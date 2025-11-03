@@ -1,0 +1,35 @@
+{
+  "expo": {
+    "name": "YMOBooks",
+    "slug": "ymobooks",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#CC5500"
+    },
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#CC5500"
+      },
+      "edgeToEdgeEnabled": true,
+      "package": "com.penielbethel.ymobooks"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "18fc625a-9c7e-472a-8aa5-98c0b05e372c"
+      }
+    }
+  }
+}

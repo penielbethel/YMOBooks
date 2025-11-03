@@ -1,0 +1,14 @@
+{
+  "name": "ymobooks-server",
+  "version": "1.0.0",
+  "description": "Backend server for YMOBooks using Express and MongoDB Atlas",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.19.2",
+    "mongoose": "^8.6.1"
+  }
+}
