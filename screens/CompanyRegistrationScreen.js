@@ -20,7 +20,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors } from '../constants/Colors';
 import { Fonts } from '../constants/Fonts';
 import { Spacing } from '../constants/Spacing';
-import { registerCompany } from '../utils/api';
+import { registerCompany, updateCompany } from '../utils/api';
 
 const CompanyRegistrationScreen = ({ navigation }) => {
   const [formData, setFormData] = useState({
@@ -29,7 +29,10 @@ const CompanyRegistrationScreen = ({ navigation }) => {
     email: '',
     phoneNumber: '',
     logo: null,
-    signature: null
+    signature: null,
+    bankAccountNumber: '',
+    bankAccountName: '',
+    bankName: ''
   });
 
   const [loading, setLoading] = useState(false);
@@ -118,16 +121,32 @@ const CompanyRegistrationScreen = ({ navigation }) => {
         phone: formData.phoneNumber,
         logo: formData.logo ? await toBase64(formData.logo) : null,
         signature: formData.signature ? await toBase64(formData.signature) : null,
+        bankAccountNumber: formData.bankAccountNumber,
+        bankAccountName: formData.bankAccountName,
+        bankName: formData.bankName,
       };
-
-      const result = await registerCompany(payload);
-      if (result?.success) {
-        setGeneratedCompanyId(result.companyId);
-        const stored = { ...formData, companyId: result.companyId };
-        await AsyncStorage.setItem('companyData', JSON.stringify(stored));
-        setSuccessModalVisible(true);
+      const storedExisting = await AsyncStorage.getItem('companyData');
+      const existing = storedExisting ? JSON.parse(storedExisting) : null;
+      if (existing?.companyId) {
+        const result = await updateCompany(existing.companyId, payload);
+        if (result?.success) {
+          const stored = { ...formData, companyId: existing.companyId };
+          await AsyncStorage.setItem('companyData', JSON.stringify(stored));
+          Alert.alert('Updated', 'Company information updated successfully');
+          navigation.navigate('Dashboard');
+        } else {
+          Alert.alert('Error', result?.message || 'Update failed');
+        }
       } else {
-        Alert.alert('Error', result?.message || 'Registration failed');
+        const result = await registerCompany(payload);
+        if (result?.success) {
+          setGeneratedCompanyId(result.companyId);
+          const stored = { ...formData, companyId: result.companyId };
+          await AsyncStorage.setItem('companyData', JSON.stringify(stored));
+          setSuccessModalVisible(true);
+        } else {
+          Alert.alert('Error', result?.message || 'Registration failed');
+        }
       }
     } catch (error) {
       Alert.alert('Error', 'Failed to save company data');

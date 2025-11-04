@@ -11,6 +11,10 @@ import CompanyRegistrationScreen from './screens/CompanyRegistrationScreen';
 import DashboardScreen from './screens/DashboardScreen';
 import LetterheadPreviewScreen from './screens/LetterheadPreviewScreen';
 import LoginScreen from './screens/LoginScreen';
+import SettingsScreen from './screens/SettingsScreen';
+import CreateInvoiceScreen from './screens/CreateInvoiceScreen';
+import InvoiceHistoryScreen from './screens/InvoiceHistoryScreen';
+import SuperAdminScreen from './screens/SuperAdminScreen';
 
 // Import constants
 import { Colors } from './constants/Colors';
@@ -79,6 +83,34 @@ export default function App() {
         <Stack.Screen 
           name="Dashboard" 
           component={DashboardScreen}
+          options={{
+            animationEnabled: true,
+          }}
+        />
+        <Stack.Screen 
+          name="Settings" 
+          component={SettingsScreen}
+          options={{
+            animationEnabled: true,
+          }}
+        />
+        <Stack.Screen 
+          name="SuperAdmin" 
+          component={SuperAdminScreen}
+          options={{
+            animationEnabled: true,
+          }}
+        />
+        <Stack.Screen 
+          name="CreateInvoice" 
+          component={CreateInvoiceScreen}
+          options={{
+            animationEnabled: true,
+          }}
+        />
+        <Stack.Screen 
+          name="InvoiceHistory" 
+          component={InvoiceHistoryScreen}
           options={{
             animationEnabled: true,
           }}

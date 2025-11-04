@@ -60,6 +60,20 @@ const DashboardScreen = ({ navigation }) => {
       description: 'Preview your company letterhead',
       icon: '🏢',
       color: Colors.secondary
+    },
+    {
+      id: 'history',
+      title: 'Invoice History',
+      description: 'View invoices from the last 6 months',
+      icon: '🗂️',
+      color: Colors.success
+    },
+    {
+      id: 'settings',
+      title: 'Global Options',
+      description: 'Settings, edit company, logout',
+      icon: '⚙️',
+      color: Colors.accent
     }
   ];
 
@@ -67,6 +81,15 @@ const DashboardScreen = ({ navigation }) => {
     switch (itemId) {
       case 'letterhead':
         navigation.navigate('LetterheadPreview');
+        break;
+      case 'invoice':
+        navigation.navigate('CreateInvoice');
+        break;
+      case 'history':
+        navigation.navigate('InvoiceHistory');
+        break;
+      case 'settings':
+        navigation.navigate('Settings');
         break;
       default:
         // For other features, show coming soon alert
@@ -103,6 +126,12 @@ const DashboardScreen = ({ navigation }) => {
               <Text style={styles.companyName}>{companyData.companyName}</Text>
               <Text style={styles.welcomeText}>Welcome to YMOBooks</Text>
             </View>
+            {/* Top-right hamburger for Global Options */}
+            <TouchableOpacity style={styles.hamburgerButton} onPress={() => navigation.navigate('Settings')}>
+              <View style={styles.hamburgerLine} />
+              <View style={styles.hamburgerLine} />
+              <View style={styles.hamburgerLine} />
+            </TouchableOpacity>
           </View>
         </View>
 
@@ -192,6 +221,7 @@ const styles = StyleSheet.create({
   headerContent: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
   },
   companyLogo: {
     width: 60,
@@ -201,6 +231,20 @@ const styles = StyleSheet.create({
   },
   companyInfo: {
     flex: 1,
+  },
+  hamburgerButton: {
+    width: 36,
+    height: 28,
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+    paddingVertical: 2,
+    marginLeft: Spacing.md,
+  },
+  hamburgerLine: {
+    width: 28,
+    height: 3,
+    backgroundColor: Colors.white,
+    borderRadius: 2,
   },
   companyName: {
     fontSize: Fonts.sizes.xl,

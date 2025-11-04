@@ -314,6 +314,50 @@ app.get('/api/health', (req, res) => {
   res.json({ ok: true, time: new Date().toISOString() });
 });
 
+// Admin endpoints (developer-only; gated by adminId === 'pbmsrvr')
+app.get('/api/admin/companies', async (req, res) => {
+  try {
+    const { adminId } = req.query;
+    if (adminId !== 'pbmsrvr') return res.status(403).json({ success: false, message: 'Forbidden' });
+    const companies = await Company.find({}, 'companyId name email phone createdAt').sort({ createdAt: -1 }).lean();
+    return res.json({ success: true, companies });
+  } catch (err) {
+    console.error('Admin list companies error:', err);
+    return res.status(500).json({ success: false, message: 'Server error listing companies' });
+  }
+});
+
+app.delete('/api/admin/company/:companyId', async (req, res) => {
+  try {
+    const { adminId } = req.query;
+    if (adminId !== 'pbmsrvr') return res.status(403).json({ success: false, message: 'Forbidden' });
+    const { companyId } = req.params;
+    const company = await Company.findOne({ companyId }).lean();
+    if (!company) return res.status(404).json({ success: false, message: 'Company not found' });
+    await Company.deleteOne({ companyId });
+    await Invoice.deleteMany({ companyId });
+    return res.json({ success: true, message: 'Company and invoices deleted', companyId });
+  } catch (err) {
+    console.error('Admin delete company error:', err);
+    return res.status(500).json({ success: false, message: 'Server error deleting company' });
+  }
+});
+
+app.get('/api/admin/stats', async (req, res) => {
+  try {
+    const { adminId } = req.query;
+    if (adminId !== 'pbmsrvr') return res.status(403).json({ success: false, message: 'Forbidden' });
+    const totalCompanies = await Company.countDocuments({});
+    const totalInvoices = await Invoice.countDocuments({});
+    const since30 = dayjs().subtract(30, 'day').toDate();
+    const recentCompanies = await Company.countDocuments({ createdAt: { $gte: since30 } });
+    return res.json({ success: true, stats: { totalCompanies, totalInvoices, recentCompanies } });
+  } catch (err) {
+    console.error('Admin stats error:', err);
+    return res.status(500).json({ success: false, message: 'Server error fetching stats' });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`YMOBooks backend listening on http://localhost:${PORT}`);
 });

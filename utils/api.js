@@ -75,3 +75,25 @@ export async function fetchInvoices(companyId, months = 6) {
   }
   return data;
 }
+
+// Admin APIs
+export async function adminFetchCompanies(adminId = 'pbmsrvr') {
+  const url = new URL(`${Config.API_BASE_URL}/api/admin/companies`);
+  url.searchParams.set('adminId', adminId);
+  const res = await fetch(url.toString());
+  return res.json();
+}
+
+export async function adminDeleteCompany(companyId, adminId = 'pbmsrvr') {
+  const url = new URL(`${Config.API_BASE_URL}/api/admin/company/${companyId}`);
+  url.searchParams.set('adminId', adminId);
+  const res = await fetch(url.toString(), { method: 'DELETE' });
+  return res.json();
+}
+
+export async function adminFetchStats(adminId = 'pbmsrvr') {
+  const url = new URL(`${Config.API_BASE_URL}/api/admin/stats`);
+  url.searchParams.set('adminId', adminId);
+  const res = await fetch(url.toString());
+  return res.json();
+}

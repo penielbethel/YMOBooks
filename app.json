@@ -4,11 +4,11 @@
     "slug": "ymobooks",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "./logo.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "splash": {
-      "image": "./assets/splash-icon.png",
+      "image": "./logo.png",
       "resizeMode": "contain",
       "backgroundColor": "#CC5500"
     },
@@ -17,14 +17,14 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
+        "foregroundImage": "./logo.png",
         "backgroundColor": "#CC5500"
       },
       "edgeToEdgeEnabled": true,
       "package": "com.penielbethel.ymobooks"
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./logo.png"
     },
     "extra": {
       "eas": {

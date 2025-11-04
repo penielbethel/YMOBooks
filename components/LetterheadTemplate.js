@@ -45,6 +45,13 @@ const LetterheadTemplate = ({ companyData, children, showSignature = false }) =>
               <Text style={styles.contactText}>Email: {companyData.email}</Text>
               <Text style={styles.contactText}>Phone: {companyData.phoneNumber}</Text>
             </View>
+            {(companyData.bankAccountNumber || companyData.bankAccountName || companyData.bankName) && (
+              <View style={styles.bankInfo}>
+                <Text style={styles.contactText}>Bank: {companyData.bankName || '-'}</Text>
+                <Text style={styles.contactText}>Account Name: {companyData.bankAccountName || '-'}</Text>
+                <Text style={styles.contactText}>Account Number: {companyData.bankAccountNumber || '-'}</Text>
+              </View>
+            )}
           </View>
         </View>
         
@@ -127,6 +134,9 @@ const styles = StyleSheet.create({
     fontSize: Fonts.sizes.sm,
     color: Colors.textSecondary,
     marginBottom: 2,
+  },
+  bankInfo: {
+    marginTop: Spacing.xs,
   },
   decorativeLine: {
     height: 3,

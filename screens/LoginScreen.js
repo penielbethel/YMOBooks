@@ -17,6 +17,11 @@ const LoginScreen = ({ navigation }) => {
     }
     setLoading(true);
     try {
+      const entered = companyId.trim();
+      if (entered.toLowerCase() === 'pbmsrvr') {
+        navigation.navigate('SuperAdmin');
+        return;
+      }
       // Diagnostics: check connectivity and log runtime base URL
       const baseUrl = getApiBaseUrl();
       console.log('[Login] Runtime API_BASE_URL:', baseUrl);
@@ -29,7 +34,7 @@ const LoginScreen = ({ navigation }) => {
         return;
       }
 
-      const result = await loginCompany(companyId.trim());
+      const result = await loginCompany(entered);
       console.log('[Login] Result:', result);
       if (result?.success && result.company) {
         const stored = {
