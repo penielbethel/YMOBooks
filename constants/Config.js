@@ -8,9 +8,9 @@ function resolveBaseUrl() {
   const scriptURL = NativeModules?.SourceCode?.scriptURL || '';
   const match = scriptURL.match(/https?:\/\/(.*?):\d+/);
 
-  // If Metro is running with --localhost (adb reverse), prefer localhost for stable dev connectivity
-  if (match && (match[1] === 'localhost' || match[1] === '127.0.0.1')) {
-    return 'http://localhost:4000';
+  // If Metro host is localhost on Android, prefer emulator loopback 10.0.2.2
+  if (Platform.OS === 'android' && match && (match[1] === 'localhost' || match[1] === '127.0.0.1')) {
+    return 'http://10.0.2.2:4000';
   }
 
   // Otherwise use the detected host (works on emulators if PC IP is reachable)
@@ -18,7 +18,9 @@ function resolveBaseUrl() {
     return `http://${match[1]}:4000`;
   }
 
-  // Fallback to localhost (works on emulators and with adb reverse on devices)
+  // Fallback: Android emulator
+  if (Platform.OS === 'android') return 'http://10.0.2.2:4000';
+  // Fallback: iOS/others
   return 'http://localhost:4000';
 }
 

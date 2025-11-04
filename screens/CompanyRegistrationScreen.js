@@ -16,6 +16,7 @@ import { Modal } from 'react-native';
 import * as FileSystem from 'expo-file-system';
 import * as Clipboard from 'expo-clipboard';
 import * as ImagePicker from 'expo-image-picker';
+import SignatureCanvas from 'react-native-signature-canvas';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors } from '../constants/Colors';
 import { Fonts } from '../constants/Fonts';
@@ -38,6 +39,7 @@ const CompanyRegistrationScreen = ({ navigation }) => {
   const [loading, setLoading] = useState(false);
   const [successModalVisible, setSuccessModalVisible] = useState(false);
   const [generatedCompanyId, setGeneratedCompanyId] = useState('');
+  const [signatureModalVisible, setSignatureModalVisible] = useState(false);
 
   const updateFormData = (field, value) => {
     setFormData(prev => ({
@@ -262,23 +264,31 @@ const CompanyRegistrationScreen = ({ navigation }) => {
 
             {/* Signature */}
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Signature (Optional)</Text>
+              <Text style={styles.label}>Register Your Signature</Text>
               <Text style={styles.helperText}>
-                Upload your signature to authenticate invoices
+                Create an electronic signature to be used across invoices, receipts, and documents.
               </Text>
-              <TouchableOpacity 
-                style={styles.imagePickerButton}
-                onPress={() => pickImage('signature')}
-              >
-                {formData.signature ? (
+              {formData.signature ? (
+                <View style={{ alignItems: 'center' }}>
                   <Image source={{ uri: formData.signature }} style={styles.signaturePreview} />
-                ) : (
+                  <TouchableOpacity
+                    style={[styles.imagePickerButton, { marginTop: Spacing.sm }]}
+                    onPress={() => setSignatureModalVisible(true)}
+                  >
+                    <Text style={styles.imagePlaceholderLabel}>Re-sign</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <TouchableOpacity
+                  style={styles.imagePickerButton}
+                  onPress={() => setSignatureModalVisible(true)}
+                >
                   <View style={styles.imagePlaceholder}>
                     <Text style={styles.imagePlaceholderText}>✍️</Text>
-                    <Text style={styles.imagePlaceholderLabel}>Tap to select signature</Text>
+                    <Text style={styles.imagePlaceholderLabel}>Tap to register signature</Text>
                   </View>
-                )}
-              </TouchableOpacity>
+                </TouchableOpacity>
+              )}
             </View>
 
             {/* Submit Button */}
@@ -295,6 +305,45 @@ const CompanyRegistrationScreen = ({ navigation }) => {
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
+    {/* Signature Modal */}
+    <Modal
+      visible={signatureModalVisible}
+      animationType="slide"
+      transparent={false}
+      onRequestClose={() => setSignatureModalVisible(false)}
+    >
+      <SafeAreaView style={{ flex: 1, backgroundColor: Colors.background }}>
+        <View style={{ flex: 1, padding: Spacing.lg }}>
+          <Text style={{ fontSize: Fonts.sizes.header, fontWeight: Fonts.weights.bold, marginBottom: Spacing.md }}>
+            Draw Your Signature
+          </Text>
+          <Text style={{ color: Colors.textSecondary, marginBottom: Spacing.md }}>
+            Use a stylus or your finger to sign in the area below. Your signature will be saved to your profile and used on generated documents.
+          </Text>
+          <View style={{ flex: 1, backgroundColor: Colors.white, borderWidth: 1, borderColor: Colors.border, borderRadius: 8 }}>
+            <SignatureCanvas
+              onOK={(sig) => {
+                // sig is a base64 data URL
+                updateFormData('signature', sig);
+                setSignatureModalVisible(false);
+                Alert.alert('Signature Saved', 'Your electronic signature has been captured.');
+              }}
+              onEmpty={() => {
+                Alert.alert('No Signature', 'Please draw your signature before saving.');
+              }}
+              descriptionText="Sign here"
+              clearText="Clear"
+              confirmText="Save Signature"
+              webStyle=".m-signature-pad--footer {box-shadow: none;}"
+              backgroundColor={Colors.white}
+            />
+          </View>
+          <TouchableOpacity style={[styles.submitButton, { marginTop: Spacing.lg }]} onPress={() => setSignatureModalVisible(false)}>
+            <Text style={styles.submitButtonText}>Cancel</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    </Modal>
     <Modal
       visible={successModalVisible}
       animationType="slide"

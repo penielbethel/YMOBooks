@@ -7,7 +7,7 @@ import { Fonts } from '../constants/Fonts';
 import { Spacing } from '../constants/Spacing';
 import { fetchInvoices } from '../utils/api';
 
-const InvoiceHistoryScreen = ({ navigation }) => {
+const InvoiceHistoryScreen = ({ navigation, route }) => {
   const [loading, setLoading] = useState(true);
   const [invoices, setInvoices] = useState([]);
   const [companyId, setCompanyId] = useState(null);
@@ -15,15 +15,20 @@ const InvoiceHistoryScreen = ({ navigation }) => {
   useEffect(() => {
     (async () => {
       try {
-        const stored = await AsyncStorage.getItem('companyData');
-        const parsed = stored ? JSON.parse(stored) : null;
-        if (!parsed?.companyId) {
+        const overrideId = route?.params?.companyId;
+        let effectiveId = overrideId;
+        if (!effectiveId) {
+          const stored = await AsyncStorage.getItem('companyData');
+          const parsed = stored ? JSON.parse(stored) : null;
+          effectiveId = parsed?.companyId;
+        }
+        if (!effectiveId) {
           Alert.alert('Missing Company', 'Please register your company first');
           navigation.navigate('CompanyRegistration');
           return;
         }
-        setCompanyId(parsed.companyId);
-        const res = await fetchInvoices(parsed.companyId, 6);
+        setCompanyId(effectiveId);
+        const res = await fetchInvoices(effectiveId, 6);
         if (res?.success) {
           setInvoices(res.invoices || []);
         } else {
@@ -64,7 +69,7 @@ const InvoiceHistoryScreen = ({ navigation }) => {
           <Text style={styles.backButtonText}>← Back</Text>
         </TouchableOpacity>
         <Text style={styles.title}>Invoice History</Text>
-        <Text style={styles.subtitle}>Showing up to 6 months of invoices</Text>
+        <Text style={styles.subtitle}>Showing up to 6 months of invoices{companyId ? ` · ${companyId}` : ''}</Text>
       </View>
       {loading ? (
         <View style={styles.loadingBox}>

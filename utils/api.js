@@ -39,6 +39,27 @@ export async function fetchCompany(companyId) {
 }
 
 export async function updateCompany(payload) {
+  // Backward-compatible: allow updateCompany(companyId, payload)
+  let bodyPayload = payload;
+  if (typeof payload === 'string') {
+    bodyPayload = { companyId: payload };
+  } else if (payload && typeof payload === 'object' && !payload.companyId && arguments.length > 1) {
+    const companyId = arguments[0];
+    const data = arguments[1];
+    bodyPayload = { ...data, companyId };
+  }
+
+  const res = await fetch(`${Config.API_BASE_URL}/api/update-company`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(bodyPayload),
+  });
+  return res.json();
+}
+
+// Save signature separately if needed
+export async function saveSignature(companyId, signatureDataUrl) {
+  const payload = { companyId, signature: signatureDataUrl };
   const res = await fetch(`${Config.API_BASE_URL}/api/update-company`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

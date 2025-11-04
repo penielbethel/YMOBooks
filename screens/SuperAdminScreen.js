@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, Alert, FlatList, ActivityIndicator } from 'react-native';
+import React, { useEffect, useState, useMemo } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, Alert, FlatList, ActivityIndicator, TextInput } from 'react-native';
 import { Colors } from '../constants/Colors';
 import { Fonts } from '../constants/Fonts';
 import { Spacing } from '../constants/Spacing';
@@ -9,6 +9,7 @@ const SuperAdminScreen = ({ navigation }) => {
   const [companies, setCompanies] = useState([]);
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [query, setQuery] = useState('');
 
   const loadData = async () => {
     setLoading(true);
@@ -52,6 +53,16 @@ const SuperAdminScreen = ({ navigation }) => {
     ]);
   };
 
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return companies;
+    return companies.filter((c) =>
+      (c.name || '').toLowerCase().includes(q) ||
+      (c.companyId || '').toLowerCase().includes(q) ||
+      (c.email || '').toLowerCase().includes(q)
+    );
+  }, [companies, query]);
+
   const renderItem = ({ item }) => (
     <View style={styles.row}>
       <View style={{ flex: 1 }}>
@@ -59,6 +70,9 @@ const SuperAdminScreen = ({ navigation }) => {
         <Text style={styles.companyMeta}>{item.companyId}</Text>
         <Text style={styles.companyMeta}>{item.email || 'no-email'} · {item.phone || 'no-phone'}</Text>
       </View>
+      <TouchableOpacity style={styles.viewButton} onPress={() => navigation.navigate('InvoiceHistory', { companyId: item.companyId })}>
+        <Text style={styles.viewText}>View</Text>
+      </TouchableOpacity>
       <TouchableOpacity style={styles.deleteButton} onPress={() => handleDelete(item.companyId)}>
         <Text style={styles.deleteText}>Delete</Text>
       </TouchableOpacity>
@@ -76,6 +90,15 @@ const SuperAdminScreen = ({ navigation }) => {
       </View>
 
       <View style={styles.actions}>
+        <TextInput
+          placeholder="Search by name, ID, or email"
+          placeholderTextColor={Colors.textSecondary}
+          value={query}
+          onChangeText={setQuery}
+          style={styles.searchInput}
+          autoCapitalize="none"
+          autoCorrect={false}
+        />
         <TouchableOpacity style={styles.refreshButton} onPress={loadData} disabled={loading}>
           <Text style={styles.refreshText}>{loading ? 'Loading...' : 'Refresh'}</Text>
         </TouchableOpacity>
@@ -93,7 +116,7 @@ const SuperAdminScreen = ({ navigation }) => {
         <View style={styles.loading}><ActivityIndicator color={Colors.primary} /></View>
       ) : (
         <FlatList
-          data={companies}
+          data={filtered}
           keyExtractor={(item) => item.companyId}
           renderItem={renderItem}
           contentContainerStyle={styles.list}
@@ -119,9 +142,12 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border, borderRadius: 8, padding: Spacing.md, marginBottom: Spacing.md },
   companyName: { fontSize: Fonts.sizes.lg, fontWeight: Fonts.weights.bold, color: Colors.text },
   companyMeta: { color: Colors.textSecondary, fontSize: Fonts.sizes.sm },
+  viewButton: { backgroundColor: Colors.primary, paddingVertical: Spacing.sm, paddingHorizontal: Spacing.md, borderRadius: 6, marginRight: Spacing.sm },
+  viewText: { color: Colors.white, fontWeight: Fonts.weights.bold },
   deleteButton: { backgroundColor: '#b00020', paddingVertical: Spacing.sm, paddingHorizontal: Spacing.md, borderRadius: 6 },
   deleteText: { color: Colors.white, fontWeight: Fonts.weights.bold },
   loading: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  searchInput: { backgroundColor: Colors.surface, borderColor: Colors.border, borderWidth: 1, borderRadius: 8, paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm, marginBottom: Spacing.sm },
 });
 
 export default SuperAdminScreen;

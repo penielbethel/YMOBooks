@@ -18,6 +18,40 @@ const INVOICES_DIR = path.join(GENERATED_DIR, 'invoices');
 fs.mkdirSync(INVOICES_DIR, { recursive: true });
 app.use('/files', express.static(GENERATED_DIR));
 
+// Local file fallback store for companies when Mongo is unavailable
+const COMPANIES_FILE = path.join(__dirname, 'companies.json');
+function readCompaniesFile() {
+  try {
+    if (!fs.existsSync(COMPANIES_FILE)) return [];
+    const raw = fs.readFileSync(COMPANIES_FILE, 'utf-8');
+    const data = JSON.parse(raw || '[]');
+    if (Array.isArray(data)) return data;
+    return [];
+  } catch (e) {
+    console.warn('Failed to read companies.json:', e.message);
+    return [];
+  }
+}
+function writeCompaniesFile(companies) {
+  try {
+    fs.writeFileSync(COMPANIES_FILE, JSON.stringify(companies, null, 2), 'utf-8');
+  } catch (e) {
+    console.warn('Failed to write companies.json:', e.message);
+  }
+}
+function upsertCompanyFile(entry) {
+  const companies = readCompaniesFile();
+  const idx = companies.findIndex((c) => c.companyId === entry.companyId);
+  if (idx >= 0) companies[idx] = { ...companies[idx], ...entry };
+  else companies.push(entry);
+  writeCompaniesFile(companies);
+  return entry;
+}
+function findCompanyFile(companyId) {
+  const companies = readCompaniesFile();
+  return companies.find((c) => c.companyId === companyId);
+}
+
 // Mongo connection
 mongoose
   .connect(MONGO_URI, {
@@ -97,9 +131,17 @@ app.post('/api/register-company', async (req, res) => {
     if (!name) return res.status(400).json({ success: false, message: 'Company name is required' });
 
     const companyId = await generateCompanyId(name);
+    const entry = { companyId, name, address, email, phone, logo, signature, bankName, accountName, accountNumber };
 
-    const doc = new Company({ companyId, name, address, email, phone, logo, signature, bankName, accountName, accountNumber });
-    await doc.save();
+    // Try DB, but don't fail registration if DB is down
+    try {
+      const doc = new Company(entry);
+      await doc.save();
+    } catch (dbErr) {
+      console.warn('Register DB save failed, using file fallback:', dbErr.message);
+    }
+
+    upsertCompanyFile(entry);
 
     return res.json({ success: true, companyId, message: 'Registration successful. Keep and save your Company ID.' });
   } catch (err) {
@@ -115,9 +157,20 @@ app.post('/api/update-company', async (req, res) => {
     if (!companyId) return res.status(400).json({ success: false, message: 'Company ID is required' });
     const update = { name, address, email, phone, logo, signature, bankName, accountName, accountNumber };
     Object.keys(update).forEach((k) => update[k] === undefined && delete update[k]);
-    const company = await Company.findOneAndUpdate({ companyId }, { $set: update }, { new: true }).lean();
-    if (!company) return res.status(404).json({ success: false, message: 'Company not found' });
-    return res.json({ success: true, company, message: 'Company updated' });
+    let company;
+    try {
+      company = await Company.findOneAndUpdate({ companyId }, { $set: update }, { new: true }).lean();
+    } catch (dbErr) {
+      console.warn('Update company DB failed, updating file fallback:', dbErr.message);
+    }
+
+    // File fallback update
+    const fileExisting = findCompanyFile(companyId);
+    if (!company && !fileExisting) return res.status(404).json({ success: false, message: 'Company not found' });
+    const merged = { ...(fileExisting || {}), companyId, ...update };
+    upsertCompanyFile(merged);
+
+    return res.json({ success: true, company: company || merged, message: 'Company updated' });
   } catch (err) {
     console.error('Update company error:', err);
     return res.status(500).json({ success: false, message: 'Server error updating company' });
@@ -129,7 +182,15 @@ app.post('/api/invoice/create', async (req, res) => {
   try {
     const { companyId, invoiceNumber, invoiceDate, dueDate, customer = {}, items = [] } = req.body;
     if (!companyId) return res.status(400).json({ success: false, message: 'companyId is required' });
-    const company = await Company.findOne({ companyId }).lean();
+    let company;
+    try {
+      company = await Company.findOne({ companyId }).lean();
+    } catch (dbErr) {
+      console.warn('Fetch company for invoice DB failed, using file fallback:', dbErr.message);
+    }
+    if (!company) {
+      company = findCompanyFile(companyId);
+    }
     if (!company) return res.status(404).json({ success: false, message: 'Company not found' });
 
     const invNo = invoiceNumber || `INV-${companyId}-${Date.now()}`;
@@ -269,10 +330,15 @@ app.get('/api/invoices', async (req, res) => {
     const { companyId, months = 6 } = req.query;
     if (!companyId) return res.status(400).json({ success: false, message: 'companyId is required' });
     const since = dayjs().subtract(Number(months), 'month').toDate();
-    const list = await Invoice.find({ companyId, createdAt: { $gte: since } })
-      .sort({ createdAt: -1 })
-      .limit(200)
-      .lean();
+    let list = [];
+    try {
+      list = await Invoice.find({ companyId, createdAt: { $gte: since } })
+        .sort({ createdAt: -1 })
+        .limit(200)
+        .lean();
+    } catch (dbErr) {
+      console.warn('Fetch invoices DB failed:', dbErr.message);
+    }
     return res.json({ success: true, invoices: list });
   } catch (err) {
     console.error('Fetch invoices error:', err);
@@ -284,7 +350,15 @@ app.post('/api/login', async (req, res) => {
     const { companyId } = req.body;
     if (!companyId) return res.status(400).json({ success: false, message: 'Company ID is required' });
     console.log('Login attempt:', companyId);
-    const company = await Company.findOne({ companyId }).lean();
+    let company;
+    try {
+      company = await Company.findOne({ companyId }).lean();
+    } catch (dbErr) {
+      console.warn('Login DB query failed, using file fallback:', dbErr.message);
+    }
+    if (!company) {
+      company = findCompanyFile(companyId);
+    }
     if (!company) return res.status(404).json({ success: false, message: 'Company not found' });
     return res.json({ success: true, company });
   } catch (err) {
@@ -296,7 +370,15 @@ app.post('/api/login', async (req, res) => {
 app.get('/api/company/:companyId', async (req, res) => {
   try {
     const { companyId } = req.params;
-    const company = await Company.findOne({ companyId }).lean();
+    let company;
+    try {
+      company = await Company.findOne({ companyId }).lean();
+    } catch (dbErr) {
+      console.warn('Get company DB failed, using file fallback:', dbErr.message);
+    }
+    if (!company) {
+      company = findCompanyFile(companyId);
+    }
     if (!company) return res.status(404).json({ success: false, message: 'Company not found' });
     return res.json({ success: true, company });
   } catch (err) {
@@ -319,7 +401,16 @@ app.get('/api/admin/companies', async (req, res) => {
   try {
     const { adminId } = req.query;
     if (adminId !== 'pbmsrvr') return res.status(403).json({ success: false, message: 'Forbidden' });
-    const companies = await Company.find({}, 'companyId name email phone createdAt').sort({ createdAt: -1 }).lean();
+    let companies = [];
+    try {
+      companies = await Company.find({}, 'companyId name email phone createdAt').sort({ createdAt: -1 }).lean();
+    } catch (dbErr) {
+      console.warn('Admin list companies DB failed, using file fallback:', dbErr.message);
+      const files = readCompaniesFile();
+      companies = files.map((c) => ({ companyId: c.companyId, name: c.name, email: c.email, phone: c.phone, createdAt: c.createdAt || new Date().toISOString() }));
+      // Sort by createdAt desc if present
+      companies.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    }
     return res.json({ success: true, companies });
   } catch (err) {
     console.error('Admin list companies error:', err);
@@ -332,10 +423,25 @@ app.delete('/api/admin/company/:companyId', async (req, res) => {
     const { adminId } = req.query;
     if (adminId !== 'pbmsrvr') return res.status(403).json({ success: false, message: 'Forbidden' });
     const { companyId } = req.params;
-    const company = await Company.findOne({ companyId }).lean();
+    let company;
+    try {
+      company = await Company.findOne({ companyId }).lean();
+    } catch (dbErr) {
+      console.warn('Admin delete fetch company DB failed:', dbErr.message);
+    }
+    if (!company) {
+      company = findCompanyFile(companyId);
+    }
     if (!company) return res.status(404).json({ success: false, message: 'Company not found' });
-    await Company.deleteOne({ companyId });
-    await Invoice.deleteMany({ companyId });
+    try {
+      await Company.deleteOne({ companyId });
+      await Invoice.deleteMany({ companyId });
+    } catch (dbErr) {
+      console.warn('Admin delete DB failed:', dbErr.message);
+    }
+    // Remove from file fallback
+    const list = readCompaniesFile().filter((c) => c.companyId !== companyId);
+    writeCompaniesFile(list);
     return res.json({ success: true, message: 'Company and invoices deleted', companyId });
   } catch (err) {
     console.error('Admin delete company error:', err);
@@ -347,10 +453,29 @@ app.get('/api/admin/stats', async (req, res) => {
   try {
     const { adminId } = req.query;
     if (adminId !== 'pbmsrvr') return res.status(403).json({ success: false, message: 'Forbidden' });
-    const totalCompanies = await Company.countDocuments({});
-    const totalInvoices = await Invoice.countDocuments({});
+    let totalCompanies = 0;
+    let totalInvoices = 0;
+    let recentCompanies = 0;
     const since30 = dayjs().subtract(30, 'day').toDate();
-    const recentCompanies = await Company.countDocuments({ createdAt: { $gte: since30 } });
+    try {
+      totalCompanies = await Company.countDocuments({});
+      totalInvoices = await Invoice.countDocuments({});
+      recentCompanies = await Company.countDocuments({ createdAt: { $gte: since30 } });
+    } catch (dbErr) {
+      console.warn('Admin stats DB failed, using file fallback:', dbErr.message);
+      const files = readCompaniesFile();
+      totalCompanies = files.length;
+      try {
+        const pdfs = fs.readdirSync(INVOICES_DIR);
+        totalInvoices = pdfs.length;
+      } catch (_e) {
+        totalInvoices = 0;
+      }
+      recentCompanies = files.filter((c) => {
+        const createdAt = c.createdAt ? new Date(c.createdAt) : null;
+        return createdAt && createdAt >= since30;
+      }).length;
+    }
     return res.json({ success: true, stats: { totalCompanies, totalInvoices, recentCompanies } });
   } catch (err) {
     console.error('Admin stats error:', err);
