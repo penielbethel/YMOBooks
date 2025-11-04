@@ -115,23 +115,45 @@ const Invoice = mongoose.model('Invoice', InvoiceSchema);
 async function generateCompanyId(name) {
   const prefix = (name || 'CMP').replace(/[^a-zA-Z0-9]/g, '').slice(0, 3).toUpperCase();
   let candidate;
-  let exists;
+  let existsDb = null;
+  let existsFile = null;
   do {
     const suffix = Math.floor(100000 + Math.random() * 900000).toString().slice(0, 5);
     candidate = `${prefix}-${suffix}`;
-    exists = await Company.findOne({ companyId: candidate }).lean();
-  } while (exists);
+    // Prefer DB check when connected; otherwise rely on file fallback to avoid timeouts
+    existsDb = null;
+    try {
+      if (mongoose.connection && mongoose.connection.readyState === 1) {
+        existsDb = await Company.findOne({ companyId: candidate }).lean();
+      }
+    } catch (_dbErr) {
+      // Ignore DB errors during ID generation
+      existsDb = null;
+    }
+    existsFile = findCompanyFile(candidate);
+  } while (existsDb || existsFile);
   return candidate;
 }
 
 // Routes
 app.post('/api/register-company', async (req, res) => {
   try {
-    const { name, address, email, phone, logo, signature, bankName, accountName, accountNumber } = req.body;
+    const { name, address, email, phone, logo, signature, bankName, accountName, accountNumber, bankAccountName, bankAccountNumber } = req.body;
     if (!name) return res.status(400).json({ success: false, message: 'Company name is required' });
 
     const companyId = await generateCompanyId(name);
-    const entry = { companyId, name, address, email, phone, logo, signature, bankName, accountName, accountNumber };
+    const entry = {
+      companyId,
+      name,
+      address,
+      email,
+      phone,
+      logo,
+      signature,
+      bankName,
+      accountName: accountName || bankAccountName,
+      accountNumber: accountNumber || bankAccountNumber,
+    };
 
     // Try DB, but don't fail registration if DB is down
     try {
@@ -153,9 +175,19 @@ app.post('/api/register-company', async (req, res) => {
 // Update company details (including bank info)
 app.post('/api/update-company', async (req, res) => {
   try {
-    const { companyId, name, address, email, phone, logo, signature, bankName, accountName, accountNumber } = req.body;
+    const { companyId, name, address, email, phone, logo, signature, bankName, accountName, accountNumber, bankAccountName, bankAccountNumber } = req.body;
     if (!companyId) return res.status(400).json({ success: false, message: 'Company ID is required' });
-    const update = { name, address, email, phone, logo, signature, bankName, accountName, accountNumber };
+    const update = {
+      name,
+      address,
+      email,
+      phone,
+      logo,
+      signature,
+      bankName,
+      accountName: accountName || bankAccountName,
+      accountNumber: accountNumber || bankAccountNumber,
+    };
     Object.keys(update).forEach((k) => update[k] === undefined && delete update[k]);
     let company;
     try {
