@@ -193,6 +193,9 @@ function renderFullInvoicePreview(company, template, brandColor) {
         <View style={[styles.fullCard, { borderColor: theme.border }]}> 
           <View style={styles.fullRow}> 
             <View style={{ flex: 1 }}>
+              {!!company?.logo && (
+                <Image source={{ uri: company.logo }} style={{ width: 64, height: 64, borderRadius: 8, marginBottom: 6 }} />
+              )}
               <Text style={styles.fullCompany}>{name}</Text>
               <Text style={styles.fullText}>{address}</Text>
               <Text style={styles.fullText}>Email: {email} • {phone}</Text>
@@ -205,20 +208,21 @@ function renderFullInvoicePreview(company, template, brandColor) {
                 </View>
               )}
             </View>
-            <Text style={styles.fullTitle}>INVOICE</Text>
+            <Text style={[styles.fullTitle, { color: theme.primary }]}>INVOICE</Text>
           </View>
           <View style={styles.fullSeparator} />
           <View style={styles.fullRow}> 
              <View style={{ flex: 1 }}>
-               <Text style={styles.fullSection}>BILL TO</Text>
+               <Text style={[styles.fullSection, { color: theme.primary }]}>BILL TO</Text>
                <Text style={styles.fullText}>Sample Client LLC</Text>
                <Text style={styles.fullText}>client@email.com</Text>
                <Text style={styles.fullText}>+1 (555) 555-5555</Text>
-             </View>
-             <View style={{ alignItems: 'flex-end' }}>
-               <Text style={styles.fullMeta}>INV-001</Text>
-               <Text style={styles.fullMeta}>Issuance: {issuanceDate.toISOString().slice(0,10)}</Text>
-               <Text style={styles.fullMeta}>Due: {dueDate.toISOString().slice(0,10)}</Text>
+               <View style={{ marginTop: 8 }}>
+                 <Text style={[styles.fullSection, { color: theme.primary }]}>Invoice</Text>
+                 <Text style={styles.fullMeta}>INV-001</Text>
+                 <Text style={styles.fullMeta}>Issuance: {issuanceDate.toISOString().slice(0,10)}</Text>
+                 <Text style={styles.fullMeta}>Due: {dueDate.toISOString().slice(0,10)}</Text>
+               </View>
              </View>
            </View>
           <View style={styles.fullTableHeader}> 
@@ -248,7 +252,7 @@ function renderFullInvoicePreview(company, template, brandColor) {
               <Image source={{ uri: company.signature }} style={{ width: 140, height: 70, resizeMode: 'contain' }} />
             </View>
           )}
-          <Text style={[styles.fullHint, { marginTop: 12 }]}>Layout: minimal, separators, left totals</Text>
+          <Text style={[styles.fullHint, { marginTop: 12 }]}>{`This invoice is generated electronically by ${name} and any alteration renders it invalid — Printed on ${new Date().toLocaleDateString()}`}</Text>
         </View>
       );
     case 'bold':
