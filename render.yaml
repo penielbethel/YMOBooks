@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: ymobooks-server
+    name: ymobooks
     env: node
     rootDir: server
     plan: free

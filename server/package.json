@@ -1,5 +1,5 @@
 {
-  "name": "ymobooks-server",
+  "name": "ymobooks",
   "version": "1.0.0",
   "description": "Backend server for YMOBooks using Express and MongoDB Atlas",
   "main": "index.js",

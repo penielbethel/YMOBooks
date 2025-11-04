@@ -8,7 +8,7 @@ const dayjs = require('dayjs');
 
 const app = express();
 const PORT = process.env.PORT || 4000;
-const MONGO_URI = process.env.MONGO_URI || 'mongodb+srv://pbmsrvr:foraminiferans@ymobooks.4dyqe3f.mongodb.net/ymobooks?retryWrites=true&w=majority&appName=ymobooks';
+const MONGO_URI = process.env.MONGO_URI; // Set in environment. If unset, server uses file fallback.
 
 app.use(cors());
 app.use(express.json({ limit: '8mb' }));
@@ -52,17 +52,21 @@ function findCompanyFile(companyId) {
   return companies.find((c) => c.companyId === companyId);
 }
 
-// Mongo connection
-mongoose
-  .connect(MONGO_URI, {
-    serverSelectionTimeoutMS: 5000,
-  })
-  .then(() => {
-    console.log('Connected to MongoDB Atlas');
-  })
-  .catch((err) => {
-    console.error('MongoDB connection error:', err.message);
-  });
+// Mongo connection (optional)
+if (MONGO_URI) {
+  mongoose
+    .connect(MONGO_URI, {
+      serverSelectionTimeoutMS: 5000,
+    })
+    .then(() => {
+      console.log('Connected to MongoDB');
+    })
+    .catch((err) => {
+      console.error('MongoDB connection error:', err.message);
+    });
+} else {
+  console.warn('MONGO_URI not set. Running with file-based fallback storage.');
+}
 
 // Models
 const CompanySchema = new mongoose.Schema(
