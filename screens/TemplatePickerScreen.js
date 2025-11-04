@@ -370,6 +370,12 @@ function renderFullInvoicePreview(company, template, brandColor) {
               <Text style={styles.fullText}>123 Client Street</Text>
               <Text style={styles.fullText}>client@email.com</Text>
               <Text style={styles.fullText}>+1 (555) 555-5555</Text>
+              <View style={{ marginTop: 8 }}>
+                <Text style={[styles.fullSection, { color: theme.primary }]}>Invoice</Text>
+                <Text style={styles.fullMeta}>INV-001</Text>
+                <Text style={styles.fullMeta}>Issuance: {issuanceDate.toISOString().slice(0,10)}</Text>
+                <Text style={styles.fullMeta}>Due: {dueDate.toISOString().slice(0,10)}</Text>
+              </View>
             </View>
             <View style={{ alignItems: 'flex-end', flex: 1 }}>
               <View style={[styles.fullInfoBox, { borderColor: theme.border }]}> 
@@ -387,11 +393,6 @@ function renderFullInvoicePreview(company, template, brandColor) {
                     {!!accountNumber && (<Text style={styles.fullText}>Account Number: {accountNumber}</Text>)}
                   </View>
                 )}
-              </View>
-              <View style={{ marginTop: 6 }}>
-                <Text style={styles.fullMeta}>INV-001</Text>
-                <Text style={styles.fullMeta}>Issuance: {issuanceDate.toISOString().slice(0,10)}</Text>
-                <Text style={styles.fullMeta}>Due: {dueDate.toISOString().slice(0,10)}</Text>
               </View>
             </View>
           </View>
