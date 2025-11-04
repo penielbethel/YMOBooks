@@ -1,4 +1,6 @@
-import React, { useState, useEffect, useMemo, useCallback, memo } from 'react';
+import React, { useState, useMemo, useCallback, memo } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
+import { InteractionManager } from 'react-native';
 import {
   View,
   Text,
@@ -33,9 +35,14 @@ const MenuItem = memo(({ item, onPress }) => (
 const DashboardScreen = ({ navigation }) => {
   const [companyData, setCompanyData] = useState(null);
 
-  useEffect(() => {
-    loadCompanyData();
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      const task = InteractionManager.runAfterInteractions(() => {
+        loadCompanyData();
+      });
+      return () => task.cancel();
+    }, [])
+  );
 
   const loadCompanyData = async () => {
     try {
