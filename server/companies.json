@@ -1,0 +1,10 @@
+[
+  {
+    "companyId": "TES-75905",
+    "name": "Test Co",
+    "email": "test@example.com",
+    "bankName": "YmoBank",
+    "accountName": "Test Holder",
+    "accountNumber": "1234567890"
+  }
+]

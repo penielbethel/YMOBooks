@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: ymobooks-server
+    env: node
+    rootDir: server
+    plan: free
+    buildCommand: npm install
+    startCommand: node index.js
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: 20
+      - key: MONGO_URI
+        sync: false
+      - key: GENERATED_ROOT
+        value: /opt/render/project/src/server
+      - key: COMPANIES_FILE
+        value: /opt/render/project/src/server/companies.json

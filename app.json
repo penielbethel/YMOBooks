@@ -5,6 +5,7 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./logo.png",
+    "scheme": "ymobooks",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "splash": {
@@ -27,6 +28,7 @@
       "favicon": "./logo.png"
     },
     "extra": {
+      "apiBaseUrl": "https://ymobooks.onrender.com",
       "eas": {
         "projectId": "18fc625a-9c7e-472a-8aa5-98c0b05e372c"
       }

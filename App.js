@@ -18,6 +18,7 @@ import SuperAdminScreen from './screens/SuperAdminScreen';
 
 // Import constants
 import { Colors } from './constants/Colors';
+import { registerCompany, fetchCompany, pingBackend } from './utils/api';
 
 const Stack = createStackNavigator();
 
@@ -32,7 +33,34 @@ export default function App() {
   const checkCompanyData = async () => {
     try {
       const companyData = await AsyncStorage.getItem('companyData');
-      setHasCompanyData(!!companyData);
+      if (companyData) {
+        setHasCompanyData(true);
+      } else {
+        // Auto-register a test company on first launch to verify backend
+        try {
+          const ping = await pingBackend();
+          if (ping.ok) {
+            const res = await registerCompany({ name: 'AutoTest Co', email: 'auto@test.local' });
+            if (res?.success && res.companyId) {
+              const fetched = await fetchCompany(res.companyId);
+              const c = fetched?.company || { name: 'AutoTest Co', companyId: res.companyId };
+              const stored = {
+                companyName: c.name,
+                address: c.address || '',
+                email: c.email || '',
+                phoneNumber: c.phone || '',
+                logo: c.logo || null,
+                signature: c.signature || null,
+                companyId: c.companyId,
+              };
+              await AsyncStorage.setItem('companyData', JSON.stringify(stored));
+              setHasCompanyData(true);
+            }
+          }
+        } catch (_e) {
+          // ignore auto-registration errors
+        }
+      }
     } catch (error) {
       console.log('Error checking company data:', error);
     } finally {
