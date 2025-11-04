@@ -22,12 +22,12 @@ const SettingsScreen = ({ navigation }) => {
         <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
           <Text style={styles.backButtonText}>← Back</Text>
         </TouchableOpacity>
-        <Text style={styles.title}>Global Options</Text>
+        <Text style={styles.title}>Settings</Text>
         <Text style={styles.subtitle}>Manage your account and preferences</Text>
       </View>
 
       <View style={styles.content}>
-        <TouchableOpacity style={styles.actionButton} onPress={() => navigation.navigate('CompanyRegistration')}>
+        <TouchableOpacity style={styles.actionButton} onPress={() => navigation.navigate('CompanyRegistration', { mode: 'edit' })}>
           <Text style={styles.actionText}>Edit Company Information</Text>
         </TouchableOpacity>
 

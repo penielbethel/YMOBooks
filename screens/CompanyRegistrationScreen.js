@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -23,7 +23,8 @@ import { Fonts } from '../constants/Fonts';
 import { Spacing } from '../constants/Spacing';
 import { registerCompany, updateCompany } from '../utils/api';
 
-const CompanyRegistrationScreen = ({ navigation }) => {
+const CompanyRegistrationScreen = ({ navigation, route }) => {
+  const mode = route?.params?.mode === 'edit' ? 'edit' : 'register';
   const [formData, setFormData] = useState({
     companyName: '',
     address: '',
@@ -40,6 +41,31 @@ const CompanyRegistrationScreen = ({ navigation }) => {
   const [successModalVisible, setSuccessModalVisible] = useState(false);
   const [generatedCompanyId, setGeneratedCompanyId] = useState('');
   const [signatureModalVisible, setSignatureModalVisible] = useState(false);
+
+  // Prefill form when editing
+  useEffect(() => {
+    const loadExisting = async () => {
+      try {
+        const stored = await AsyncStorage.getItem('companyData');
+        if (stored) {
+          const existing = JSON.parse(stored);
+          setFormData(prev => ({
+            ...prev,
+            companyName: existing.companyName || '',
+            address: existing.address || '',
+            email: existing.email || '',
+            phoneNumber: existing.phoneNumber || '',
+            logo: existing.logo || null,
+            signature: existing.signature || null,
+            bankAccountNumber: existing.bankAccountNumber || '',
+            bankAccountName: existing.bankAccountName || '',
+            bankName: existing.bankName || ''
+          }));
+        }
+      } catch {}
+    };
+    if (mode === 'edit') loadExisting();
+  }, [mode]);
 
   const updateFormData = (field, value) => {
     setFormData(prev => ({
@@ -129,15 +155,19 @@ const CompanyRegistrationScreen = ({ navigation }) => {
       };
       const storedExisting = await AsyncStorage.getItem('companyData');
       const existing = storedExisting ? JSON.parse(storedExisting) : null;
-      if (existing?.companyId) {
-        const result = await updateCompany(existing.companyId, payload);
-        if (result?.success) {
-          const stored = { ...formData, companyId: existing.companyId };
-          await AsyncStorage.setItem('companyData', JSON.stringify(stored));
-          Alert.alert('Updated', 'Company information updated successfully');
-          navigation.navigate('Dashboard');
+      if (mode === 'edit') {
+        if (!existing?.companyId) {
+          Alert.alert('Not Found', 'No existing company profile to edit. Please register first.');
         } else {
-          Alert.alert('Error', result?.message || 'Update failed');
+          const result = await updateCompany(existing.companyId, payload);
+          if (result?.success) {
+            const stored = { ...formData, companyId: existing.companyId };
+            await AsyncStorage.setItem('companyData', JSON.stringify(stored));
+            Alert.alert('Profile Updated Successfully', 'Your company profile has been updated.');
+            navigation.navigate('Dashboard');
+          } else {
+            Alert.alert('Error', result?.message || 'Update failed');
+          }
         }
       } else {
         const result = await registerCompany(payload);
@@ -183,9 +213,9 @@ const CompanyRegistrationScreen = ({ navigation }) => {
             >
               <Text style={styles.backButtonText}>← Back</Text>
             </TouchableOpacity>
-            <Text style={styles.title}>Register Your Company</Text>
+            <Text style={styles.title}>{mode === 'edit' ? "Edit your Company's Details" : 'Register Your Company'}</Text>
             <Text style={styles.subtitle}>
-              Set up your company profile to create professional documents
+              {mode === 'edit' ? 'Update your profile information and logo' : 'Set up your company profile to create professional documents'}
             </Text>
           </View>
 
@@ -195,12 +225,16 @@ const CompanyRegistrationScreen = ({ navigation }) => {
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Company Name *</Text>
               <TextInput
-                style={styles.input}
+                style={[styles.input, mode === 'edit' && { backgroundColor: Colors.gray?.[100] || Colors.surface }]}
                 value={formData.companyName}
                 onChangeText={(text) => updateFormData('companyName', text)}
                 placeholder="Enter your company name"
                 placeholderTextColor={Colors.textSecondary}
+                editable={mode !== 'edit'}
               />
+              {mode === 'edit' && (
+                <Text style={styles.helperText}>Company name cannot be changed.</Text>
+              )}
             </View>
 
             {/* Company Logo */}
@@ -262,9 +296,42 @@ const CompanyRegistrationScreen = ({ navigation }) => {
               />
             </View>
 
+            {/* Bank Details */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Bank Name</Text>
+              <TextInput
+                style={styles.input}
+                value={formData.bankName}
+                onChangeText={(text) => updateFormData('bankName', text)}
+                placeholder="Enter your bank name"
+                placeholderTextColor={Colors.textSecondary}
+              />
+            </View>
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Account Name</Text>
+              <TextInput
+                style={styles.input}
+                value={formData.bankAccountName}
+                onChangeText={(text) => updateFormData('bankAccountName', text)}
+                placeholder="Enter your account name"
+                placeholderTextColor={Colors.textSecondary}
+              />
+            </View>
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Account Number</Text>
+              <TextInput
+                style={styles.input}
+                value={formData.bankAccountNumber}
+                onChangeText={(text) => updateFormData('bankAccountNumber', text)}
+                placeholder="Enter your account number"
+                placeholderTextColor={Colors.textSecondary}
+                keyboardType="number-pad"
+              />
+            </View>
+
             {/* Signature */}
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Register Your Signature</Text>
+              <Text style={styles.label}>{mode === 'edit' ? 'Signature' : 'Register Your Signature'}</Text>
               <Text style={styles.helperText}>
                 Create an electronic signature to be used across invoices, receipts, and documents.
               </Text>
@@ -285,7 +352,7 @@ const CompanyRegistrationScreen = ({ navigation }) => {
                 >
                   <View style={styles.imagePlaceholder}>
                     <Text style={styles.imagePlaceholderText}>✍️</Text>
-                    <Text style={styles.imagePlaceholderLabel}>Tap to register signature</Text>
+                    <Text style={styles.imagePlaceholderLabel}>{mode === 'edit' ? 'Tap to add or update signature' : 'Tap to register signature'}</Text>
                   </View>
                 </TouchableOpacity>
               )}
@@ -298,7 +365,7 @@ const CompanyRegistrationScreen = ({ navigation }) => {
               disabled={loading}
             >
               <Text style={styles.submitButtonText}>
-                {loading ? 'Registering...' : 'Complete Registration'}
+                {loading ? (mode === 'edit' ? 'Saving...' : 'Registering...') : (mode === 'edit' ? 'Save Changes' : 'Complete Registration')}
               </Text>
             </TouchableOpacity>
           </View>
@@ -344,6 +411,7 @@ const CompanyRegistrationScreen = ({ navigation }) => {
         </View>
       </SafeAreaView>
     </Modal>
+    {mode !== 'edit' && (
     <Modal
       visible={successModalVisible}
       animationType="slide"
@@ -367,6 +435,7 @@ const CompanyRegistrationScreen = ({ navigation }) => {
         </View>
       </View>
     </Modal>
+    )}
     </>
   );
 };

@@ -70,8 +70,8 @@ const DashboardScreen = ({ navigation }) => {
     },
     {
       id: 'settings',
-      title: 'Global Options',
-      description: 'Settings, edit company, logout',
+      title: 'Settings',
+      description: 'Manage settings, edit company, logout',
       icon: '⚙️',
       color: Colors.accent
     }
@@ -182,13 +182,7 @@ const DashboardScreen = ({ navigation }) => {
           ))}
         </View>
 
-        {/* Edit Company Button */}
-        <TouchableOpacity 
-          style={styles.editButton}
-          onPress={() => navigation.navigate('CompanyRegistration')}
-        >
-          <Text style={styles.editButtonText}>Edit Company Information</Text>
-        </TouchableOpacity>
+        {/* Removed duplicate Edit Company section; use top-right Settings */}
       </ScrollView>
     </SafeAreaView>
   );
@@ -354,19 +348,7 @@ const styles = StyleSheet.create({
     fontSize: Fonts.sizes.lg,
     color: Colors.textSecondary,
   },
-  editButton: {
-    backgroundColor: Colors.secondary,
-    marginHorizontal: Spacing.lg,
-    marginTop: Spacing.lg,
-    paddingVertical: Spacing.md,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  editButtonText: {
-    color: Colors.white,
-    fontSize: Fonts.sizes.md,
-    fontWeight: Fonts.weights.medium,
-  },
+  
 });
 
 export default DashboardScreen;
