@@ -4,7 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors } from '../constants/Colors';
 import { Fonts } from '../constants/Fonts';
 import { Spacing } from '../constants/Spacing';
-import { loginCompany } from '../utils/api';
+import { loginCompany, pingBackend, getApiBaseUrl } from '../utils/api';
 
 const LoginScreen = ({ navigation }) => {
   const [companyId, setCompanyId] = useState('');
@@ -17,7 +17,20 @@ const LoginScreen = ({ navigation }) => {
     }
     setLoading(true);
     try {
+      // Diagnostics: check connectivity and log runtime base URL
+      const baseUrl = getApiBaseUrl();
+      console.log('[Login] Runtime API_BASE_URL:', baseUrl);
+      const ping = await pingBackend();
+      if (!ping.ok) {
+        Alert.alert(
+          'Network Error',
+          `Cannot reach backend at ${ping.url}.\nEnsure device USB connection is active and ports 4000/8083 are reversed.`
+        );
+        return;
+      }
+
       const result = await loginCompany(companyId.trim());
+      console.log('[Login] Result:', result);
       if (result?.success && result.company) {
         const stored = {
           companyName: result.company.name,
@@ -34,6 +47,7 @@ const LoginScreen = ({ navigation }) => {
         Alert.alert('Login Failed', result?.message || 'Invalid Company ID');
       }
     } catch (err) {
+      console.log('[Login] Error:', err);
       Alert.alert('Error', 'Failed to login');
     } finally {
       setLoading(false);

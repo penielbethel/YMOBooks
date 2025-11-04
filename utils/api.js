@@ -1,5 +1,20 @@
 import { Config } from '../constants/Config';
 
+export function getApiBaseUrl() {
+  return Config.API_BASE_URL;
+}
+
+export async function pingBackend() {
+  const url = `${Config.API_BASE_URL}/api/health`;
+  try {
+    const res = await fetch(url);
+    const data = await res.json().catch(() => null);
+    return { ok: res.ok, status: res.status, data, url };
+  } catch (err) {
+    return { ok: false, error: String(err), url };
+  }
+}
+
 export async function registerCompany(payload) {
   const res = await fetch(`${Config.API_BASE_URL}/api/register-company`, {
     method: 'POST',
@@ -21,4 +36,42 @@ export async function loginCompany(companyId) {
 export async function fetchCompany(companyId) {
   const res = await fetch(`${Config.API_BASE_URL}/api/company/${companyId}`);
   return res.json();
+}
+
+export async function updateCompany(payload) {
+  const res = await fetch(`${Config.API_BASE_URL}/api/update-company`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  return res.json();
+}
+
+export async function createInvoice(payload) {
+  const res = await fetch(`${Config.API_BASE_URL}/api/invoice/create`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  const data = await res.json();
+  if (data?.pdfPath) {
+    return { ...data, pdfUrl: `${Config.API_BASE_URL}${data.pdfPath}` };
+  }
+  return data;
+}
+
+export async function fetchInvoices(companyId, months = 6) {
+  const url = new URL(`${Config.API_BASE_URL}/api/invoices`);
+  url.searchParams.set('companyId', companyId);
+  url.searchParams.set('months', String(months));
+  const res = await fetch(url.toString());
+  const data = await res.json();
+  if (data?.invoices) {
+    // add absolute pdfUrl
+    data.invoices = data.invoices.map((inv) => ({
+      ...inv,
+      pdfUrl: inv.pdfPath ? `${Config.API_BASE_URL}${inv.pdfPath}` : undefined,
+    }));
+  }
+  return data;
 }
