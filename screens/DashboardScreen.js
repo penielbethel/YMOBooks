@@ -148,26 +148,28 @@ const DashboardScreen = ({ navigation }) => {
 
         {/* Company Details Card */}
         <View style={styles.companyCard}>
-          <Text style={styles.cardTitle}>Company Information</Text>
+          <View style={styles.cardHeader}>
+            <Text style={styles.cardTitle}>Company Information</Text>
+            <View style={styles.idBadge}>
+              <Text style={styles.idBadgeText}>ID: {companyData.companyId}</Text>
+            </View>
+          </View>
+          <View style={styles.divider} />
           <View style={styles.infoRow}>
-            <Text style={[styles.infoLabel, { fontWeight: '700' }]}>Unique ID:</Text>
-            <Text style={[styles.infoValue, { fontWeight: '700' }]}>{companyData.companyId}</Text>
+            <Text style={styles.infoLabel}>📍 Address</Text>
+            <Text style={styles.infoValue}>{companyData.address || '—'}</Text>
           </View>
           <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Address:</Text>
-            <Text style={styles.infoValue}>{companyData.address}</Text>
+            <Text style={styles.infoLabel}>✉️ Email</Text>
+            <Text style={styles.infoValue}>{companyData.email || '—'}</Text>
           </View>
           <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Email:</Text>
-            <Text style={styles.infoValue}>{companyData.email}</Text>
-          </View>
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Phone:</Text>
-            <Text style={styles.infoValue}>{companyData.phoneNumber}</Text>
+            <Text style={styles.infoLabel}>📞 Phone</Text>
+            <Text style={styles.infoValue}>{companyData.phoneNumber || '—'}</Text>
           </View>
           {companyData.signature && (
-            <View style={styles.signatureContainer}>
-              <Text style={styles.infoLabel}>Signature:</Text>
+            <View style={[styles.infoRow, { alignItems: 'center' }]}> 
+              <Text style={styles.infoLabel}>🖋️ Signature</Text>
               <Image 
                 source={{ uri: companyData.signature }} 
                 style={styles.signatureImage}
@@ -259,31 +261,52 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surface,
     margin: Spacing.lg,
     padding: Spacing.lg,
-    borderRadius: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: Colors.border,
     shadowColor: Colors.black,
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
   cardTitle: {
     fontSize: Fonts.sizes.lg,
     fontWeight: Fonts.weights.semiBold,
     color: Colors.text,
-    marginBottom: Spacing.md,
+    marginBottom: 0,
+  },
+  idBadge: {
+    backgroundColor: Colors.accent,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 20,
+  },
+  idBadgeText: {
+    color: Colors.white,
+    fontSize: Fonts.sizes.sm,
+    fontWeight: Fonts.weights.semiBold,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: Colors.border,
+    marginVertical: Spacing.md,
   },
   infoRow: {
     flexDirection: 'row',
     marginBottom: Spacing.sm,
+    alignItems: 'flex-start',
   },
   infoLabel: {
     fontSize: Fonts.sizes.md,
     fontWeight: Fonts.weights.medium,
-    color: Colors.textSecondary,
-    width: 80,
+    color: Colors.text,
+    width: 120,
   },
   infoValue: {
     fontSize: Fonts.sizes.md,
@@ -294,10 +317,12 @@ const styles = StyleSheet.create({
     marginTop: Spacing.sm,
   },
   signatureImage: {
-    width: 120,
-    height: 60,
-    marginTop: Spacing.xs,
-    borderRadius: 4,
+    width: 140,
+    height: 64,
+    marginTop: 0,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: Colors.border,
   },
   menuContainer: {
     paddingHorizontal: Spacing.lg,

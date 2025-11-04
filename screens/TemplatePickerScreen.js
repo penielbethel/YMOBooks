@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, ScrollView, Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors } from '../constants/Colors';
@@ -13,6 +13,43 @@ const TEMPLATES = [
   { key: 'bold', title: 'Bold', emoji: '🔥' },
   { key: 'compact', title: 'Compact', emoji: '📦' },
 ];
+
+const getThemeFor = (tpl) => {
+  switch (tpl) {
+    case 'modern':
+      return { primary: Colors.primary, accent: Colors.accent, border: Colors.border, text: Colors.text };
+    case 'minimal':
+      return { primary: Colors.secondary, accent: Colors.gray[300], border: Colors.gray[300], text: Colors.text };
+    case 'bold':
+      return { primary: Colors.error, accent: Colors.warning, border: Colors.border, text: Colors.text };
+    case 'compact':
+      return { primary: Colors.success, accent: Colors.gray[200], border: Colors.border, text: Colors.text };
+    case 'classic':
+    default:
+      return { primary: Colors.secondary, accent: Colors.accent, border: Colors.border, text: Colors.text };
+  }
+};
+
+const TemplatePreview = ({ companyName, template }) => {
+  const theme = useMemo(() => getThemeFor(template), [template]);
+  return (
+    <View style={[styles.previewCard, { borderColor: theme.border }]}> 
+      <View style={[styles.previewHeader, { backgroundColor: theme.primary }]}> 
+        <Text style={styles.previewTitle} numberOfLines={1}>{companyName || 'Your Company'}</Text>
+        <Text style={styles.previewType}>INVOICE</Text>
+      </View>
+      <View style={[styles.previewAccentBar, { backgroundColor: theme.accent }]} />
+      <View style={styles.previewTableHeader}>
+        <Text style={[styles.previewTh, { color: theme.text }]}>Item</Text>
+        <Text style={[styles.previewTh, { color: theme.text }]}>Qty</Text>
+        <Text style={[styles.previewTh, { color: theme.text }]}>Amount</Text>
+      </View>
+      <View style={styles.previewHintRow}>
+        <Text style={styles.previewHint}>Preview is indicative; final PDF reflects full data.</Text>
+      </View>
+    </View>
+  );
+};
 
 export default function TemplatePickerScreen({ navigation }) {
   const [company, setCompany] = useState(null);
@@ -87,6 +124,10 @@ export default function TemplatePickerScreen({ navigation }) {
               </View>
             ))}
           </View>
+          <View style={styles.previewContainer}>
+            <Text style={styles.previewLabel}>Preview</Text>
+            <TemplatePreview companyName={company?.companyName} template={invoiceTemplate} />
+          </View>
         </View>
 
         <View style={styles.section}>
@@ -97,6 +138,10 @@ export default function TemplatePickerScreen({ navigation }) {
                 {renderTemplate(t.key, t.title, t.emoji, receiptTemplate === t.key, setReceiptTemplate)}
               </View>
             ))}
+          </View>
+          <View style={styles.previewContainer}>
+            <Text style={styles.previewLabel}>Preview</Text>
+            <TemplatePreview companyName={company?.companyName} template={receiptTemplate} />
           </View>
         </View>
 
@@ -139,6 +184,34 @@ const styles = StyleSheet.create({
   templateEmoji: { fontSize: 28 },
   templateTitle: { fontSize: 15, fontFamily: Fonts.semiBold, color: Colors.text, marginTop: 8 },
   templateSubtitle: { fontSize: 12, color: Colors.textSecondary, marginTop: 2 },
+  previewContainer: { marginTop: Spacing.md },
+  previewLabel: { fontSize: 13, color: Colors.textSecondary, marginBottom: Spacing.xs },
+  previewCard: {
+    backgroundColor: Colors.surface,
+    borderRadius: 12,
+    borderWidth: 1,
+    paddingBottom: Spacing.md,
+    overflow: 'hidden',
+  },
+  previewHeader: {
+    height: 40,
+    paddingHorizontal: Spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  previewTitle: { color: Colors.white, fontSize: 14, fontFamily: Fonts.semiBold, maxWidth: '70%' },
+  previewType: { color: Colors.white, fontSize: 12, fontFamily: Fonts.medium },
+  previewAccentBar: { height: 6, width: '100%' },
+  previewTableHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: Spacing.md,
+    paddingTop: Spacing.md,
+  },
+  previewTh: { fontSize: 12, fontFamily: Fonts.medium },
+  previewHintRow: { paddingHorizontal: Spacing.md, paddingTop: Spacing.sm },
+  previewHint: { fontSize: 11, color: Colors.textSecondary },
   saveButton: {
     backgroundColor: Colors.primary,
     paddingVertical: 14,
