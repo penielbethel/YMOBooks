@@ -11,10 +11,14 @@ Prerequisites
 
 Steps
 1) Push this repo to GitHub.
-2) In Render, click “New” -> “Blueprint” and point it to your GitHub repo.
+2) Preferred: In Render, click “New” -> “Blueprint” and point it to your GitHub repo.
 3) Render will detect `render.yaml` at the repo root.
 4) Confirm the service named `ymobooks-server` and create it.
-5) Set environment variables (Render -> Service -> Environment):
+5) Alternative (if not using Blueprint): Create a Web Service from the repo root and set:
+   - Build Command: `npm --prefix server install`
+   - Start Command: `node server-start.js`
+   - Root Directory: leave as repo root
+6) Set environment variables (Render -> Service -> Environment):
    - `NODE_VERSION=20`
    - `MONGO_URI` (leave empty to rely on file fallback, or set to your Mongo URI)
    - `GENERATED_ROOT=/opt/render/project/src/server`
