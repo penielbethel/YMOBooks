@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, memo } from 'react';
 import {
   View,
   Text,
@@ -13,6 +13,22 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors } from '../constants/Colors';
 import { Fonts } from '../constants/Fonts';
 import { Spacing } from '../constants/Spacing';
+
+const MenuItem = memo(({ item, onPress }) => (
+  <TouchableOpacity
+    style={styles.menuItem}
+    onPress={() => onPress(item.id)}
+  >
+    <View style={[styles.menuIcon, { backgroundColor: item.color }]}>
+      <Text style={styles.menuIconText}>{item.icon}</Text>
+    </View>
+    <View style={styles.menuContent}>
+      <Text style={styles.menuTitle}>{item.title}</Text>
+      <Text style={styles.menuDescription}>{item.description}</Text>
+    </View>
+    <Text style={styles.menuArrow}>→</Text>
+  </TouchableOpacity>
+));
 
 const DashboardScreen = ({ navigation }) => {
   const [companyData, setCompanyData] = useState(null);
@@ -32,7 +48,7 @@ const DashboardScreen = ({ navigation }) => {
     }
   };
 
-  const menuItems = [
+  const menuItems = useMemo(() => ([
     {
       id: 'invoice',
       title: 'Create Invoice',
@@ -75,9 +91,9 @@ const DashboardScreen = ({ navigation }) => {
       icon: '⚙️',
       color: Colors.accent
     }
-  ];
+  ]), []);
 
-  const handleMenuPress = (itemId) => {
+  const handleMenuPress = useCallback((itemId) => {
     switch (itemId) {
       case 'letterhead':
         navigation.navigate('LetterheadPreview');
@@ -95,7 +111,7 @@ const DashboardScreen = ({ navigation }) => {
         // For other features, show coming soon alert
         Alert.alert('Coming Soon', `${itemId} feature will be available soon!`);
     }
-  };
+  }, [navigation]);
 
   if (!companyData) {
     return (
@@ -165,20 +181,7 @@ const DashboardScreen = ({ navigation }) => {
         <View style={styles.menuContainer}>
           <Text style={styles.sectionTitle}>What would you like to do?</Text>
           {menuItems.map((item) => (
-            <TouchableOpacity
-              key={item.id}
-              style={styles.menuItem}
-              onPress={() => handleMenuPress(item.id)}
-            >
-              <View style={[styles.menuIcon, { backgroundColor: item.color }]}>
-                <Text style={styles.menuIconText}>{item.icon}</Text>
-              </View>
-              <View style={styles.menuContent}>
-                <Text style={styles.menuTitle}>{item.title}</Text>
-                <Text style={styles.menuDescription}>{item.description}</Text>
-              </View>
-              <Text style={styles.menuArrow}>→</Text>
-            </TouchableOpacity>
+            <MenuItem key={item.id} item={item} onPress={handleMenuPress} />
           ))}
         </View>
 

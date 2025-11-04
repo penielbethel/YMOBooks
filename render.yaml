@@ -11,7 +11,7 @@ services:
       - key: NODE_VERSION
         value: 20
       - key: MONGO_URI
-        sync: false
+        value: mongodb+srv://pbmsrvr:foraminiferans@ymobooks.4dyqe3f.mongodb.net/
       - key: GENERATED_ROOT
         value: /opt/render/project/src/server
       - key: COMPANIES_FILE
