@@ -370,10 +370,28 @@ function renderFullInvoicePreview(company, template, brandColor) {
               <Text style={styles.fullText}>client@email.com</Text>
               <Text style={styles.fullText}>+1 (555) 555-5555</Text>
             </View>
-            <View style={{ alignItems: 'flex-end' }}>
-              <Text style={styles.fullMeta}>INV-001</Text>
-              <Text style={styles.fullMeta}>Issuance: {issuanceDate.toISOString().slice(0,10)}</Text>
-              <Text style={styles.fullMeta}>Due: {dueDate.toISOString().slice(0,10)}</Text>
+            <View style={{ alignItems: 'flex-end', flex: 1 }}>
+              <View style={[styles.fullInfoBox, { borderColor: theme.border }]}> 
+                {!!company?.logo && (
+                  <Image source={{ uri: company.logo }} style={{ width: 64, height: 64, borderRadius: 8, marginBottom: 6 }} />
+                )}
+                <Text style={styles.fullText}>{address}</Text>
+                <Text style={styles.fullText}>Email: {email}</Text>
+                <Text style={styles.fullText}>Phone: {phone}</Text>
+                {(bankName || accountName || accountNumber) && (
+                  <View style={{ marginTop: 6 }}>
+                    <Text style={styles.fullSection}>Bank Details</Text>
+                    {!!bankName && (<Text style={styles.fullText}>Bank: {bankName}</Text>)}
+                    {!!accountName && (<Text style={styles.fullText}>Account Name: {accountName}</Text>)}
+                    {!!accountNumber && (<Text style={styles.fullText}>Account Number: {accountNumber}</Text>)}
+                  </View>
+                )}
+              </View>
+              <View style={{ marginTop: 6 }}>
+                <Text style={styles.fullMeta}>INV-001</Text>
+                <Text style={styles.fullMeta}>Issuance: {issuanceDate.toISOString().slice(0,10)}</Text>
+                <Text style={styles.fullMeta}>Due: {dueDate.toISOString().slice(0,10)}</Text>
+              </View>
             </View>
           </View>
           <View style={styles.fullTableHeader}> 
