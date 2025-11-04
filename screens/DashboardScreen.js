@@ -90,13 +90,6 @@ const DashboardScreen = ({ navigation }) => {
       description: 'View invoices from the last 6 months',
       icon: '🗂️',
       color: Colors.success
-    },
-    {
-      id: 'settings',
-      title: 'Settings',
-      description: 'Manage settings, edit company, logout',
-      icon: '⚙️',
-      color: Colors.accent
     }
   ]), []);
 
@@ -110,9 +103,6 @@ const DashboardScreen = ({ navigation }) => {
         break;
       case 'history':
         navigation.navigate('InvoiceHistory');
-        break;
-      case 'settings':
-        navigation.navigate('Settings');
         break;
       default:
         // For other features, show coming soon alert

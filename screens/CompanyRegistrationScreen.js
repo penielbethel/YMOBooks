@@ -141,14 +141,16 @@ const CompanyRegistrationScreen = ({ navigation, route }) => {
           return null;
         }
       };
+      const isDataUrl = (str) => typeof str === 'string' && str.startsWith('data:');
 
       const payload = {
         name: formData.companyName,
         address: formData.address,
         email: formData.email,
         phone: formData.phoneNumber,
-        logo: formData.logo ? await toBase64(formData.logo) : null,
-        signature: formData.signature ? await toBase64(formData.signature) : null,
+        // Preserve existing data URLs, otherwise convert selected file URIs to base64
+        logo: formData.logo ? (isDataUrl(formData.logo) ? formData.logo : await toBase64(formData.logo)) : null,
+        signature: formData.signature ? (isDataUrl(formData.signature) ? formData.signature : await toBase64(formData.signature)) : null,
         bankAccountNumber: formData.bankAccountNumber,
         bankAccountName: formData.bankAccountName,
         bankName: formData.bankName,
