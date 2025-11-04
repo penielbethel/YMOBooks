@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, ScrollView, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, ScrollView, Alert, Modal } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors } from '../constants/Colors';
 import { Fonts } from '../constants/Fonts';
@@ -51,11 +51,246 @@ const TemplatePreview = ({ companyName, template }) => {
   );
 };
 
+function renderFullInvoicePreview(company, template) {
+  const theme = getThemeFor(template);
+  const name = company?.companyName || 'Your Company';
+  const address = company?.address || 'Company Address';
+  const email = company?.email || 'info@example.com';
+  const phone = company?.phoneNumber || '+000 000 0000';
+
+  // Common sample rows
+  const sampleRows = [
+    { desc: 'Consulting Services', qty: 8, price: 120, total: 960 },
+    { desc: 'Design & Branding', qty: 1, price: 450, total: 450 },
+    { desc: 'Hosting (12 months)', qty: 1, price: 199, total: 199 },
+  ];
+
+  const subtotal = sampleRows.reduce((s, r) => s + r.total, 0);
+  const tax = Math.round(subtotal * 0.075 * 100) / 100;
+  const grand = Math.round((subtotal + tax) * 100) / 100;
+
+  switch (template) {
+    case 'modern':
+      return (
+        <View style={[styles.fullCard, { borderColor: theme.border }]}> 
+          <View style={[styles.fullHeader, { backgroundColor: theme.primary }]}> 
+            <Text style={[styles.fullTitle, { color: Colors.white }]}>INVOICE</Text>
+            <View>
+              <Text style={[styles.fullCompany, { color: Colors.white }]} numberOfLines={1}>{name}</Text>
+              <Text style={[styles.fullMeta, { color: Colors.white }]}>INV-001 • {new Date().toLocaleDateString()}</Text>
+            </View>
+          </View>
+          <View style={[styles.fullAccent, { backgroundColor: theme.accent }]} />
+          <View style={styles.fullRow}> 
+            <View style={{ flex: 1 }}>
+              <Text style={styles.fullSection}>BILL TO</Text>
+              <Text style={styles.fullText}>Sample Client LLC</Text>
+              <Text style={styles.fullText}>123 Client Street</Text>
+              <Text style={styles.fullText}>Client City, State</Text>
+              <Text style={styles.fullText}>client@email.com</Text>
+            </View>
+            <View style={[styles.fullInfoBox, { borderColor: theme.border }]}> 
+              <Text style={styles.fullText}>{address}</Text>
+              <Text style={styles.fullText}>Email: {email}</Text>
+              <Text style={styles.fullText}>Phone: {phone}</Text>
+            </View>
+          </View>
+          <View style={styles.fullTableHeader}> 
+            <Text style={[styles.fullTh, { flex: 2 }]}>Description</Text>
+            <Text style={[styles.fullTh, { flex: 0.7, textAlign: 'center' }]}>Qty</Text>
+            <Text style={[styles.fullTh, { flex: 1, textAlign: 'right' }]}>Price</Text>
+            <Text style={[styles.fullTh, { flex: 1, textAlign: 'right' }]}>Total</Text>
+          </View>
+          {sampleRows.map((r, i) => (
+            <View key={i} style={[styles.fullRowCard, { borderColor: theme.border }]}> 
+              <Text style={[styles.fullTd, { flex: 2 }]}>{r.desc}</Text>
+              <Text style={[styles.fullTd, { flex: 0.7, textAlign: 'center' }]}>{r.qty}</Text>
+              <Text style={[styles.fullTd, { flex: 1, textAlign: 'right' }]}>${r.price.toFixed(2)}</Text>
+              <Text style={[styles.fullTd, { flex: 1, textAlign: 'right' }]}>${r.total.toFixed(2)}</Text>
+            </View>
+          ))}
+          <View style={styles.fullTotalsRight}> 
+            <View style={styles.fullTotalRow}><Text style={styles.fullMeta}>Subtotal</Text><Text style={styles.fullMeta}>${subtotal.toFixed(2)}</Text></View>
+            <View style={styles.fullTotalRow}><Text style={styles.fullMeta}>Tax (7.5%)</Text><Text style={styles.fullMeta}>${tax.toFixed(2)}</Text></View>
+            <View style={[styles.fullTotalRow, styles.fullGrand]}><Text style={styles.fullTitleSm}>Total</Text><Text style={styles.fullTitleSm}>${grand.toFixed(2)}</Text></View>
+          </View>
+          <Text style={[styles.fullHint, { marginTop: 12 }]}>Layout: modern, card rows, right-aligned totals</Text>
+        </View>
+      );
+    case 'minimal':
+      return (
+        <View style={[styles.fullCard, { borderColor: theme.border }]}> 
+          <View style={styles.fullRow}> 
+            <View style={{ flex: 1 }}>
+              <Text style={styles.fullCompany}>{name}</Text>
+              <Text style={styles.fullText}>{address}</Text>
+              <Text style={styles.fullText}>Email: {email} • {phone}</Text>
+            </View>
+            <Text style={styles.fullTitle}>INVOICE</Text>
+          </View>
+          <View style={styles.fullSeparator} />
+          <View style={styles.fullRow}> 
+            <View style={{ flex: 1 }}>
+              <Text style={styles.fullSection}>BILL TO</Text>
+              <Text style={styles.fullText}>Sample Client LLC</Text>
+            </View>
+            <View style={{ alignItems: 'flex-end' }}>
+              <Text style={styles.fullMeta}>INV-001</Text>
+              <Text style={styles.fullMeta}>{new Date().toLocaleDateString()}</Text>
+            </View>
+          </View>
+          <View style={styles.fullTableHeader}> 
+            <Text style={[styles.fullTh, { flex: 2 }]}>Description</Text>
+            <Text style={[styles.fullTh, { flex: 0.7, textAlign: 'center' }]}>Qty</Text>
+            <Text style={[styles.fullTh, { flex: 1, textAlign: 'right' }]}>Price</Text>
+            <Text style={[styles.fullTh, { flex: 1, textAlign: 'right' }]}>Total</Text>
+          </View>
+          {sampleRows.map((r, i) => (
+            <View key={i} style={styles.fullTableRow}> 
+              <Text style={[styles.fullTd, { flex: 2 }]}>{r.desc}</Text>
+              <Text style={[styles.fullTd, { flex: 0.7, textAlign: 'center' }]}>{r.qty}</Text>
+              <Text style={[styles.fullTd, { flex: 1, textAlign: 'right' }]}>${r.price.toFixed(2)}</Text>
+              <Text style={[styles.fullTd, { flex: 1, textAlign: 'right' }]}>${r.total.toFixed(2)}</Text>
+            </View>
+          ))}
+          <View style={styles.fullSeparator} />
+          <View style={styles.fullTotalsLeft}> 
+            <View style={styles.fullTotalRow}><Text style={styles.fullMeta}>Subtotal</Text><Text style={styles.fullMeta}>${subtotal.toFixed(2)}</Text></View>
+            <View style={styles.fullTotalRow}><Text style={styles.fullMeta}>Tax (7.5%)</Text><Text style={styles.fullMeta}>${tax.toFixed(2)}</Text></View>
+            <View style={styles.fullTotalRow}><Text style={styles.fullTitleSm}>Total</Text><Text style={styles.fullTitleSm}>${grand.toFixed(2)}</Text></View>
+          </View>
+          <Text style={[styles.fullHint, { marginTop: 12 }]}>Layout: minimal, separators, left totals</Text>
+        </View>
+      );
+    case 'bold':
+      return (
+        <View style={[styles.fullCard, { borderColor: theme.border }]}> 
+          <Text style={[styles.fullTitle, { color: theme.primary }]}>INVOICE</Text>
+          <View style={[styles.fullAccent, { backgroundColor: theme.accent, height: 8 }]} />
+          <View style={styles.fullRow}> 
+            <View style={{ flex: 1 }}>
+              <Text style={styles.fullCompany}>{name}</Text>
+              <Text style={styles.fullText}>{address}</Text>
+            </View>
+            <View style={{ alignItems: 'flex-end' }}>
+              <Text style={styles.fullMeta}>INV-001</Text>
+              <Text style={styles.fullMeta}>{new Date().toLocaleDateString()}</Text>
+            </View>
+          </View>
+          <View style={[styles.fullTableHeader, { backgroundColor: Colors.gray[100] }]}> 
+            <Text style={[styles.fullTh, { flex: 2 }]}>Description</Text>
+            <Text style={[styles.fullTh, { flex: 0.7, textAlign: 'center' }]}>Qty</Text>
+            <Text style={[styles.fullTh, { flex: 1, textAlign: 'right' }]}>Price</Text>
+            <Text style={[styles.fullTh, { flex: 1, textAlign: 'right' }]}>Total</Text>
+          </View>
+          {sampleRows.map((r, i) => (
+            <View key={i} style={[styles.fullTableRow, { borderBottomWidth: 2 }]}> 
+              <Text style={[styles.fullTd, { flex: 2 }]}>{r.desc}</Text>
+              <Text style={[styles.fullTd, { flex: 0.7, textAlign: 'center' }]}>{r.qty}</Text>
+              <Text style={[styles.fullTd, { flex: 1, textAlign: 'right' }]}>${r.price.toFixed(2)}</Text>
+              <Text style={[styles.fullTd, { flex: 1, textAlign: 'right' }]}>${r.total.toFixed(2)}</Text>
+            </View>
+          ))}
+          <View style={[styles.fullTotalsRight, { backgroundColor: Colors.gray[100], padding: Spacing.md, borderRadius: 8 }]}> 
+            <View style={styles.fullTotalRow}><Text style={styles.fullMeta}>Subtotal</Text><Text style={styles.fullMeta}>${subtotal.toFixed(2)}</Text></View>
+            <View style={styles.fullTotalRow}><Text style={styles.fullMeta}>Tax (7.5%)</Text><Text style={styles.fullMeta}>${tax.toFixed(2)}</Text></View>
+            <View style={[styles.fullTotalRow, styles.fullGrand]}><Text style={styles.fullTitleSm}>Total</Text><Text style={styles.fullTitleSm}>${grand.toFixed(2)}</Text></View>
+          </View>
+          <Text style={[styles.fullHint, { marginTop: 12 }]}>Layout: bold, thick separators, boxed totals</Text>
+        </View>
+      );
+    case 'compact':
+      return (
+        <View style={[styles.fullCard, { borderColor: theme.border }]}> 
+          <View style={styles.fullRow}> 
+            <Text style={styles.fullTitleSm}>INVOICE</Text>
+            <View style={{ alignItems: 'flex-end', flex: 1 }}>
+              <Text style={styles.fullMeta}>INV-001</Text>
+              <Text style={styles.fullMeta}>{new Date().toLocaleDateString()}</Text>
+            </View>
+          </View>
+          <View style={styles.fullRow}> 
+            <View style={{ flex: 1 }}>
+              <Text style={styles.fullCompany}>{name}</Text>
+              <Text style={styles.fullText}>Email: {email}</Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.fullSection}>BILL TO</Text>
+              <Text style={styles.fullText}>Sample Client LLC</Text>
+            </View>
+          </View>
+          <View style={styles.fullTableHeader}> 
+            <Text style={[styles.fullTh, { flex: 2 }]}>Item</Text>
+            <Text style={[styles.fullTh, { flex: 0.6, textAlign: 'center' }]}>Qty</Text>
+            <Text style={[styles.fullTh, { flex: 1, textAlign: 'right' }]}>Price</Text>
+            <Text style={[styles.fullTh, { flex: 1, textAlign: 'right' }]}>Total</Text>
+          </View>
+          {sampleRows.map((r, i) => (
+            <View key={i} style={[styles.fullTableRow, { paddingVertical: 6 }]}> 
+              <Text style={[styles.fullTd, { flex: 2 }]}>{r.desc}</Text>
+              <Text style={[styles.fullTd, { flex: 0.6, textAlign: 'center' }]}>{r.qty}</Text>
+              <Text style={[styles.fullTd, { flex: 1, textAlign: 'right' }]}>${r.price.toFixed(2)}</Text>
+              <Text style={[styles.fullTd, { flex: 1, textAlign: 'right' }]}>${r.total.toFixed(2)}</Text>
+            </View>
+          ))}
+          <View style={styles.fullTotalsRight}> 
+            <View style={styles.fullTotalRow}><Text style={styles.fullMeta}>Subtotal</Text><Text style={styles.fullMeta}>${subtotal.toFixed(2)}</Text></View>
+            <View style={styles.fullTotalRow}><Text style={styles.fullMeta}>Tax</Text><Text style={styles.fullMeta}>${tax.toFixed(2)}</Text></View>
+            <View style={styles.fullTotalRow}><Text style={styles.fullTitleSm}>Total</Text><Text style={styles.fullTitleSm}>${grand.toFixed(2)}</Text></View>
+          </View>
+          <Text style={[styles.fullHint, { marginTop: 12 }]}>Layout: compact, tight spacing, two-column header</Text>
+        </View>
+      );
+    case 'classic':
+    default:
+      return (
+        <View style={[styles.fullCard, { borderColor: theme.border }]}> 
+          <View style={styles.fullRow}> 
+            <Text style={[styles.fullCompany]}>{name}</Text>
+            <Text style={styles.fullTitle}>INVOICE</Text>
+          </View>
+          <View style={styles.fullSeparator} />
+          <View style={styles.fullRow}> 
+            <View style={{ flex: 1 }}>
+              <Text style={styles.fullSection}>BILL TO</Text>
+              <Text style={styles.fullText}>Sample Client LLC</Text>
+              <Text style={styles.fullText}>123 Client Street</Text>
+            </View>
+            <View style={{ alignItems: 'flex-end' }}>
+              <Text style={styles.fullMeta}>INV-001</Text>
+              <Text style={styles.fullMeta}>{new Date().toLocaleDateString()}</Text>
+            </View>
+          </View>
+          <View style={styles.fullTableHeader}> 
+            <Text style={[styles.fullTh, { flex: 2 }]}>Description</Text>
+            <Text style={[styles.fullTh, { flex: 0.7, textAlign: 'center' }]}>Qty</Text>
+            <Text style={[styles.fullTh, { flex: 1, textAlign: 'right' }]}>Price</Text>
+            <Text style={[styles.fullTh, { flex: 1, textAlign: 'right' }]}>Total</Text>
+          </View>
+          {sampleRows.map((r, i) => (
+            <View key={i} style={styles.fullTableRow}> 
+              <Text style={[styles.fullTd, { flex: 2 }]}>{r.desc}</Text>
+              <Text style={[styles.fullTd, { flex: 0.7, textAlign: 'center' }]}>{r.qty}</Text>
+              <Text style={[styles.fullTd, { flex: 1, textAlign: 'right' }]}>${r.price.toFixed(2)}</Text>
+              <Text style={[styles.fullTd, { flex: 1, textAlign: 'right' }]}>${r.total.toFixed(2)}</Text>
+            </View>
+          ))}
+          <View style={styles.fullTotalsRight}> 
+            <View style={styles.fullTotalRow}><Text style={styles.fullMeta}>Subtotal</Text><Text style={styles.fullMeta}>${subtotal.toFixed(2)}</Text></View>
+            <View style={styles.fullTotalRow}><Text style={styles.fullMeta}>Tax (7.5%)</Text><Text style={styles.fullMeta}>${tax.toFixed(2)}</Text></View>
+            <View style={styles.fullTotalRow}><Text style={styles.fullTitleSm}>Total</Text><Text style={styles.fullTitleSm}>${grand.toFixed(2)}</Text></View>
+          </View>
+          <Text style={[styles.fullHint, { marginTop: 12 }]}>Layout: classic, balanced header and table</Text>
+        </View>
+      );
+  }
+}
+
 export default function TemplatePickerScreen({ navigation }) {
   const [company, setCompany] = useState(null);
   const [invoiceTemplate, setInvoiceTemplate] = useState('classic');
-  const [receiptTemplate, setReceiptTemplate] = useState('classic');
   const [saving, setSaving] = useState(false);
+  const [previewVisible, setPreviewVisible] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -65,7 +300,6 @@ export default function TemplatePickerScreen({ navigation }) {
           const parsed = JSON.parse(data);
           setCompany(parsed);
           setInvoiceTemplate(parsed.invoiceTemplate || 'classic');
-          setReceiptTemplate(parsed.receiptTemplate || 'classic');
         }
       } catch (err) {
         Alert.alert('Error', 'Failed to load company data');
@@ -77,9 +311,10 @@ export default function TemplatePickerScreen({ navigation }) {
     if (!company?.companyId) return Alert.alert('Not Found', 'Company ID missing. Please login again.');
     setSaving(true);
     try {
-      const res = await updateCompany(company.companyId, { invoiceTemplate, receiptTemplate });
+      // Save receiptTemplate equal to invoiceTemplate as requested
+      const res = await updateCompany(company.companyId, { invoiceTemplate, receiptTemplate: invoiceTemplate });
       if (res?.success) {
-        const updated = { ...company, invoiceTemplate, receiptTemplate };
+        const updated = { ...company, invoiceTemplate, receiptTemplate: invoiceTemplate };
         await AsyncStorage.setItem('companyData', JSON.stringify(updated));
         Alert.alert('Saved', 'Template preferences updated successfully. New invoices will use your selected style.');
         navigation.goBack();
@@ -111,8 +346,8 @@ export default function TemplatePickerScreen({ navigation }) {
           <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
             <Text style={styles.backButtonText}>← Back</Text>
           </TouchableOpacity>
-          <Text style={styles.title}>Pick Your Templates</Text>
-          <Text style={styles.subtitle}>Choose invoice and receipt styles. Your choice affects future PDFs.</Text>
+          <Text style={styles.title}>Pick Your Invoice Template</Text>
+          <Text style={styles.subtitle}>Choose how your invoice looks. Tap preview for full layout.</Text>
         </View>
 
         <View style={styles.section}>
@@ -126,28 +361,31 @@ export default function TemplatePickerScreen({ navigation }) {
           </View>
           <View style={styles.previewContainer}>
             <Text style={styles.previewLabel}>Preview</Text>
-            <TemplatePreview companyName={company?.companyName} template={invoiceTemplate} />
-          </View>
-        </View>
-
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Receipt Template</Text>
-          <View style={styles.grid}>
-            {TEMPLATES.map((t) => (
-              <View key={`rcp-${t.key}`} style={styles.gridItem}>
-                {renderTemplate(t.key, t.title, t.emoji, receiptTemplate === t.key, setReceiptTemplate)}
-              </View>
-            ))}
-          </View>
-          <View style={styles.previewContainer}>
-            <Text style={styles.previewLabel}>Preview</Text>
-            <TemplatePreview companyName={company?.companyName} template={receiptTemplate} />
+            <TouchableOpacity activeOpacity={0.8} onPress={() => setPreviewVisible(true)}>
+              <TemplatePreview companyName={company?.companyName} template={invoiceTemplate} />
+              <Text style={styles.tapHint}>Tap to view full layout</Text>
+            </TouchableOpacity>
           </View>
         </View>
 
         <TouchableOpacity style={[styles.saveButton, saving && styles.saveButtonDisabled]} onPress={saveSelection} disabled={saving}>
           <Text style={styles.saveButtonText}>{saving ? 'Saving...' : 'Save Preference'}</Text>
         </TouchableOpacity>
+
+        {/* Full-screen preview modal */}
+        <Modal visible={previewVisible} animationType="slide" onRequestClose={() => setPreviewVisible(false)}>
+          <SafeAreaView style={[styles.container, { backgroundColor: Colors.gray[100] }]}> 
+            <View style={styles.modalHeader}>
+              <TouchableOpacity style={styles.backButton} onPress={() => setPreviewVisible(false)}>
+                <Text style={styles.backButtonText}>← Close</Text>
+              </TouchableOpacity>
+              <Text style={styles.title}>Invoice Preview — {invoiceTemplate.charAt(0).toUpperCase() + invoiceTemplate.slice(1)}</Text>
+            </View>
+            <ScrollView contentContainerStyle={{ padding: Spacing.lg }}>
+              {renderFullInvoicePreview(company, invoiceTemplate)}
+            </ScrollView>
+          </SafeAreaView>
+        </Modal>
       </ScrollView>
     </SafeAreaView>
   );
@@ -184,6 +422,7 @@ const styles = StyleSheet.create({
   templateEmoji: { fontSize: 28 },
   templateTitle: { fontSize: 15, fontFamily: Fonts.semiBold, color: Colors.text, marginTop: 8 },
   templateSubtitle: { fontSize: 12, color: Colors.textSecondary, marginTop: 2 },
+  tapHint: { fontSize: 11, color: Colors.textSecondary, textAlign: 'center', marginTop: 6 },
   previewContainer: { marginTop: Spacing.md },
   previewLabel: { fontSize: 13, color: Colors.textSecondary, marginBottom: Spacing.xs },
   previewCard: {
@@ -212,6 +451,85 @@ const styles = StyleSheet.create({
   previewTh: { fontSize: 12, fontFamily: Fonts.medium },
   previewHintRow: { paddingHorizontal: Spacing.md, paddingTop: Spacing.sm },
   previewHint: { fontSize: 11, color: Colors.textSecondary },
+  modalHeader: { paddingHorizontal: Spacing.lg, paddingVertical: Spacing.md },
+  // Full preview styles
+  fullCard: {
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderRadius: 12,
+    borderColor: Colors.border,
+    overflow: 'hidden',
+  },
+  fullHeader: {
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.md,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  fullTitle: { fontSize: 20, fontFamily: Fonts.bold, color: Colors.text },
+  fullTitleSm: { fontSize: 16, fontFamily: Fonts.semiBold, color: Colors.text },
+  fullCompany: { fontSize: 16, fontFamily: Fonts.semiBold, color: Colors.text },
+  fullMeta: { fontSize: 12, color: Colors.textSecondary },
+  fullAccent: { height: 6, width: '100%' },
+  fullRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.md,
+  },
+  fullInfoBox: {
+    minWidth: 160,
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: Spacing.sm,
+  },
+  fullSection: { fontSize: 12, color: Colors.textSecondary, marginBottom: 4 },
+  fullText: { fontSize: 12, color: Colors.text },
+  fullSeparator: { height: 1, backgroundColor: Colors.border, marginHorizontal: Spacing.lg, marginTop: Spacing.md },
+  fullTableHeader: {
+    flexDirection: 'row',
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: Colors.border,
+    marginTop: Spacing.md,
+  },
+  fullTh: { fontSize: 12, fontFamily: Fonts.semiBold, color: Colors.text },
+  fullTableRow: {
+    flexDirection: 'row',
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    borderBottomWidth: 1,
+    borderColor: Colors.border,
+  },
+  fullRowCard: {
+    flexDirection: 'row',
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    borderWidth: 1,
+    borderRadius: 8,
+    marginHorizontal: Spacing.lg,
+    marginTop: Spacing.sm,
+  },
+  fullTd: { fontSize: 12, color: Colors.text },
+  fullTotalsRight: {
+    alignSelf: 'flex-end',
+    width: 260,
+    marginTop: Spacing.md,
+    marginRight: Spacing.lg,
+  },
+  fullTotalsLeft: {
+    alignSelf: 'flex-start',
+    width: 260,
+    marginTop: Spacing.md,
+    marginLeft: Spacing.lg,
+  },
+  fullTotalRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 },
+  fullGrand: { borderTopWidth: 1, borderColor: Colors.border, paddingTop: 6, marginTop: 6 },
+  fullHint: { fontSize: 11, color: Colors.textSecondary, textAlign: 'center' },
   saveButton: {
     backgroundColor: Colors.primary,
     paddingVertical: 14,
