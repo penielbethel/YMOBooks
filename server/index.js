@@ -96,6 +96,9 @@ const CompanySchema = new mongoose.Schema(
     bankName: { type: String },
     accountName: { type: String },
     accountNumber: { type: String, unique: true, sparse: true },
+    // Document templates
+    invoiceTemplate: { type: String, default: 'classic' },
+    receiptTemplate: { type: String, default: 'classic' },
   },
   { timestamps: true }
 );
@@ -187,7 +190,7 @@ async function detectConflicts(uniqueFields = {}, excludeCompanyId = null) {
 // Routes
 app.post('/api/register-company', async (req, res) => {
   try {
-    const { name, address, email, phone, logo, signature, bankName, accountName, accountNumber, bankAccountName, bankAccountNumber } = req.body;
+    const { name, address, email, phone, logo, signature, bankName, accountName, accountNumber, bankAccountName, bankAccountNumber, invoiceTemplate, receiptTemplate } = req.body;
     if (!name) return res.status(400).json({ success: false, message: 'Company name is required' });
 
     // Duplicate checks (prefer DB when connected)
@@ -216,6 +219,8 @@ app.post('/api/register-company', async (req, res) => {
       bankName,
       accountName: accountName || bankAccountName,
       accountNumber: accountNumber || bankAccountNumber,
+      invoiceTemplate: typeof invoiceTemplate === 'string' ? invoiceTemplate : 'classic',
+      receiptTemplate: typeof receiptTemplate === 'string' ? receiptTemplate : 'classic',
     };
 
     // Try DB, but don't fail registration if DB is down
@@ -238,7 +243,7 @@ app.post('/api/register-company', async (req, res) => {
 // Update company details (including bank info)
 app.post('/api/update-company', async (req, res) => {
   try {
-    const { companyId, name, address, email, phone, logo, signature, bankName, accountName, accountNumber, bankAccountName, bankAccountNumber } = req.body;
+    const { companyId, name, address, email, phone, logo, signature, bankName, accountName, accountNumber, bankAccountName, bankAccountNumber, invoiceTemplate, receiptTemplate } = req.body;
     if (!companyId) return res.status(400).json({ success: false, message: 'Company ID is required' });
     const update = {
       name,
@@ -250,6 +255,8 @@ app.post('/api/update-company', async (req, res) => {
       bankName,
       accountName: accountName || bankAccountName,
       accountNumber: accountNumber || bankAccountNumber,
+      invoiceTemplate,
+      receiptTemplate,
     };
     Object.keys(update).forEach((k) => update[k] === undefined && delete update[k]);
     // Duplicate checks for updates (exclude current company)
@@ -291,6 +298,103 @@ app.post('/api/update-company', async (req, res) => {
   }
 });
 
+// Helper: draw invoice by template style
+function drawInvoiceByTemplate(doc, company, invNo, invoiceDate, dueDate, customer, items) {
+  const template = (company.invoiceTemplate || 'classic').toLowerCase();
+  const theme = {
+    classic: { primary: '#000000', accent: '#333333', tableHeader: '#eeeeee' },
+    modern: { primary: '#1f6feb', accent: '#0ea5e9', tableHeader: '#e0f2fe' },
+    minimal: { primary: '#111827', accent: '#6b7280', tableHeader: '#f3f4f6' },
+    bold: { primary: '#d97706', accent: '#b45309', tableHeader: '#fef3c7' },
+    compact: { primary: '#10b981', accent: '#047857', tableHeader: '#d1fae5' },
+  }[template] || { primary: '#000000', accent: '#333333', tableHeader: '#eeeeee' };
+
+  // Top decorative bar
+  doc.save();
+  doc.rect(doc.page.margins.left, doc.page.margins.top, doc.page.width - doc.page.margins.left - doc.page.margins.right, 18).fill(theme.primary);
+  doc.restore();
+
+  doc.fillColor('#ffffff').fontSize(12).text((company.name || 'Company'), doc.page.margins.left + 6, doc.page.margins.top + 2, { continued: true });
+  if (company.companyId) {
+    doc.fillColor('#ffffff').text(` • ${company.companyId}`);
+  }
+
+  // Right-side Invoice meta
+  doc.fillColor(theme.accent).fontSize(20).text('Invoice', { align: 'right' });
+  doc.fontSize(10).fillColor('#000').text(`Invoice No: ${invNo}`, { align: 'right' });
+  doc.text(`Invoice Date: ${dayjs(invoiceDate || undefined).isValid() ? dayjs(invoiceDate).format('YYYY-MM-DD') : dayjs().format('YYYY-MM-DD')}`, { align: 'right' });
+  if (dueDate) doc.text(`Due Date: ${dueDate}`, { align: 'right' });
+
+  // Contact block
+  doc.moveDown(0.5);
+  doc.fillColor('#333').fontSize(10);
+  if (company.address) doc.text(company.address);
+  if (company.email) doc.text(company.email);
+  if (company.phone) doc.text(company.phone);
+  if (company.bankName || company.accountName || company.accountNumber) {
+    doc.moveDown(0.2);
+    doc.text(`Bank: ${company.bankName || ''}`);
+    doc.text(`Account Name: ${company.accountName || ''}`);
+    doc.text(`Account Number: ${company.accountNumber || ''}`);
+  }
+
+  // Customer section
+  doc.moveDown(1);
+  doc.fontSize(template === 'bold' ? 13 : 12).fillColor(theme.primary).text('Bill To:', { underline: template === 'classic' });
+  doc.fontSize(10).fillColor('#333');
+  if (customer.name) doc.text(customer.name);
+  if (customer.address) doc.text(customer.address);
+  if (customer.contact) doc.text(`Contact: ${customer.contact}`);
+
+  // Items table
+  doc.moveDown(1);
+  const startX = doc.page.margins.left;
+  const tableTop = doc.y;
+  const colDesc = 260;
+  const colQty = 60;
+  const colUnit = 100;
+  const colTotal = 100;
+  const rowHeight = 22;
+
+  // Header row background
+  doc.save();
+  doc.rect(startX, tableTop, doc.page.width - startX - doc.page.margins.right, rowHeight).fill(theme.tableHeader);
+  doc.restore();
+  doc.fillColor('#000').fontSize(10).text('Description', startX + 8, tableTop + 6, { width: colDesc });
+  doc.text('Qty', startX + 8 + colDesc, tableTop + 6, { width: colQty, align: 'center' });
+  doc.text('Unit Price', startX + 8 + colDesc + colQty, tableTop + 6, { width: colUnit, align: 'right' });
+  doc.text('Total', startX + 8 + colDesc + colQty + colUnit, tableTop + 6, { width: colTotal, align: 'right' });
+
+  let y = tableTop + rowHeight;
+  items.forEach((it, idx) => {
+    if ((template === 'modern' || template === 'compact') && idx % 2 === 1) {
+      doc.save();
+      doc.rect(startX, y, doc.page.width - startX - doc.page.margins.right, rowHeight).fill('#fafafa');
+      doc.restore();
+    }
+    doc.fillColor('#333').fontSize(10).text(String(it.description || ''), startX + 8, y + 6, { width: colDesc });
+    doc.text(String(Number(it.qty || 0)), startX + 8 + colDesc, y + 6, { width: colQty, align: 'center' });
+    doc.text((Number(it.price || 0)).toFixed(2), startX + 8 + colDesc + colQty, y + 6, { width: colUnit, align: 'right' });
+    doc.text((Number(it.total || (Number(it.qty || 0) * Number(it.price || 0)))).toFixed(2), startX + 8 + colDesc + colQty + colUnit, y + 6, { width: colTotal, align: 'right' });
+    y += rowHeight;
+    if (y > doc.page.height - 120) {
+      doc.addPage();
+      y = doc.page.margins.top;
+    }
+  });
+
+  // Totals
+  const grandTotal = items.reduce((sum, it) => sum + (Number(it.qty || 0) * Number(it.price || 0)), 0);
+  doc.moveTo(startX, y + 8).lineTo(doc.page.width - doc.page.margins.right, y + 8).stroke(theme.accent);
+  doc.fontSize(template === 'minimal' ? 12 : 14).fillColor(theme.primary);
+  doc.text('Total:', startX + colDesc + colQty + 8, y + 20, { width: colUnit, align: 'right' });
+  doc.text(grandTotal.toFixed(2), startX + colDesc + colQty + colUnit + 8, y + 20, { width: colTotal, align: 'right' });
+
+  // Footer
+  doc.moveDown(1);
+  doc.fontSize(9).fillColor('#777').text('Powered by YMOBooks', { align: 'right' });
+}
+
 // Create invoice PDF (A4, multi-page if needed)
 app.post('/api/invoice/create', async (req, res) => {
   try {
@@ -316,86 +420,8 @@ app.post('/api/invoice/create', async (req, res) => {
     const stream = fs.createWriteStream(filePath);
     doc.pipe(stream);
 
-    // Header: Company name and contact
-    doc.fontSize(18).text(company.name || 'Company', { align: 'left' });
-    doc.moveDown(0.2);
-    doc.fontSize(10).fillColor('#333');
-    if (company.address) doc.text(company.address);
-    if (company.email) doc.text(company.email);
-    if (company.phone) doc.text(company.phone);
-    doc.moveDown(0.4);
-    // Bank details
-    if (company.bankName || company.accountName || company.accountNumber) {
-      doc.fontSize(10).fillColor('#000').text(`Bank: ${company.bankName || ''}`);
-      doc.text(`Account Name: ${company.accountName || ''}`);
-      doc.text(`Account Number: ${company.accountNumber || ''}`);
-    }
-
-    // Invoice Meta
-    doc.moveDown(0.6);
-    doc.fontSize(14).fillColor('#000').text('Invoice', { align: 'right' });
-    doc.fontSize(10);
-    doc.text(`Invoice No: ${invNo}`, { align: 'right' });
-    doc.text(`Invoice Date: ${dayjs(invoiceDate || undefined).isValid() ? dayjs(invoiceDate).format('YYYY-MM-DD') : dayjs().format('YYYY-MM-DD')}`, { align: 'right' });
-    if (dueDate) doc.text(`Due Date: ${dueDate}`, { align: 'right' });
-
-    // Customer section
-    doc.moveDown(1);
-    doc.fontSize(12).text('Bill To:', { underline: true });
-    doc.fontSize(10).fillColor('#333');
-    if (customer.name) doc.text(customer.name);
-    if (customer.address) doc.text(customer.address);
-    if (customer.contact) doc.text(`Contact: ${customer.contact}`);
-
-    // Items table
-    doc.moveDown(1);
-    const tableTop = doc.y;
-    const colQty = 60;
-    const colDesc = 260;
-    const colUnit = 100;
-    const colTotal = 100;
-    const startX = doc.page.margins.left;
-    const startY = tableTop;
-    const rowHeight = 22;
-
-    function drawRow(y, qty, desc, unit, total, header = false) {
-      doc.fontSize(header ? 11 : 10).fillColor(header ? '#000' : '#333');
-      doc.text(qty, startX, y, { width: colQty });
-      doc.text(desc, startX + colQty, y, { width: colDesc });
-      doc.text(unit, startX + colQty + colDesc, y, { width: colUnit, align: 'right' });
-      doc.text(total, startX + colQty + colDesc + colUnit, y, { width: colTotal, align: 'right' });
-    }
-
-    drawRow(startY, 'Qty', 'Description', 'Unit Price', 'Total', true);
-    let y = startY + rowHeight;
-    let grandTotal = 0;
-    items.forEach((it, idx) => {
-      const qty = Number(it.qty || 0);
-      const unit = Number(it.price || 0);
-      const lineTotal = qty * unit;
-      grandTotal += lineTotal;
-
-      // Add page if needed
-      if (y > doc.page.height - doc.page.margins.bottom - 40) {
-        doc.addPage();
-        y = doc.page.margins.top;
-        drawRow(y, 'Qty', 'Description', 'Unit Price', 'Total', true);
-        y += rowHeight;
-      }
-
-      drawRow(y, String(qty), String(it.description || ''), unit.toFixed(2), lineTotal.toFixed(2));
-      y += rowHeight;
-    });
-
-    doc.moveTo(startX, y).lineTo(startX + colQty + colDesc + colUnit + colTotal, y).stroke('#ddd');
-    y += 10;
-    doc.fontSize(12).fillColor('#000').text(`Total: ${grandTotal.toFixed(2)}`, startX + colQty + colDesc + colUnit, y, { width: colTotal, align: 'right' });
-
-    // Attachments removed as per requirements
-
-    // Footer
-    doc.moveDown(1);
-    doc.fontSize(9).fillColor('#777').text('Powered by YMOBooks', { align: 'right' });
+    // Template-aware rendering
+    drawInvoiceByTemplate(doc, company, invNo, invoiceDate, dueDate, customer, items);
 
     doc.end();
 

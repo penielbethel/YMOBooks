@@ -10,6 +10,7 @@ import WelcomeScreen from './screens/WelcomeScreen';
 import CompanyRegistrationScreen from './screens/CompanyRegistrationScreen';
 import DashboardScreen from './screens/DashboardScreen';
 import LetterheadPreviewScreen from './screens/LetterheadPreviewScreen';
+import TemplatePickerScreen from './screens/TemplatePickerScreen';
 import LoginScreen from './screens/LoginScreen';
 import SettingsScreen from './screens/SettingsScreen';
 import CreateInvoiceScreen from './screens/CreateInvoiceScreen';
@@ -52,6 +53,8 @@ export default function App() {
                 logo: c.logo || null,
                 signature: c.signature || null,
                 companyId: c.companyId,
+                invoiceTemplate: c.invoiceTemplate || 'classic',
+                receiptTemplate: c.receiptTemplate || 'classic',
               };
               await AsyncStorage.setItem('companyData', JSON.stringify(stored));
               setHasCompanyData(true);
@@ -146,6 +149,13 @@ export default function App() {
         <Stack.Screen 
           name="LetterheadPreview" 
           component={LetterheadPreviewScreen}
+          options={{
+            animationEnabled: true,
+          }}
+        />
+        <Stack.Screen 
+          name="TemplatePicker" 
+          component={TemplatePickerScreen}
           options={{
             animationEnabled: true,
           }}

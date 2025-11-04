@@ -45,6 +45,8 @@ const LoginScreen = ({ navigation }) => {
           logo: result.company.logo || null,
           signature: result.company.signature || null,
           companyId: result.company.companyId,
+          invoiceTemplate: result.company.invoiceTemplate || 'classic',
+          receiptTemplate: result.company.receiptTemplate || 'classic',
         };
         await AsyncStorage.setItem('companyData', JSON.stringify(stored));
         navigation.navigate('Dashboard');

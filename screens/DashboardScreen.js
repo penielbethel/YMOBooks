@@ -24,11 +24,8 @@ const MenuItem = memo(({ item, onPress }) => (
     <View style={[styles.menuIcon, { backgroundColor: item.color }]}>
       <Text style={styles.menuIconText}>{item.icon}</Text>
     </View>
-    <View style={styles.menuContent}>
-      <Text style={styles.menuTitle}>{item.title}</Text>
-      <Text style={styles.menuDescription}>{item.description}</Text>
-    </View>
-    <Text style={styles.menuArrow}>→</Text>
+    <Text style={styles.menuTitle}>{item.title}</Text>
+    <Text style={styles.menuDescription}>{item.description}</Text>
   </TouchableOpacity>
 ));
 
@@ -79,8 +76,8 @@ const DashboardScreen = ({ navigation }) => {
     },
     {
       id: 'letterhead',
-      title: 'View Letterhead',
-      description: 'Preview your company letterhead',
+      title: 'Pick Invoice/Receipt Template',
+      description: 'Choose your document styles',
       icon: '🏢',
       color: Colors.secondary
     },
@@ -96,7 +93,7 @@ const DashboardScreen = ({ navigation }) => {
   const handleMenuPress = useCallback((itemId) => {
     switch (itemId) {
       case 'letterhead':
-        navigation.navigate('LetterheadPreview');
+        navigation.navigate('TemplatePicker');
         break;
       case 'invoice':
         navigation.navigate('CreateInvoice');
@@ -138,6 +135,7 @@ const DashboardScreen = ({ navigation }) => {
             <View style={styles.companyInfo}>
               <Text style={styles.companyName}>{companyData.companyName}</Text>
               <Text style={styles.welcomeText}>Welcome to YMOBooks</Text>
+              <Text style={[styles.welcomeText, { fontWeight: '700', color: Colors.text }]}>ID: {companyData.companyId}</Text>
             </View>
             {/* Top-right hamburger for Global Options */}
             <TouchableOpacity style={styles.hamburgerButton} onPress={() => navigation.navigate('Settings')}>
@@ -151,6 +149,10 @@ const DashboardScreen = ({ navigation }) => {
         {/* Company Details Card */}
         <View style={styles.companyCard}>
           <Text style={styles.cardTitle}>Company Information</Text>
+          <View style={styles.infoRow}>
+            <Text style={[styles.infoLabel, { fontWeight: '700' }]}>Unique ID:</Text>
+            <Text style={[styles.infoValue, { fontWeight: '700' }]}>{companyData.companyId}</Text>
+          </View>
           <View style={styles.infoRow}>
             <Text style={styles.infoLabel}>Address:</Text>
             <Text style={styles.infoValue}>{companyData.address}</Text>
@@ -177,9 +179,11 @@ const DashboardScreen = ({ navigation }) => {
         {/* Menu Items */}
         <View style={styles.menuContainer}>
           <Text style={styles.sectionTitle}>What would you like to do?</Text>
-          {menuItems.map((item) => (
-            <MenuItem key={item.id} item={item} onPress={handleMenuPress} />
-          ))}
+          <View style={styles.menuGrid}>
+            {menuItems.map((item) => (
+              <MenuItem key={item.id} item={item} onPress={handleMenuPress} />
+            ))}
+          </View>
         </View>
 
         {/* Removed duplicate Edit Company section; use top-right Settings */}
@@ -298,6 +302,11 @@ const styles = StyleSheet.create({
   menuContainer: {
     paddingHorizontal: Spacing.lg,
   },
+  menuGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+  },
   sectionTitle: {
     fontSize: Fonts.sizes.lg,
     fontWeight: Fonts.weights.semiBold,
@@ -305,49 +314,44 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.lg,
   },
   menuItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    width: '48%',
+    aspectRatio: 1,
     backgroundColor: Colors.surface,
-    padding: Spacing.lg,
+    borderRadius: 16,
+    padding: Spacing.md,
     marginBottom: Spacing.md,
-    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
     shadowColor: Colors.black,
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.12,
+    shadowRadius: 6,
+    elevation: 4,
   },
   menuIcon: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
+    width: 64,
+    height: 64,
+    borderRadius: 14,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: Spacing.md,
+    marginBottom: Spacing.sm,
   },
   menuIconText: {
-    fontSize: 24,
-  },
-  menuContent: {
-    flex: 1,
+    fontSize: 32,
   },
   menuTitle: {
-    fontSize: Fonts.sizes.lg,
+    fontSize: Fonts.sizes.md,
     fontWeight: Fonts.weights.semiBold,
     color: Colors.text,
-    marginBottom: Spacing.xs,
+    textAlign: 'center',
+    marginTop: Spacing.xs,
   },
   menuDescription: {
-    fontSize: Fonts.sizes.sm,
+    fontSize: Fonts.sizes.xs,
     color: Colors.textSecondary,
+    textAlign: 'center',
   },
-  menuArrow: {
-    fontSize: Fonts.sizes.lg,
-    color: Colors.textSecondary,
-  },
+  
   
 });
 
