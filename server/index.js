@@ -93,6 +93,7 @@ const CompanySchema = new mongoose.Schema(
     logo: { type: String }, // base64 or URL
     signature: { type: String }, // base64 or URL (optional)
     brandColor: { type: String },
+    currencySymbol: { type: String, default: '$' },
     // Bank details
     bankName: { type: String },
     accountName: { type: String },
@@ -268,7 +269,7 @@ function numberToWords(num) {
 // Routes
 app.post('/api/register-company', async (req, res) => {
   try {
-    const { name, address, email, phone, logo, signature, brandColor, bankName, accountName, accountNumber, bankAccountName, bankAccountNumber, invoiceTemplate, receiptTemplate } = req.body;
+    const { name, address, email, phone, logo, signature, brandColor, currencySymbol, bankName, accountName, accountNumber, bankAccountName, bankAccountNumber, invoiceTemplate, receiptTemplate } = req.body;
     if (!name) return res.status(400).json({ success: false, message: 'Company name is required' });
 
     // Duplicate checks (prefer DB when connected)
@@ -295,6 +296,7 @@ app.post('/api/register-company', async (req, res) => {
       logo,
       signature,
       brandColor,
+      currencySymbol,
       bankName,
       accountName: accountName || bankAccountName,
       accountNumber: accountNumber || bankAccountNumber,
@@ -322,7 +324,7 @@ app.post('/api/register-company', async (req, res) => {
 // Update company details (including bank info)
 app.post('/api/update-company', async (req, res) => {
   try {
-    const { companyId, name, address, email, phone, logo, signature, brandColor, bankName, accountName, accountNumber, bankAccountName, bankAccountNumber, invoiceTemplate, receiptTemplate } = req.body;
+    const { companyId, name, address, email, phone, logo, signature, brandColor, currencySymbol, bankName, accountName, accountNumber, bankAccountName, bankAccountNumber, invoiceTemplate, receiptTemplate } = req.body;
     if (!companyId) return res.status(400).json({ success: false, message: 'Company ID is required' });
     const update = {
       name,
@@ -332,6 +334,7 @@ app.post('/api/update-company', async (req, res) => {
       logo,
       signature,
       brandColor,
+      currencySymbol,
       bankName,
       accountName: accountName || bankAccountName,
       accountNumber: accountNumber || bankAccountNumber,
@@ -396,6 +399,8 @@ function drawInvoiceByTemplate(doc, company, invNo, invoiceDate, dueDate, custom
     theme.accent = shadeColor(base, -20);
     theme.tableHeader = shadeColor(base, 70);
   }
+
+  const curr = (company.currencySymbol && String(company.currencySymbol).trim()) || '$';
 
   // Top decorative bar
   doc.save();
@@ -473,8 +478,8 @@ function drawInvoiceByTemplate(doc, company, invNo, invoiceDate, dueDate, custom
     }
     doc.fillColor('#333').fontSize(10).text(String(it.description || ''), startX + 8, y + 6, { width: colDesc });
     doc.text(String(Number(it.qty || 0)), startX + 8 + colDesc, y + 6, { width: colQty, align: 'center' });
-    doc.text((Number(it.price || 0)).toFixed(2), startX + 8 + colDesc + colQty, y + 6, { width: colUnit, align: 'right' });
-    doc.text((Number(it.total || (Number(it.qty || 0) * Number(it.price || 0)))).toFixed(2), startX + 8 + colDesc + colQty + colUnit, y + 6, { width: colTotal, align: 'right' });
+    doc.text(`${curr}${(Number(it.price || 0)).toFixed(2)}`, startX + 8 + colDesc + colQty, y + 6, { width: colUnit, align: 'right' });
+    doc.text(`${curr}${(Number(it.total || (Number(it.qty || 0) * Number(it.price || 0)))).toFixed(2)}`, startX + 8 + colDesc + colQty + colUnit, y + 6, { width: colTotal, align: 'right' });
     y += rowHeight;
     if (y > doc.page.height - 120) {
       doc.addPage();
@@ -487,7 +492,7 @@ function drawInvoiceByTemplate(doc, company, invNo, invoiceDate, dueDate, custom
   doc.moveTo(startX, y + 8).lineTo(doc.page.width - doc.page.margins.right, y + 8).stroke(theme.accent);
   doc.fontSize(template === 'minimal' ? 12 : 14).fillColor(theme.primary);
   doc.text('Total:', startX + colDesc + colQty + 8, y + 20, { width: colUnit, align: 'right' });
-  doc.text(grandTotal.toFixed(2), startX + colDesc + colQty + colUnit + 8, y + 20, { width: colTotal, align: 'right' });
+  doc.text(`${curr}${grandTotal.toFixed(2)}`, startX + colDesc + colQty + colUnit + 8, y + 20, { width: colTotal, align: 'right' });
 
   // Amount in words
   doc.moveDown(0.5);
