@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, ScrollView, Alert, Modal } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, ScrollView, Alert, Modal, TextInput, Image } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors } from '../constants/Colors';
 import { Fonts } from '../constants/Fonts';
@@ -14,24 +14,40 @@ const TEMPLATES = [
   { key: 'compact', title: 'Compact', emoji: '📦' },
 ];
 
-const getThemeFor = (tpl) => {
-  switch (tpl) {
-    case 'modern':
-      return { primary: Colors.primary, accent: Colors.accent, border: Colors.border, text: Colors.text };
-    case 'minimal':
-      return { primary: Colors.secondary, accent: Colors.gray[300], border: Colors.gray[300], text: Colors.text };
-    case 'bold':
-      return { primary: Colors.error, accent: Colors.warning, border: Colors.border, text: Colors.text };
-    case 'compact':
-      return { primary: Colors.success, accent: Colors.gray[200], border: Colors.border, text: Colors.text };
-    case 'classic':
-    default:
-      return { primary: Colors.secondary, accent: Colors.accent, border: Colors.border, text: Colors.text };
+const shadeColor = (hex, percent) => {
+  try {
+    const h = hex.replace('#', '');
+    const bigint = parseInt(h.length === 3 ? h.split('').map((c) => c + c).join('') : h, 16);
+    let r = (bigint >> 16) & 255;
+    let g = (bigint >> 8) & 255;
+    let b = bigint & 255;
+    r = Math.min(255, Math.max(0, Math.round(r + (percent / 100) * 255)));
+    g = Math.min(255, Math.max(0, Math.round(g + (percent / 100) * 255)));
+    b = Math.min(255, Math.max(0, Math.round(b + (percent / 100) * 255)));
+    return `#${(1 << 24 | (r << 16) | (g << 8) | b).toString(16).slice(1)}`;
+  } catch (_) {
+    return hex;
   }
 };
 
-const TemplatePreview = ({ companyName, template }) => {
-  const theme = useMemo(() => getThemeFor(template), [template]);
+const getThemeFor = (tpl, brandColor) => {
+  switch (tpl) {
+    case 'modern':
+      return { primary: brandColor || Colors.primary, accent: brandColor ? shadeColor(brandColor, -20) : Colors.accent, border: Colors.border, text: Colors.text };
+    case 'minimal':
+      return { primary: brandColor || Colors.secondary, accent: brandColor ? shadeColor(brandColor, 70) : Colors.gray[300], border: Colors.gray[300], text: Colors.text };
+    case 'bold':
+      return { primary: brandColor || Colors.error, accent: brandColor ? shadeColor(brandColor, -30) : Colors.warning, border: Colors.border, text: Colors.text };
+    case 'compact':
+      return { primary: brandColor || Colors.success, accent: brandColor ? shadeColor(brandColor, 60) : Colors.gray[200], border: Colors.border, text: Colors.text };
+    case 'classic':
+    default:
+      return { primary: brandColor || Colors.secondary, accent: brandColor ? shadeColor(brandColor, -10) : Colors.accent, border: Colors.border, text: Colors.text };
+  }
+};
+
+const TemplatePreview = ({ companyName, template, brandColor }) => {
+  const theme = useMemo(() => getThemeFor(template, brandColor), [template, brandColor]);
   return (
     <View style={[styles.previewCard, { borderColor: theme.border }]}> 
       <View style={[styles.previewHeader, { backgroundColor: theme.primary }]}> 
@@ -51,12 +67,17 @@ const TemplatePreview = ({ companyName, template }) => {
   );
 };
 
-function renderFullInvoicePreview(company, template) {
-  const theme = getThemeFor(template);
+function renderFullInvoicePreview(company, template, brandColor) {
+  const theme = getThemeFor(template, brandColor);
   const name = company?.companyName || 'Your Company';
   const address = company?.address || 'Company Address';
   const email = company?.email || 'info@example.com';
   const phone = company?.phoneNumber || '+000 000 0000';
+  const bankName = company?.bankName || '';
+  const accountName = company?.bankAccountName || '';
+  const accountNumber = company?.bankAccountNumber || '';
+  const issuanceDate = new Date();
+  const dueDate = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
 
   // Common sample rows
   const sampleRows = [
@@ -68,6 +89,32 @@ function renderFullInvoicePreview(company, template) {
   const subtotal = sampleRows.reduce((s, r) => s + r.total, 0);
   const tax = Math.round(subtotal * 0.075 * 100) / 100;
   const grand = Math.round((subtotal + tax) * 100) / 100;
+
+  const amountInWords = (() => {
+    const ones = ['Zero','One','Two','Three','Four','Five','Six','Seven','Eight','Nine'];
+    const teens = ['Ten','Eleven','Twelve','Thirteen','Fourteen','Fifteen','Sixteen','Seventeen','Eighteen','Nineteen'];
+    const tens = ['','','Twenty','Thirty','Forty','Fifty','Sixty','Seventy','Eighty','Ninety'];
+    const chunk = (n) => {
+      let s = '';
+      if (n >= 100) { s += `${ones[Math.floor(n/100)]} Hundred`; n %= 100; if (n) s += ' '; }
+      if (n >= 20) { s += tens[Math.floor(n/10)]; n %= 10; if (n) s += `-${ones[n]}`; }
+      else if (n >= 10) { s += teens[n-10]; }
+      else if (n > 0) { s += ones[n]; }
+      else if (!s) { s = 'Zero'; }
+      return s;
+    };
+    const whole = Math.floor(grand);
+    const decimals = Math.round((grand - whole) * 100);
+    const groups = [
+      { v: 1_000_000_000, l: 'Billion' },
+      { v: 1_000_000, l: 'Million' },
+      { v: 1_000, l: 'Thousand' },
+    ];
+    let rem = whole; const parts = [];
+    for (const g of groups) { if (rem >= g.v) { const c = Math.floor(rem / g.v); parts.push(`${chunk(c)} ${g.l}`); rem %= g.v; } }
+    if (rem > 0 || parts.length === 0) parts.push(chunk(rem));
+    return `${parts.join(' ')}${decimals ? ` and ${decimals}/100` : ''}`;
+  })();
 
   switch (template) {
     case 'modern':
@@ -90,10 +137,25 @@ function renderFullInvoicePreview(company, template) {
               <Text style={styles.fullText}>client@email.com</Text>
             </View>
             <View style={[styles.fullInfoBox, { borderColor: theme.border }]}> 
+              {!!company?.logo && (
+                <Image source={{ uri: company.logo }} style={{ width: 64, height: 64, borderRadius: 8, marginBottom: 6 }} />
+              )}
               <Text style={styles.fullText}>{address}</Text>
               <Text style={styles.fullText}>Email: {email}</Text>
               <Text style={styles.fullText}>Phone: {phone}</Text>
+              {(bankName || accountName || accountNumber) && (
+                <View style={{ marginTop: 6 }}>
+                  <Text style={styles.fullSection}>Bank Details</Text>
+                  {!!bankName && (<Text style={styles.fullText}>Bank: {bankName}</Text>)}
+                  {!!accountName && (<Text style={styles.fullText}>Account Name: {accountName}</Text>)}
+                  {!!accountNumber && (<Text style={styles.fullText}>Account Number: {accountNumber}</Text>)}
+                </View>
+              )}
             </View>
+          </View>
+          <View style={[styles.fullRow, { paddingTop: 6 }]}> 
+            <Text style={styles.fullMeta}>Issuance Date: {issuanceDate.toISOString().slice(0,10)}</Text>
+            <Text style={styles.fullMeta}>Due Date: {dueDate.toISOString().slice(0,10)}</Text>
           </View>
           <View style={styles.fullTableHeader}> 
             <Text style={[styles.fullTh, { flex: 2 }]}>Description</Text>
@@ -113,7 +175,14 @@ function renderFullInvoicePreview(company, template) {
             <View style={styles.fullTotalRow}><Text style={styles.fullMeta}>Subtotal</Text><Text style={styles.fullMeta}>${subtotal.toFixed(2)}</Text></View>
             <View style={styles.fullTotalRow}><Text style={styles.fullMeta}>Tax (7.5%)</Text><Text style={styles.fullMeta}>${tax.toFixed(2)}</Text></View>
             <View style={[styles.fullTotalRow, styles.fullGrand]}><Text style={styles.fullTitleSm}>Total</Text><Text style={styles.fullTitleSm}>${grand.toFixed(2)}</Text></View>
+            <Text style={[styles.fullMeta, { marginTop: 6 }]}>Amount in words: {amountInWords}</Text>
           </View>
+          {!!company?.signature && (
+            <View style={{ paddingHorizontal: Spacing.lg, marginTop: Spacing.md }}>
+              <Text style={styles.fullMeta}>Authorized Signature</Text>
+              <Image source={{ uri: company.signature }} style={{ width: 140, height: 70, resizeMode: 'contain' }} />
+            </View>
+          )}
           <Text style={[styles.fullHint, { marginTop: 12 }]}>Layout: modern, card rows, right-aligned totals</Text>
         </View>
       );
@@ -136,7 +205,8 @@ function renderFullInvoicePreview(company, template) {
             </View>
             <View style={{ alignItems: 'flex-end' }}>
               <Text style={styles.fullMeta}>INV-001</Text>
-              <Text style={styles.fullMeta}>{new Date().toLocaleDateString()}</Text>
+              <Text style={styles.fullMeta}>Issuance: {issuanceDate.toISOString().slice(0,10)}</Text>
+              <Text style={styles.fullMeta}>Due: {dueDate.toISOString().slice(0,10)}</Text>
             </View>
           </View>
           <View style={styles.fullTableHeader}> 
@@ -158,7 +228,14 @@ function renderFullInvoicePreview(company, template) {
             <View style={styles.fullTotalRow}><Text style={styles.fullMeta}>Subtotal</Text><Text style={styles.fullMeta}>${subtotal.toFixed(2)}</Text></View>
             <View style={styles.fullTotalRow}><Text style={styles.fullMeta}>Tax (7.5%)</Text><Text style={styles.fullMeta}>${tax.toFixed(2)}</Text></View>
             <View style={styles.fullTotalRow}><Text style={styles.fullTitleSm}>Total</Text><Text style={styles.fullTitleSm}>${grand.toFixed(2)}</Text></View>
+            <Text style={[styles.fullMeta, { marginTop: 6 }]}>Amount in words: {amountInWords}</Text>
           </View>
+          {!!company?.signature && (
+            <View style={{ paddingHorizontal: Spacing.lg, marginTop: Spacing.md }}>
+              <Text style={styles.fullMeta}>Authorized Signature</Text>
+              <Image source={{ uri: company.signature }} style={{ width: 140, height: 70, resizeMode: 'contain' }} />
+            </View>
+          )}
           <Text style={[styles.fullHint, { marginTop: 12 }]}>Layout: minimal, separators, left totals</Text>
         </View>
       );
@@ -174,7 +251,8 @@ function renderFullInvoicePreview(company, template) {
             </View>
             <View style={{ alignItems: 'flex-end' }}>
               <Text style={styles.fullMeta}>INV-001</Text>
-              <Text style={styles.fullMeta}>{new Date().toLocaleDateString()}</Text>
+              <Text style={styles.fullMeta}>Issuance: {issuanceDate.toISOString().slice(0,10)}</Text>
+              <Text style={styles.fullMeta}>Due: {dueDate.toISOString().slice(0,10)}</Text>
             </View>
           </View>
           <View style={[styles.fullTableHeader, { backgroundColor: Colors.gray[100] }]}> 
@@ -195,7 +273,14 @@ function renderFullInvoicePreview(company, template) {
             <View style={styles.fullTotalRow}><Text style={styles.fullMeta}>Subtotal</Text><Text style={styles.fullMeta}>${subtotal.toFixed(2)}</Text></View>
             <View style={styles.fullTotalRow}><Text style={styles.fullMeta}>Tax (7.5%)</Text><Text style={styles.fullMeta}>${tax.toFixed(2)}</Text></View>
             <View style={[styles.fullTotalRow, styles.fullGrand]}><Text style={styles.fullTitleSm}>Total</Text><Text style={styles.fullTitleSm}>${grand.toFixed(2)}</Text></View>
+            <Text style={[styles.fullMeta, { marginTop: 6 }]}>Amount in words: {amountInWords}</Text>
           </View>
+          {!!company?.signature && (
+            <View style={{ paddingHorizontal: Spacing.lg, marginTop: Spacing.md }}>
+              <Text style={styles.fullMeta}>Authorized Signature</Text>
+              <Image source={{ uri: company.signature }} style={{ width: 140, height: 70, resizeMode: 'contain' }} />
+            </View>
+          )}
           <Text style={[styles.fullHint, { marginTop: 12 }]}>Layout: bold, thick separators, boxed totals</Text>
         </View>
       );
@@ -237,7 +322,14 @@ function renderFullInvoicePreview(company, template) {
             <View style={styles.fullTotalRow}><Text style={styles.fullMeta}>Subtotal</Text><Text style={styles.fullMeta}>${subtotal.toFixed(2)}</Text></View>
             <View style={styles.fullTotalRow}><Text style={styles.fullMeta}>Tax</Text><Text style={styles.fullMeta}>${tax.toFixed(2)}</Text></View>
             <View style={styles.fullTotalRow}><Text style={styles.fullTitleSm}>Total</Text><Text style={styles.fullTitleSm}>${grand.toFixed(2)}</Text></View>
+            <Text style={[styles.fullMeta, { marginTop: 6 }]}>Amount in words: {amountInWords}</Text>
           </View>
+          {!!company?.signature && (
+            <View style={{ paddingHorizontal: Spacing.lg, marginTop: Spacing.md }}>
+              <Text style={styles.fullMeta}>Authorized Signature</Text>
+              <Image source={{ uri: company.signature }} style={{ width: 140, height: 70, resizeMode: 'contain' }} />
+            </View>
+          )}
           <Text style={[styles.fullHint, { marginTop: 12 }]}>Layout: compact, tight spacing, two-column header</Text>
         </View>
       );
@@ -258,7 +350,8 @@ function renderFullInvoicePreview(company, template) {
             </View>
             <View style={{ alignItems: 'flex-end' }}>
               <Text style={styles.fullMeta}>INV-001</Text>
-              <Text style={styles.fullMeta}>{new Date().toLocaleDateString()}</Text>
+              <Text style={styles.fullMeta}>Issuance: {issuanceDate.toISOString().slice(0,10)}</Text>
+              <Text style={styles.fullMeta}>Due: {dueDate.toISOString().slice(0,10)}</Text>
             </View>
           </View>
           <View style={styles.fullTableHeader}> 
@@ -279,7 +372,14 @@ function renderFullInvoicePreview(company, template) {
             <View style={styles.fullTotalRow}><Text style={styles.fullMeta}>Subtotal</Text><Text style={styles.fullMeta}>${subtotal.toFixed(2)}</Text></View>
             <View style={styles.fullTotalRow}><Text style={styles.fullMeta}>Tax (7.5%)</Text><Text style={styles.fullMeta}>${tax.toFixed(2)}</Text></View>
             <View style={styles.fullTotalRow}><Text style={styles.fullTitleSm}>Total</Text><Text style={styles.fullTitleSm}>${grand.toFixed(2)}</Text></View>
+            <Text style={[styles.fullMeta, { marginTop: 6 }]}>Amount in words: {amountInWords}</Text>
           </View>
+          {!!company?.signature && (
+            <View style={{ paddingHorizontal: Spacing.lg, marginTop: Spacing.md }}>
+              <Text style={styles.fullMeta}>Authorized Signature</Text>
+              <Image source={{ uri: company.signature }} style={{ width: 140, height: 70, resizeMode: 'contain' }} />
+            </View>
+          )}
           <Text style={[styles.fullHint, { marginTop: 12 }]}>Layout: classic, balanced header and table</Text>
         </View>
       );
@@ -289,6 +389,7 @@ function renderFullInvoicePreview(company, template) {
 export default function TemplatePickerScreen({ navigation }) {
   const [company, setCompany] = useState(null);
   const [invoiceTemplate, setInvoiceTemplate] = useState('classic');
+  const [brandColor, setBrandColor] = useState('');
   const [saving, setSaving] = useState(false);
   const [previewVisible, setPreviewVisible] = useState(false);
 
@@ -300,6 +401,7 @@ export default function TemplatePickerScreen({ navigation }) {
           const parsed = JSON.parse(data);
           setCompany(parsed);
           setInvoiceTemplate(parsed.invoiceTemplate || 'classic');
+          setBrandColor(parsed.brandColor || Colors.primary);
         }
       } catch (err) {
         Alert.alert('Error', 'Failed to load company data');
@@ -312,9 +414,9 @@ export default function TemplatePickerScreen({ navigation }) {
     setSaving(true);
     try {
       // Save receiptTemplate equal to invoiceTemplate as requested
-      const res = await updateCompany(company.companyId, { invoiceTemplate, receiptTemplate: invoiceTemplate });
+      const res = await updateCompany(company.companyId, { invoiceTemplate, receiptTemplate: invoiceTemplate, brandColor });
       if (res?.success) {
-        const updated = { ...company, invoiceTemplate, receiptTemplate: invoiceTemplate };
+        const updated = { ...company, invoiceTemplate, receiptTemplate: invoiceTemplate, brandColor };
         await AsyncStorage.setItem('companyData', JSON.stringify(updated));
         Alert.alert('Saved', 'Template preferences updated successfully. New invoices will use your selected style.');
         navigation.goBack();
@@ -362,9 +464,32 @@ export default function TemplatePickerScreen({ navigation }) {
           <View style={styles.previewContainer}>
             <Text style={styles.previewLabel}>Preview</Text>
             <TouchableOpacity activeOpacity={0.8} onPress={() => setPreviewVisible(true)}>
-              <TemplatePreview companyName={company?.companyName} template={invoiceTemplate} />
+              <TemplatePreview companyName={company?.companyName} template={invoiceTemplate} brandColor={brandColor} />
               <Text style={styles.tapHint}>Tap to view full layout</Text>
             </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Brand Color Picker */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Brand Color</Text>
+          <Text style={styles.subtitle}>Pick a color that matches your brand. It applies to header and accents.</Text>
+          <View style={styles.swatchGrid}>
+            {['#1f6feb','#10b981','#d97706','#ef4444','#7c3aed','#14b8a6','#0ea5e9','#f43f5e','#3b82f6','#22c55e','#eab308','#6b7280'].map((c) => (
+              <TouchableOpacity key={c} style={[styles.swatch, { backgroundColor: c }, brandColor === c && styles.swatchSelected]} onPress={() => setBrandColor(c)} />
+            ))}
+          </View>
+          <View style={styles.colorInputRow}>
+            <TextInput
+              style={[styles.input, { flex: 1 }]}
+              placeholder="#RRGGBB"
+              placeholderTextColor={Colors.textSecondary}
+              value={brandColor}
+              onChangeText={(t) => setBrandColor(t.startsWith('#') ? t : `#${t}`)}
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+            <View style={[styles.colorPreviewBox, { backgroundColor: brandColor || Colors.primary }]} />
           </View>
         </View>
 
@@ -382,7 +507,7 @@ export default function TemplatePickerScreen({ navigation }) {
               <Text style={styles.title}>Invoice Preview — {invoiceTemplate.charAt(0).toUpperCase() + invoiceTemplate.slice(1)}</Text>
             </View>
             <ScrollView contentContainerStyle={{ padding: Spacing.lg }}>
-              {renderFullInvoicePreview(company, invoiceTemplate)}
+              {renderFullInvoicePreview(company, invoiceTemplate, brandColor)}
             </ScrollView>
           </SafeAreaView>
         </Modal>
@@ -530,6 +655,12 @@ const styles = StyleSheet.create({
   fullTotalRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 },
   fullGrand: { borderTopWidth: 1, borderColor: Colors.border, paddingTop: 6, marginTop: 6 },
   fullHint: { fontSize: 11, color: Colors.textSecondary, textAlign: 'center' },
+  // Color picker styles
+  swatchGrid: { flexDirection: 'row', flexWrap: 'wrap', marginTop: Spacing.sm },
+  swatch: { width: 32, height: 32, borderRadius: 6, marginRight: 8, marginBottom: 8, borderWidth: 2, borderColor: Colors.border },
+  swatchSelected: { borderColor: Colors.primary, elevation: 2 },
+  colorInputRow: { flexDirection: 'row', alignItems: 'center', marginTop: Spacing.sm },
+  colorPreviewBox: { width: 40, height: 40, borderRadius: 8, marginLeft: Spacing.sm, borderWidth: 1, borderColor: Colors.border },
   saveButton: {
     backgroundColor: Colors.primary,
     paddingVertical: 14,

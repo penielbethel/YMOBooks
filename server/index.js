@@ -92,6 +92,7 @@ const CompanySchema = new mongoose.Schema(
     phone: { type: String, unique: true, sparse: true },
     logo: { type: String }, // base64 or URL
     signature: { type: String }, // base64 or URL (optional)
+    brandColor: { type: String },
     // Bank details
     bankName: { type: String },
     accountName: { type: String },
@@ -187,10 +188,87 @@ async function detectConflicts(uniqueFields = {}, excludeCompanyId = null) {
   return Array.from(new Set(conflicts));
 }
 
+// Color helpers and image utils
+function clamp(n, min, max) {
+  return Math.min(Math.max(n, min), max);
+}
+function shadeColor(hex, percent) {
+  try {
+    const h = hex.replace('#', '');
+    const bigint = parseInt(h.length === 3 ? h.split('').map((c) => c + c).join('') : h, 16);
+    let r = (bigint >> 16) & 255;
+    let g = (bigint >> 8) & 255;
+    let b = bigint & 255;
+    r = clamp(Math.round(r + (percent / 100) * 255), 0, 255);
+    g = clamp(Math.round(g + (percent / 100) * 255), 0, 255);
+    b = clamp(Math.round(b + (percent / 100) * 255), 0, 255);
+    return `#${(1 << 24 | (r << 16) | (g << 8) | b).toString(16).slice(1)}`;
+  } catch (_) {
+    return hex;
+  }
+}
+function dataUrlToBuffer(dataUrl) {
+  try {
+    if (typeof dataUrl !== 'string') return null;
+    if (!dataUrl.startsWith('data:image')) return null;
+    const base64 = dataUrl.split(',')[1];
+    return Buffer.from(base64, 'base64');
+  } catch (_) {
+    return null;
+  }
+}
+function numberToWords(num) {
+  const ones = ['Zero','One','Two','Three','Four','Five','Six','Seven','Eight','Nine'];
+  const teens = ['Ten','Eleven','Twelve','Thirteen','Fourteen','Fifteen','Sixteen','Seventeen','Eighteen','Nineteen'];
+  const tens = ['','','Twenty','Thirty','Forty','Fifty','Sixty','Seventy','Eighty','Ninety'];
+  function chunkToWords(n) {
+    let str = '';
+    if (n >= 100) {
+      str += `${ones[Math.floor(n/100)]} Hundred`;
+      n = n % 100;
+      if (n) str += ' ';
+    }
+    if (n >= 20) {
+      str += tens[Math.floor(n/10)];
+      n = n % 10;
+      if (n) str += `-${ones[n]}`;
+    } else if (n >= 10) {
+      str += teens[n-10];
+    } else if (n > 0) {
+      str += ones[n];
+    } else if (!str) {
+      str = 'Zero';
+    }
+    return str;
+  }
+  if (isNaN(num)) return '';
+  const whole = Math.floor(Math.abs(num));
+  const decimals = Math.round((Math.abs(num) - whole) * 100);
+  const groups = [
+    { value: 1_000_000_000, label: 'Billion' },
+    { value: 1_000_000, label: 'Million' },
+    { value: 1_000, label: 'Thousand' },
+  ];
+  let remaining = whole;
+  let parts = [];
+  for (const g of groups) {
+    if (remaining >= g.value) {
+      const count = Math.floor(remaining / g.value);
+      parts.push(`${chunkToWords(count)} ${g.label}`);
+      remaining = remaining % g.value;
+    }
+  }
+  if (remaining > 0 || parts.length === 0) {
+    parts.push(chunkToWords(remaining));
+  }
+  const words = parts.join(' ');
+  return `${words}${decimals ? ` and ${decimals}/100` : ''}`;
+}
+
 // Routes
 app.post('/api/register-company', async (req, res) => {
   try {
-    const { name, address, email, phone, logo, signature, bankName, accountName, accountNumber, bankAccountName, bankAccountNumber, invoiceTemplate, receiptTemplate } = req.body;
+    const { name, address, email, phone, logo, signature, brandColor, bankName, accountName, accountNumber, bankAccountName, bankAccountNumber, invoiceTemplate, receiptTemplate } = req.body;
     if (!name) return res.status(400).json({ success: false, message: 'Company name is required' });
 
     // Duplicate checks (prefer DB when connected)
@@ -216,6 +294,7 @@ app.post('/api/register-company', async (req, res) => {
       phone,
       logo,
       signature,
+      brandColor,
       bankName,
       accountName: accountName || bankAccountName,
       accountNumber: accountNumber || bankAccountNumber,
@@ -243,7 +322,7 @@ app.post('/api/register-company', async (req, res) => {
 // Update company details (including bank info)
 app.post('/api/update-company', async (req, res) => {
   try {
-    const { companyId, name, address, email, phone, logo, signature, bankName, accountName, accountNumber, bankAccountName, bankAccountNumber, invoiceTemplate, receiptTemplate } = req.body;
+    const { companyId, name, address, email, phone, logo, signature, brandColor, bankName, accountName, accountNumber, bankAccountName, bankAccountNumber, invoiceTemplate, receiptTemplate } = req.body;
     if (!companyId) return res.status(400).json({ success: false, message: 'Company ID is required' });
     const update = {
       name,
@@ -252,6 +331,7 @@ app.post('/api/update-company', async (req, res) => {
       phone,
       logo,
       signature,
+      brandColor,
       bankName,
       accountName: accountName || bankAccountName,
       accountNumber: accountNumber || bankAccountNumber,
@@ -309,6 +389,14 @@ function drawInvoiceByTemplate(doc, company, invNo, invoiceDate, dueDate, custom
     compact: { primary: '#10b981', accent: '#047857', tableHeader: '#d1fae5' },
   }[template] || { primary: '#000000', accent: '#333333', tableHeader: '#eeeeee' };
 
+  // Override with brand color if provided
+  if (company.brandColor && /^#?[0-9a-fA-F]{3,6}$/.test(company.brandColor)) {
+    const base = company.brandColor.startsWith('#') ? company.brandColor : `#${company.brandColor}`;
+    theme.primary = base;
+    theme.accent = shadeColor(base, -20);
+    theme.tableHeader = shadeColor(base, 70);
+  }
+
   // Top decorative bar
   doc.save();
   doc.rect(doc.page.margins.left, doc.page.margins.top, doc.page.width - doc.page.margins.left - doc.page.margins.right, 18).fill(theme.primary);
@@ -324,6 +412,17 @@ function drawInvoiceByTemplate(doc, company, invNo, invoiceDate, dueDate, custom
   doc.fontSize(10).fillColor('#000').text(`Invoice No: ${invNo}`, { align: 'right' });
   doc.text(`Invoice Date: ${dayjs(invoiceDate || undefined).isValid() ? dayjs(invoiceDate).format('YYYY-MM-DD') : dayjs().format('YYYY-MM-DD')}`, { align: 'right' });
   if (dueDate) doc.text(`Due Date: ${dueDate}`, { align: 'right' });
+
+  // Logo in header area (top-right)
+  try {
+    const logoBuf = dataUrlToBuffer(company.logo);
+    if (logoBuf) {
+      const imgWidth = 60;
+      const x = doc.page.width - doc.page.margins.right - imgWidth;
+      const y = doc.page.margins.top + 24;
+      doc.image(logoBuf, x, y, { width: imgWidth });
+    }
+  } catch (_) {}
 
   // Contact block
   doc.moveDown(0.5);
@@ -390,7 +489,21 @@ function drawInvoiceByTemplate(doc, company, invNo, invoiceDate, dueDate, custom
   doc.text('Total:', startX + colDesc + colQty + 8, y + 20, { width: colUnit, align: 'right' });
   doc.text(grandTotal.toFixed(2), startX + colDesc + colQty + colUnit + 8, y + 20, { width: colTotal, align: 'right' });
 
+  // Amount in words
+  doc.moveDown(0.5);
+  doc.fontSize(10).fillColor('#333').text(`Amount in words: ${numberToWords(grandTotal)}`);
+
   // Footer
+  // Signature block
+  try {
+    const sigBuf = dataUrlToBuffer(company.signature);
+    if (sigBuf) {
+      doc.moveDown(1);
+      doc.fontSize(10).fillColor('#333').text('Authorized Signature');
+      doc.image(sigBuf, doc.page.margins.left, doc.y + 4, { width: 120 });
+    }
+  } catch (_) {}
+
   doc.moveDown(1);
   doc.fontSize(9).fillColor('#777').text('Powered by YMOBooks', { align: 'right' });
 }
@@ -435,6 +548,7 @@ app.post('/api/invoice/create', async (req, res) => {
           price: Number(it.price || 0),
           total: Number(it.qty || 0) * Number(it.price || 0),
         }));
+        const grandTotalPersist = persistedItems.reduce((sum, it) => sum + Number(it.total || 0), 0);
         await Invoice.create({
           companyId,
           invoiceNumber: invNo,
@@ -446,7 +560,7 @@ app.post('/api/invoice/create', async (req, res) => {
             contact: customer.contact,
           },
           items: persistedItems,
-          grandTotal,
+          grandTotal: grandTotalPersist,
           pdfPath,
         });
       } catch (persistErr) {
