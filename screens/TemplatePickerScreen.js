@@ -194,21 +194,31 @@ function renderFullInvoicePreview(company, template, brandColor) {
               <Text style={styles.fullCompany}>{name}</Text>
               <Text style={styles.fullText}>{address}</Text>
               <Text style={styles.fullText}>Email: {email} • {phone}</Text>
+              {(bankName || accountName || accountNumber) && (
+                <View style={{ marginTop: 6 }}>
+                  <Text style={styles.fullSection}>Bank Details</Text>
+                  {!!bankName && (<Text style={styles.fullText}>Bank: {bankName}</Text>)}
+                  {!!accountName && (<Text style={styles.fullText}>Account Name: {accountName}</Text>)}
+                  {!!accountNumber && (<Text style={styles.fullText}>Account Number: {accountNumber}</Text>)}
+                </View>
+              )}
             </View>
             <Text style={styles.fullTitle}>INVOICE</Text>
           </View>
           <View style={styles.fullSeparator} />
           <View style={styles.fullRow}> 
-            <View style={{ flex: 1 }}>
-              <Text style={styles.fullSection}>BILL TO</Text>
-              <Text style={styles.fullText}>Sample Client LLC</Text>
-            </View>
-            <View style={{ alignItems: 'flex-end' }}>
-              <Text style={styles.fullMeta}>INV-001</Text>
-              <Text style={styles.fullMeta}>Issuance: {issuanceDate.toISOString().slice(0,10)}</Text>
-              <Text style={styles.fullMeta}>Due: {dueDate.toISOString().slice(0,10)}</Text>
-            </View>
-          </View>
+             <View style={{ flex: 1 }}>
+               <Text style={styles.fullSection}>BILL TO</Text>
+               <Text style={styles.fullText}>Sample Client LLC</Text>
+               <Text style={styles.fullText}>client@email.com</Text>
+               <Text style={styles.fullText}>+1 (555) 555-5555</Text>
+             </View>
+             <View style={{ alignItems: 'flex-end' }}>
+               <Text style={styles.fullMeta}>INV-001</Text>
+               <Text style={styles.fullMeta}>Issuance: {issuanceDate.toISOString().slice(0,10)}</Text>
+               <Text style={styles.fullMeta}>Due: {dueDate.toISOString().slice(0,10)}</Text>
+             </View>
+           </View>
           <View style={styles.fullTableHeader}> 
             <Text style={[styles.fullTh, { flex: 2 }]}>Description</Text>
             <Text style={[styles.fullTh, { flex: 0.7, textAlign: 'center' }]}>Qty</Text>
@@ -298,10 +308,20 @@ function renderFullInvoicePreview(company, template, brandColor) {
             <View style={{ flex: 1 }}>
               <Text style={styles.fullCompany}>{name}</Text>
               <Text style={styles.fullText}>Email: {email}</Text>
+              {(bankName || accountName || accountNumber) && (
+                <View style={{ marginTop: 6 }}>
+                  <Text style={styles.fullSection}>Bank Details</Text>
+                  {!!bankName && (<Text style={styles.fullText}>Bank: {bankName}</Text>)}
+                  {!!accountName && (<Text style={styles.fullText}>Account Name: {accountName}</Text>)}
+                  {!!accountNumber && (<Text style={styles.fullText}>Account Number: {accountNumber}</Text>)}
+                </View>
+              )}
             </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.fullSection}>BILL TO</Text>
               <Text style={styles.fullText}>Sample Client LLC</Text>
+              <Text style={styles.fullText}>client@email.com</Text>
+              <Text style={styles.fullText}>+1 (555) 555-5555</Text>
             </View>
           </View>
           <View style={styles.fullTableHeader}> 
@@ -347,6 +367,8 @@ function renderFullInvoicePreview(company, template, brandColor) {
               <Text style={styles.fullSection}>BILL TO</Text>
               <Text style={styles.fullText}>Sample Client LLC</Text>
               <Text style={styles.fullText}>123 Client Street</Text>
+              <Text style={styles.fullText}>client@email.com</Text>
+              <Text style={styles.fullText}>+1 (555) 555-5555</Text>
             </View>
             <View style={{ alignItems: 'flex-end' }}>
               <Text style={styles.fullMeta}>INV-001</Text>
