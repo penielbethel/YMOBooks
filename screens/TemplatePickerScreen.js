@@ -359,12 +359,13 @@ function renderFullInvoicePreview(company, template, brandColor) {
         <View style={[styles.fullCard, { borderColor: theme.border }]}> 
           <View style={styles.fullRow}> 
             <Text style={[styles.fullCompany]}>{name}</Text>
-            <Text style={styles.fullTitle}>INVOICE</Text>
+            <Text style={[styles.fullTitle, { color: theme.primary }]}>INVOICE</Text>
           </View>
+          <View style={[styles.fullAccent, { backgroundColor: theme.accent }]} />
           <View style={styles.fullSeparator} />
           <View style={styles.fullRow}> 
             <View style={{ flex: 1 }}>
-              <Text style={styles.fullSection}>BILL TO</Text>
+              <Text style={[styles.fullSection, { color: theme.primary }]}>BILL TO</Text>
               <Text style={styles.fullText}>Sample Client LLC</Text>
               <Text style={styles.fullText}>123 Client Street</Text>
               <Text style={styles.fullText}>client@email.com</Text>
@@ -394,7 +395,7 @@ function renderFullInvoicePreview(company, template, brandColor) {
               </View>
             </View>
           </View>
-          <View style={styles.fullTableHeader}> 
+          <View style={[styles.fullTableHeader, { borderColor: theme.border }]}> 
             <Text style={[styles.fullTh, { flex: 2 }]}>Description</Text>
             <Text style={[styles.fullTh, { flex: 0.7, textAlign: 'center' }]}>Qty</Text>
             <Text style={[styles.fullTh, { flex: 1, textAlign: 'right' }]}>Price</Text>
@@ -411,7 +412,7 @@ function renderFullInvoicePreview(company, template, brandColor) {
           <View style={styles.fullTotalsRight}> 
             <View style={styles.fullTotalRow}><Text style={styles.fullMeta}>Subtotal</Text><Text style={styles.fullMeta}>${subtotal.toFixed(2)}</Text></View>
             <View style={styles.fullTotalRow}><Text style={styles.fullMeta}>Tax (7.5%)</Text><Text style={styles.fullMeta}>${tax.toFixed(2)}</Text></View>
-            <View style={styles.fullTotalRow}><Text style={styles.fullTitleSm}>Total</Text><Text style={styles.fullTitleSm}>${grand.toFixed(2)}</Text></View>
+            <View style={styles.fullTotalRow}><Text style={[styles.fullTitleSm, { color: theme.primary }]}>Total</Text><Text style={[styles.fullTitleSm, { color: theme.primary }]}>${grand.toFixed(2)}</Text></View>
             <Text style={[styles.fullMeta, { marginTop: 6 }]}>Amount in words: {amountInWords}</Text>
           </View>
           {!!company?.signature && (
@@ -420,7 +421,7 @@ function renderFullInvoicePreview(company, template, brandColor) {
               <Image source={{ uri: company.signature }} style={{ width: 140, height: 70, resizeMode: 'contain' }} />
             </View>
           )}
-          <Text style={[styles.fullHint, { marginTop: 12 }]}>Layout: classic, balanced header and table</Text>
+          <Text style={[styles.fullHint, { marginTop: 12 }]}>{`This invoice is generated electronically by ${name} and any alteration renders it invalid — Printed on ${new Date().toLocaleDateString()}`}</Text>
         </View>
       );
   }

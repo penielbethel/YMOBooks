@@ -494,6 +494,11 @@ function drawInvoiceByTemplate(doc, company, invNo, invoiceDate, dueDate, custom
   doc.fontSize(10).fillColor('#333').text(`Amount in words: ${numberToWords(grandTotal)}`);
 
   // Footer
+  // Electronic generation notice with printed date
+  doc.moveDown(0.5);
+  doc.fontSize(9).fillColor('#555').text(
+    `This invoice is generated electronically by ${company.name || company.companyName || 'Company'} and any alteration renders it invalid — Printed on ${dayjs().format('YYYY-MM-DD')}`
+  );
   // Signature block
   try {
     const sigBuf = dataUrlToBuffer(company.signature);
