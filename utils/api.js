@@ -118,3 +118,17 @@ export async function adminFetchStats(adminId = 'pbmsrvr') {
   const res = await fetch(url.toString());
   return res.json();
 }
+
+export async function adminMigrateFilesToDb(adminId = 'pbmsrvr') {
+  const url = new URL(`${Config.API_BASE_URL}/api/admin/migrate-files-to-db`);
+  url.searchParams.set('adminId', adminId);
+  const res = await fetch(url.toString(), { method: 'POST' });
+  return res.json();
+}
+
+export async function adminScanDuplicates(adminId = 'pbmsrvr') {
+  const url = new URL(`${Config.API_BASE_URL}/api/admin/duplicates`);
+  url.searchParams.set('adminId', adminId);
+  const res = await fetch(url.toString());
+  return res.json();
+}

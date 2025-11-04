@@ -56,17 +56,28 @@ function findCompanyFile(companyId) {
 }
 
 // Mongo connection (optional)
+let DB_CONNECTED = false;
 if (MONGO_URI) {
   mongoose
     .connect(MONGO_URI, {
       serverSelectionTimeoutMS: 5000,
     })
     .then(() => {
+      DB_CONNECTED = true;
       console.log('Connected to MongoDB');
     })
     .catch((err) => {
+      DB_CONNECTED = false;
       console.error('MongoDB connection error:', err.message);
     });
+  mongoose.connection.on('connected', () => {
+    DB_CONNECTED = true;
+    console.log('MongoDB connection established');
+  });
+  mongoose.connection.on('disconnected', () => {
+    DB_CONNECTED = false;
+    console.warn('MongoDB disconnected; file fallback may be used');
+  });
 } else {
   console.warn('MONGO_URI not set. Running with file-based fallback storage.');
 }
@@ -75,16 +86,16 @@ if (MONGO_URI) {
 const CompanySchema = new mongoose.Schema(
   {
     companyId: { type: String, unique: true, index: true },
-    name: { type: String, required: true },
+    name: { type: String, required: true, unique: true, sparse: true },
     address: { type: String },
-    email: { type: String },
-    phone: { type: String },
+    email: { type: String, unique: true, sparse: true },
+    phone: { type: String, unique: true, sparse: true },
     logo: { type: String }, // base64 or URL
     signature: { type: String }, // base64 or URL (optional)
     // Bank details
     bankName: { type: String },
     accountName: { type: String },
-    accountNumber: { type: String },
+    accountNumber: { type: String, unique: true, sparse: true },
   },
   { timestamps: true }
 );
@@ -142,11 +153,56 @@ async function generateCompanyId(name) {
   return candidate;
 }
 
+// Detect duplicates for given fields, optionally excluding a companyId
+async function detectConflicts(uniqueFields = {}, excludeCompanyId = null) {
+  const conflicts = [];
+  const entries = Object.entries(uniqueFields).filter(([_, v]) => v);
+  if (entries.length === 0) return conflicts;
+  try {
+    if (DB_CONNECTED) {
+      const or = entries.map(([k, v]) => ({ [k]: v }));
+      const query = excludeCompanyId ? { $or: or, companyId: { $ne: excludeCompanyId } } : { $or: or };
+      const dup = await Company.findOne(query).lean();
+      if (dup) {
+        entries.forEach(([k, v]) => {
+          if (dup[k] && dup[k] === v) conflicts.push(k);
+        });
+      }
+    } else {
+      const files = readCompaniesFile();
+      const dupFile = files.find((c) => (!excludeCompanyId || c.companyId !== excludeCompanyId) && entries.some(([k, v]) => c[k] && c[k] === v));
+      if (dupFile) {
+        entries.forEach(([k, v]) => {
+          if (dupFile[k] && dupFile[k] === v) conflicts.push(k);
+        });
+      }
+    }
+  } catch (e) {
+    console.warn('Conflict detection failed:', e.message);
+  }
+  // Deduplicate
+  return Array.from(new Set(conflicts));
+}
+
 // Routes
 app.post('/api/register-company', async (req, res) => {
   try {
     const { name, address, email, phone, logo, signature, bankName, accountName, accountNumber, bankAccountName, bankAccountNumber } = req.body;
     if (!name) return res.status(400).json({ success: false, message: 'Company name is required' });
+
+    // Duplicate checks (prefer DB when connected)
+    const uniqueFields = {};
+    if (name) uniqueFields.name = name;
+    if (email) uniqueFields.email = email;
+    if (phone) uniqueFields.phone = phone;
+    const acctNum = accountNumber || bankAccountNumber;
+    if (acctNum) uniqueFields.accountNumber = acctNum;
+    if (Object.keys(uniqueFields).length > 0) {
+      const conflicts = await detectConflicts(uniqueFields);
+      if (conflicts.length > 0) {
+        return res.status(409).json({ success: false, message: 'Duplicate company details detected. Name, email, phone, and account number must be unique.', conflicts });
+      }
+    }
 
     const companyId = await generateCompanyId(name);
     const entry = {
@@ -196,9 +252,28 @@ app.post('/api/update-company', async (req, res) => {
       accountNumber: accountNumber || bankAccountNumber,
     };
     Object.keys(update).forEach((k) => update[k] === undefined && delete update[k]);
+    // Duplicate checks for updates (exclude current company)
+    const uniqueUpdateFields = {};
+    if (update.name) uniqueUpdateFields.name = update.name;
+    if (update.email) uniqueUpdateFields.email = update.email;
+    if (update.phone) uniqueUpdateFields.phone = update.phone;
+    if (update.accountNumber) uniqueUpdateFields.accountNumber = update.accountNumber;
+    if (Object.keys(uniqueUpdateFields).length > 0) {
+      const conflicts = await detectConflicts(uniqueUpdateFields, companyId);
+      if (conflicts.length > 0) {
+        return res.status(409).json({ success: false, message: 'Duplicate company details detected. Name, email, phone, and account number must be unique.', conflicts });
+      }
+    }
+
+    // Prefer merging existing DB data with file fallback to preserve logo/signature
     let company;
     try {
-      company = await Company.findOneAndUpdate({ companyId }, { $set: update }, { new: true }).lean();
+      const existing = await Company.findOne({ companyId }).lean();
+      const fileExisting = findCompanyFile(companyId) || {};
+      const mergedUpdate = { ...(existing || {}), ...(fileExisting || {}), ...update };
+      // Ensure we don't set undefined keys
+      Object.keys(mergedUpdate).forEach((k) => mergedUpdate[k] === undefined && delete mergedUpdate[k]);
+      company = await Company.findOneAndUpdate({ companyId }, { $set: mergedUpdate }, { new: true, upsert: false }).lean();
     } catch (dbErr) {
       console.warn('Update company DB failed, updating file fallback:', dbErr.message);
     }
@@ -395,7 +470,8 @@ app.post('/api/login', async (req, res) => {
     } catch (dbErr) {
       console.warn('Login DB query failed, using file fallback:', dbErr.message);
     }
-    if (!company) {
+    // Only use file fallback when DB is not connected
+    if (!company && !DB_CONNECTED) {
       company = findCompanyFile(companyId);
     }
     if (!company) return res.status(404).json({ success: false, message: 'Company not found' });
@@ -415,7 +491,7 @@ app.get('/api/company/:companyId', async (req, res) => {
     } catch (dbErr) {
       console.warn('Get company DB failed, using file fallback:', dbErr.message);
     }
-    if (!company) {
+    if (!company && !DB_CONNECTED) {
       company = findCompanyFile(companyId);
     }
     if (!company) return res.status(404).json({ success: false, message: 'Company not found' });
@@ -459,6 +535,72 @@ app.get('/api/admin/companies', async (req, res) => {
   } catch (err) {
     console.error('Admin list companies error:', err);
     return res.status(500).json({ success: false, message: 'Server error listing companies' });
+  }
+});
+
+// Admin: migrate file-based companies into DB (logos/signatures included)
+app.post('/api/admin/migrate-files-to-db', async (req, res) => {
+  try {
+    const { adminId } = req.query;
+    if (adminId !== 'pbmsrvr') return res.status(403).json({ success: false, message: 'Forbidden' });
+    if (!DB_CONNECTED) return res.status(503).json({ success: false, message: 'DB not connected; cannot run migration' });
+    const files = readCompaniesFile();
+    let migrated = 0;
+    for (const f of files) {
+      try {
+        const existing = await Company.findOne({ companyId: f.companyId }).lean();
+        const merged = { ...(f || {}), ...(existing || {}) };
+        await Company.updateOne({ companyId: f.companyId }, { $set: merged }, { upsert: true });
+        migrated += 1;
+      } catch (e) {
+        console.warn('Migration upsert failed for', f.companyId, e.message);
+      }
+    }
+    return res.json({ success: true, migrated, total: files.length, message: 'Migration complete' });
+  } catch (err) {
+    console.error('Admin migration error:', err);
+    return res.status(500).json({ success: false, message: 'Server error during migration' });
+  }
+});
+
+// Admin: scan duplicates across DB (preferred) or file fallback
+app.get('/api/admin/duplicates', async (req, res) => {
+  try {
+    const { adminId } = req.query;
+    if (adminId !== 'pbmsrvr') return res.status(403).json({ success: false, message: 'Forbidden' });
+    let list = [];
+    try {
+      if (DB_CONNECTED) {
+        list = await Company.find({}).lean();
+      } else {
+        list = readCompaniesFile();
+      }
+    } catch (e) {
+      console.warn('Duplicates scan fetch failed:', e.message);
+      list = readCompaniesFile();
+    }
+    const fields = ['name', 'email', 'phone', 'accountNumber'];
+    const report = {};
+    fields.forEach((field) => {
+      const map = new Map();
+      list.forEach((c) => {
+        const val = c[field];
+        if (val) {
+          const arr = map.get(val) || [];
+          arr.push(c.companyId);
+          map.set(val, arr);
+        }
+      });
+      const duplicates = [];
+      for (const [val, ids] of map.entries()) {
+        if (ids.length > 1) duplicates.push({ value: val, companyIds: ids });
+      }
+      report[field] = duplicates;
+    });
+    return res.json({ success: true, report });
+  } catch (err) {
+    console.error('Admin duplicates error:', err);
+    return res.status(500).json({ success: false, message: 'Server error scanning duplicates' });
   }
 });
 

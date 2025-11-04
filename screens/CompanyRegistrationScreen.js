@@ -168,7 +168,11 @@ const CompanyRegistrationScreen = ({ navigation, route }) => {
             Alert.alert('Profile Updated Successfully', 'Your company profile has been updated.');
             navigation.navigate('Dashboard');
           } else {
-            Alert.alert('Error', result?.message || 'Update failed');
+            if (Array.isArray(result?.conflicts) && result.conflicts.length > 0) {
+              Alert.alert('Duplicate Details', `Please use unique values for: ${result.conflicts.join(', ')}`);
+            } else {
+              Alert.alert('Error', result?.message || 'Update failed');
+            }
           }
         }
       } else {
@@ -179,7 +183,11 @@ const CompanyRegistrationScreen = ({ navigation, route }) => {
           await AsyncStorage.setItem('companyData', JSON.stringify(stored));
           setSuccessModalVisible(true);
         } else {
-          Alert.alert('Error', result?.message || 'Registration failed');
+          if (Array.isArray(result?.conflicts) && result.conflicts.length > 0) {
+            Alert.alert('Duplicate Details', `Please use unique values for: ${result.conflicts.join(', ')}`);
+          } else {
+            Alert.alert('Error', result?.message || 'Registration failed');
+          }
         }
       }
     } catch (error) {

@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, Alert, FlatList
 import { Colors } from '../constants/Colors';
 import { Fonts } from '../constants/Fonts';
 import { Spacing } from '../constants/Spacing';
-import { adminFetchCompanies, adminDeleteCompany, adminFetchStats } from '../utils/api';
+import { adminFetchCompanies, adminDeleteCompany, adminFetchStats, adminMigrateFilesToDb, adminScanDuplicates } from '../utils/api';
 
 const SuperAdminScreen = ({ navigation }) => {
   const [companies, setCompanies] = useState([]);
@@ -53,6 +53,40 @@ const SuperAdminScreen = ({ navigation }) => {
     ]);
   };
 
+  const handleMigrate = async () => {
+    try {
+      const res = await adminMigrateFilesToDb();
+      if (res?.success) {
+        Alert.alert('Migration Complete', `Migrated ${res.migrated} of ${res.total} companies`);
+        const sRes = await adminFetchStats();
+        setStats(sRes?.stats || null);
+        await loadData();
+      } else {
+        Alert.alert('Migration Failed', res?.message || 'Unable to migrate');
+      }
+    } catch (err) {
+      Alert.alert('Error', 'Migration request failed');
+    }
+  };
+
+  const handleScanDuplicates = async () => {
+    try {
+      const res = await adminScanDuplicates();
+      if (res?.success && res.report) {
+        const { report } = res;
+        const summarize = (field) => {
+          const dups = report[field] || [];
+          return `${field}: ${dups.length} issue${dups.length === 1 ? '' : 's'}`;
+        };
+        Alert.alert('Duplicate Scan', [summarize('name'), summarize('email'), summarize('phone'), summarize('accountNumber')].join('\n'));
+      } else {
+        Alert.alert('Scan Failed', res?.message || 'Unable to scan duplicates');
+      }
+    } catch (err) {
+      Alert.alert('Error', 'Duplicate scan request failed');
+    }
+  };
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return companies;
@@ -87,6 +121,14 @@ const SuperAdminScreen = ({ navigation }) => {
         </TouchableOpacity>
         <Text style={styles.title}>Super Admin</Text>
         <Text style={styles.subtitle}>Developer panel for maintenance tasks</Text>
+        <View style={{ flexDirection: 'row', marginTop: Spacing.sm }}>
+          <TouchableOpacity style={[styles.refreshButton, { marginRight: Spacing.sm }]} onPress={handleMigrate}>
+            <Text style={styles.refreshText}>Migrate File → DB</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.refreshButton} onPress={handleScanDuplicates}>
+            <Text style={styles.refreshText}>Scan Duplicates</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       <View style={styles.actions}>
