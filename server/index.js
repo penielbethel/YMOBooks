@@ -63,7 +63,8 @@ if (MONGO_URI) {
   mongoose
     .connect(MONGO_URI, {
       serverSelectionTimeoutMS: 8000,
-      dbName: process.env.MONGO_DB_NAME || 'ymobooks',
+      // Use 'test' by default to align with existing Atlas DB
+      dbName: process.env.MONGO_DB_NAME || 'test',
     })
     .then(() => {
       DB_CONNECTED = true;
