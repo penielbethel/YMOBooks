@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { Modal } from 'react-native';
 import * as FileSystem from 'expo-file-system';
+import * as FileSystemLegacy from 'expo-file-system/legacy';
 import * as Clipboard from 'expo-clipboard';
 import * as ImagePicker from 'expo-image-picker';
 import SignatureCanvas from 'react-native-signature-canvas';
@@ -106,14 +107,29 @@ const CompanyRegistrationScreen = ({ navigation, route }) => {
       }
 
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: ['images'],
         allowsEditing: true,
         aspect: type === 'logo' ? [1, 1] : [4, 2],
         quality: 0.8,
       });
 
       if (!result.canceled) {
-        updateFormData(type, result.assets[0].uri);
+        const uri = result.assets[0].uri;
+        if (type === 'logo') {
+          try {
+            // Persist a cacheable data URL for the logo so it survives backend omissions
+            const ext = (uri.split('?')[0].split('#')[0].split('.').pop() || '').toLowerCase();
+            const mime = ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg' : 'image/png';
+      const base64 = await FileSystemLegacy.readAsStringAsync(uri, { encoding: 'base64' });
+            const dataUrl = `data:${mime};base64,${base64}`;
+            await AsyncStorage.setItem('companyLogoCache', dataUrl);
+            updateFormData(type, dataUrl);
+          } catch {
+            updateFormData(type, uri);
+          }
+        } else {
+          updateFormData(type, uri);
+        }
       }
     } catch (error) {
       Alert.alert('Error', 'Failed to pick image');
@@ -157,7 +173,7 @@ const CompanyRegistrationScreen = ({ navigation, route }) => {
       const toBase64 = async (uri) => {
         try {
           if (!uri) return null;
-          const base64 = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
+      const base64 = await FileSystemLegacy.readAsStringAsync(uri, { encoding: 'base64' });
           return `data:image/png;base64,${base64}`;
         } catch {
           return null;

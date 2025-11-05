@@ -102,8 +102,8 @@ const CreateInvoiceScreen = ({ navigation }) => {
           if (perm.granted && perm.directoryUri) {
             const fileUri = await FileSystem.StorageAccessFramework.createFileAsync(perm.directoryUri, filename, 'application/pdf');
             console.log('[Download][Android] SAF created fileUri:', fileUri);
-            const base64 = await FileSystem.readAsStringAsync(dl.uri, { encoding: FileSystem.EncodingType.Base64 });
-            await FileSystem.StorageAccessFramework.writeAsStringAsync(fileUri, base64, { encoding: FileSystem.EncodingType.Base64 });
+  const base64 = await FileSystemLegacy.readAsStringAsync(dl.uri, { encoding: 'base64' });
+  await FileSystem.StorageAccessFramework.writeAsStringAsync(fileUri, base64, { encoding: 'base64' });
             Alert.alert('Saved', 'Invoice PDF saved to selected folder.');
           } else {
             console.log('[Download][Android] SAF not granted, opening from cache');

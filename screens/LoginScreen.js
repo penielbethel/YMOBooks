@@ -4,7 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors } from '../constants/Colors';
 import { Fonts } from '../constants/Fonts';
 import { Spacing } from '../constants/Spacing';
-import { loginCompany, pingBackend, getApiBaseUrl } from '../utils/api';
+import { loginCompany, pingBackend, getApiBaseUrl, fetchCompany } from '../utils/api';
 
 const LoginScreen = ({ navigation }) => {
   const [companyId, setCompanyId] = useState('');
@@ -34,15 +34,38 @@ const LoginScreen = ({ navigation }) => {
         return;
       }
 
-      const result = await loginCompany(entered);
+      let result = await loginCompany(entered);
       console.log('[Login] Result:', result);
+      // Fallback: older servers may not implement POST /api/login; try GET /api/company/:id
+      if (!(result?.success && result.company)) {
+        try {
+          const alt = await fetchCompany(entered);
+          console.log('[Login] Fallback fetchCompany:', alt);
+          if (alt?.success && (alt.company || alt.data)) {
+            result = { success: true, company: alt.company || alt.data };
+          }
+        } catch (e) {
+          console.warn('[Login] Fallback fetchCompany failed:', e?.message || e);
+        }
+      }
       if (result?.success && result.company) {
+        // Merge cached logo/signature if backend doesn't have them
+        let cachedLogo = null;
+        let previousLogo = null;
+        try {
+          cachedLogo = await AsyncStorage.getItem('companyLogoCache');
+        } catch {}
+        try {
+          const prevRaw = await AsyncStorage.getItem('companyData');
+          const prev = prevRaw ? JSON.parse(prevRaw) : null;
+          previousLogo = prev?.logo || null;
+        } catch {}
         const stored = {
           companyName: result.company.name,
           address: result.company.address || '',
           email: result.company.email || '',
           phoneNumber: result.company.phone || '',
-          logo: result.company.logo || null,
+          logo: result.company.logo || previousLogo || cachedLogo || null,
           signature: result.company.signature || null,
           companyId: result.company.companyId,
           invoiceTemplate: result.company.invoiceTemplate || 'classic',
@@ -57,11 +80,13 @@ const LoginScreen = ({ navigation }) => {
         await AsyncStorage.setItem('companyData', JSON.stringify(stored));
         navigation.navigate('Dashboard');
       } else {
-        Alert.alert('Login Failed', result?.message || 'Invalid Company ID');
+        const msg = result?.message || 'Invalid Company ID';
+        Alert.alert('Login Failed', typeof msg === 'string' ? msg : JSON.stringify(msg));
       }
     } catch (err) {
       console.log('[Login] Error:', err);
-      Alert.alert('Error', 'Failed to login');
+      const msg = err?.message || String(err);
+      Alert.alert('Error', `Failed to Login\n${msg}`);
     } finally {
       setLoading(false);
     }

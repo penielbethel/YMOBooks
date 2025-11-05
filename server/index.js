@@ -87,7 +87,7 @@ if (MONGO_URI) {
 }
 
 // Models
-const CompanySchema = new mongoose.Schema(
+  const CompanySchema = new mongoose.Schema(
   {
     companyId: { type: String, unique: true, index: true },
     name: { type: String, required: true, unique: true, sparse: true },
@@ -98,6 +98,7 @@ const CompanySchema = new mongoose.Schema(
     signature: { type: String }, // base64 or URL (optional)
     brandColor: { type: String },
     currencySymbol: { type: String, default: '$' },
+    termsAndConditions: { type: String },
     // Bank details
     bankName: { type: String },
     accountName: { type: String },
@@ -315,16 +316,15 @@ function currencyLabels(symbol) {
 function amountInWordsWithCurrency(amount, symbol) {
   if (isNaN(amount)) return '';
   const whole = Math.floor(Math.abs(Number(amount)));
-  const decimals = Math.round((Math.abs(Number(amount)) - whole) * 100);
   const baseWords = numberToWords(whole).replace(/\s+and\s+\d+\/100$/, '');
-  const { currencyName, minorName } = currencyLabels(symbol);
-  return `${baseWords} ${currencyName}${decimals ? ` and ${decimals}/100 ${minorName}` : ''}`;
+  const { currencyName } = currencyLabels(symbol);
+  return `${baseWords} ${currencyName} Only`;
 }
 
 // Routes
-app.post('/api/register-company', async (req, res) => {
+  app.post('/api/register-company', async (req, res) => {
   try {
-    const { name, address, email, phone, logo, signature, brandColor, currencySymbol, bankName, accountName, accountNumber, bankAccountName, bankAccountNumber, invoiceTemplate, receiptTemplate } = req.body;
+    const { name, address, email, phone, logo, signature, brandColor, currencySymbol, bankName, accountName, accountNumber, bankAccountName, bankAccountNumber, invoiceTemplate, receiptTemplate, termsAndConditions } = req.body;
     if (!name) return res.status(400).json({ success: false, message: 'Company name is required' });
 
     // Duplicate checks (prefer DB when connected)
@@ -352,6 +352,7 @@ app.post('/api/register-company', async (req, res) => {
       signature,
       brandColor,
       currencySymbol,
+      termsAndConditions,
       bankName,
       accountName: accountName || bankAccountName,
       accountNumber: accountNumber || bankAccountNumber,
@@ -377,9 +378,9 @@ app.post('/api/register-company', async (req, res) => {
 });
 
 // Update company details (including bank info)
-app.post('/api/update-company', async (req, res) => {
+  app.post('/api/update-company', async (req, res) => {
   try {
-    const { companyId, name, address, email, phone, logo, signature, brandColor, currencySymbol, bankName, accountName, accountNumber, bankAccountName, bankAccountNumber, invoiceTemplate, receiptTemplate } = req.body;
+    const { companyId, name, address, email, phone, logo, signature, brandColor, currencySymbol, bankName, accountName, accountNumber, bankAccountName, bankAccountNumber, invoiceTemplate, receiptTemplate, termsAndConditions } = req.body;
     if (!companyId) return res.status(400).json({ success: false, message: 'Company ID is required' });
     const update = {
       name,
@@ -390,6 +391,7 @@ app.post('/api/update-company', async (req, res) => {
       signature,
       brandColor,
       currencySymbol,
+      termsAndConditions,
       bankName,
       accountName: accountName || bankAccountName,
       accountNumber: accountNumber || bankAccountNumber,
@@ -548,7 +550,7 @@ function drawInvoiceByTemplate(doc, company, invNo, invoiceDate, dueDate, custom
       }
     } catch (_) {}
     doc.moveDown(0.5);
-    doc.fillColor('#333').fontSize(10);
+    doc.fillColor('#333').fontSize(12);
     if (company.address) doc.text(company.address);
     if (company.email) doc.text(company.email);
     if (company.phone) doc.text(company.phone);
@@ -560,7 +562,7 @@ function drawInvoiceByTemplate(doc, company, invNo, invoiceDate, dueDate, custom
     }
     doc.moveDown(1);
     doc.fontSize(template === 'bold' ? 13 : 12).fillColor(theme.primary).text('Bill To:', { underline: template === 'classic' });
-    doc.fontSize(10).fillColor('#333');
+    doc.fontSize(12).fillColor('#333');
     if (customer.name) doc.text(customer.name);
     if (customer.address) doc.text(customer.address);
     if (customer.contact) doc.text(`Contact: ${customer.contact}`);
@@ -568,7 +570,7 @@ function drawInvoiceByTemplate(doc, company, invNo, invoiceDate, dueDate, custom
 
   // Contact block
   doc.moveDown(0.5);
-  doc.fillColor('#333').fontSize(10);
+  doc.fillColor('#333').fontSize(12);
   if (company.address) doc.text(company.address);
   if (company.email) doc.text(company.email);
   if (company.phone) doc.text(company.phone);
@@ -582,7 +584,7 @@ function drawInvoiceByTemplate(doc, company, invNo, invoiceDate, dueDate, custom
   // Customer section
   doc.moveDown(1);
   doc.fontSize(template === 'bold' ? 13 : 12).fillColor(theme.primary).text('Bill To:', { underline: template === 'classic' });
-  doc.fontSize(10).fillColor('#333');
+  doc.fontSize(12).fillColor('#333');
   if (customer.name) doc.text(customer.name);
   if (customer.address) doc.text(customer.address);
   if (customer.contact) doc.text(`Contact: ${customer.contact}`);
@@ -595,13 +597,13 @@ function drawInvoiceByTemplate(doc, company, invNo, invoiceDate, dueDate, custom
   const colQty = 60;
   const colUnit = 100;
   const colTotal = 100;
-  const rowHeight = 22;
+  const rowHeight = 24;
 
   // Header row background
   doc.save();
   doc.rect(startX, tableTop, doc.page.width - startX - doc.page.margins.right, rowHeight).fill(theme.tableHeader);
   doc.restore();
-  doc.fillColor('#000').fontSize(10).text('Description', startX + 8, tableTop + 6, { width: colDesc });
+  doc.fillColor('#000').fontSize(12).text('Description', startX + 8, tableTop + 6, { width: colDesc });
   doc.text('Qty', startX + 8 + colDesc, tableTop + 6, { width: colQty, align: 'center' });
   doc.text('Price', startX + 8 + colDesc + colQty, tableTop + 6, { width: colUnit, align: 'right' });
   doc.text('Total', startX + 8 + colDesc + colQty + colUnit, tableTop + 6, { width: colTotal, align: 'right' });
@@ -613,7 +615,7 @@ function drawInvoiceByTemplate(doc, company, invNo, invoiceDate, dueDate, custom
       doc.rect(startX, y, doc.page.width - startX - doc.page.margins.right, rowHeight).fill('#fafafa');
       doc.restore();
     }
-    doc.fillColor('#333').fontSize(10).text(String(it.description || ''), startX + 8, y + 6, { width: colDesc });
+    doc.fillColor('#333').fontSize(12).text(String(it.description || ''), startX + 8, y + 6, { width: colDesc });
     doc.text(String(Number(it.qty || 0)), startX + 8 + colDesc, y + 6, { width: colQty, align: 'center' });
     doc.text(`${curr}${(Number(it.price || 0)).toFixed(2)}`, startX + 8 + colDesc + colQty, y + 6, { width: colUnit, align: 'right' });
     doc.text(`${curr}${(Number(it.total || (Number(it.qty || 0) * Number(it.price || 0)))).toFixed(2)}`, startX + 8 + colDesc + colQty + colUnit, y + 6, { width: colTotal, align: 'right' });
@@ -633,7 +635,7 @@ function drawInvoiceByTemplate(doc, company, invNo, invoiceDate, dueDate, custom
 
   // Amount in words (currency-aware)
   doc.moveDown(0.5);
-  doc.fontSize(10).fillColor('#333').text(`Amount in words: ${amountInWordsWithCurrency(grandTotal, curr)}`);
+  doc.fontSize(12).fillColor('#333').text(`Amount in words: ${amountInWordsWithCurrency(grandTotal, curr)}`);
 
   // Footer
   // Electronic generation notice with printed date
@@ -650,6 +652,17 @@ function drawInvoiceByTemplate(doc, company, invNo, invoiceDate, dueDate, custom
       doc.image(sigBuf, doc.page.margins.left, doc.y + 4, { width: 120 });
     }
   } catch (_) {}
+
+  // Optional Terms and Conditions section, shown only if provided
+  if (company.termsAndConditions && String(company.termsAndConditions).trim()) {
+    doc.moveDown(1);
+    doc.fontSize(12).fillColor(theme.primary).text('Terms and Conditions');
+    doc.moveDown(0.2);
+    doc.fontSize(11).fillColor('#333').text(String(company.termsAndConditions), {
+      width: doc.page.width - doc.page.margins.left - doc.page.margins.right,
+      align: 'left',
+    });
+  }
 
   doc.moveDown(1);
   doc.fontSize(9).fillColor('#777').text('Powered by YMOBooks', { align: 'right' });
@@ -799,6 +812,9 @@ app.post('/api/invoice/create', async (req, res) => {
         phoneNumber: 'phone',
         logo: 'logo',
         signature: 'signature',
+        terms: 'termsAndConditions',
+        termsAndConditions: 'termsAndConditions',
+        tnc: 'termsAndConditions',
         bankName: 'bankName',
         accountName: 'accountName',
         bankAccountName: 'accountName',

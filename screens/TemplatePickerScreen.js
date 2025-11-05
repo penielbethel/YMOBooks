@@ -1,13 +1,17 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, ScrollView, Alert, Modal, TextInput, Image, Platform, Linking, KeyboardAvoidingView } from 'react-native';
+  import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, ScrollView, Alert, Modal, TextInput, Image, Platform, Linking, KeyboardAvoidingView } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import * as FileSystem from 'expo-file-system';
 import * as FileSystemLegacy from 'expo-file-system/legacy';
+  import * as Print from 'expo-print';
+  import * as Sharing from 'expo-sharing';
+  import * as ImagePicker from 'expo-image-picker';
 import { createInvoice } from '../utils/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors } from '../constants/Colors';
 import { Fonts } from '../constants/Fonts';
 import { Spacing } from '../constants/Spacing';
+import { buildInvoiceHtml } from '../utils/invoiceHtml';
 // removed updateCompany; preferences are not saved here anymore
 
 const TEMPLATES = [
@@ -489,6 +493,8 @@ export default function TemplatePickerScreen({ navigation }) {
   const [previewVisible, setPreviewVisible] = useState(false);
   const [showInvoiceDatePicker, setShowInvoiceDatePicker] = useState(false);
   const [showDueDatePicker, setShowDueDatePicker] = useState(false);
+  // Temporary per-PDF logo override (not persisted)
+  const [tempPdfLogo, setTempPdfLogo] = useState('');
 
   // Live invoice editor state (auto-generate invoice number on server, minimal fields here)
   const [invoice, setInvoice] = useState({
@@ -501,8 +507,7 @@ export default function TemplatePickerScreen({ navigation }) {
   const [items, setItems] = useState([
     { description: 'Service 1', qty: '1', price: '100' },
   ]);
-  const [downloading, setDownloading] = useState(false);
-  const [printing, setPrinting] = useState(false);
+  const [savingHtmlPdf, setSavingHtmlPdf] = useState(false);
 
   const updateInvoice = (patch) => setInvoice((prev) => ({ ...prev, ...patch }));
   const updateItem = (index, patch) => setItems((prev) => prev.map((it, i) => (i === index ? { ...it, ...patch } : it)));
@@ -527,6 +532,40 @@ export default function TemplatePickerScreen({ navigation }) {
   }, []);
 
   // No preference saving on this screen anymore per new flow
+
+  // Pick a logo solely for current PDF export and set in-memory override
+  const pickTempLogoForPdf = async () => {
+    if (Platform.OS === 'web') {
+      Alert.alert('Not supported on web', 'Logo picking for this PDF is available on mobile.');
+      return null;
+    }
+    try {
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!perm.granted) {
+        Alert.alert('Permission required', 'Please allow media library access to pick a logo.');
+        return null;
+      }
+      const picked = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: [1,1],
+        quality: 0.8,
+      });
+      if (picked?.canceled) return null;
+      const uri = picked.assets?.[0]?.uri;
+      if (!uri) return null;
+      const ext = (uri.split('?')[0].split('#')[0].split('.').pop() || '').toLowerCase();
+      const mime = ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : (ext === 'jpg' || ext === 'jpeg') ? 'image/jpeg' : 'image/png';
+      const base64 = await FileSystem.readAsStringAsync(uri, { encoding: 'base64' });
+      const dataUrl = `data:${mime};base64,${base64}`;
+      setTempPdfLogo(dataUrl);
+      return dataUrl;
+    } catch (e) {
+      console.warn('[TemplatePicker][pickTempLogoForPdf] Failed:', e?.message || e);
+      Alert.alert('Logo pick failed', String(e?.message || e));
+      return null;
+    }
+  };
 
   const renderTemplate = (tplKey, title, emoji, selected, onSelect) => (
     <TouchableOpacity
@@ -705,7 +744,166 @@ export default function TemplatePickerScreen({ navigation }) {
                 currencySymbol,
               })}
               <View style={{ height: 12 }} />
-              <View style={{ flexDirection: 'row', gap: 10, paddingHorizontal: Spacing.lg }}>
+              <View style={{ flexDirection: 'row', gap: 10, paddingHorizontal: Spacing.lg, flexWrap: 'wrap' }}>
+                <TouchableOpacity onPress={async () => {
+                  try {
+                    setSavingHtmlPdf(true);
+
+                    const guessMime = (u) => {
+                      const ext = (u || '').split('?')[0].split('#')[0].split('.').pop()?.toLowerCase() || '';
+                      if (ext === 'jpg' || ext === 'jpeg') return 'image/jpeg';
+                      if (ext === 'png') return 'image/png';
+                      if (ext === 'gif') return 'image/gif';
+                      if (ext === 'webp') return 'image/webp';
+                      return 'image/*';
+                    };
+
+                    const toDataUrl = async (uri) => {
+                      if (!uri) return '';
+                      if (uri.startsWith('data:')) return uri;
+                      try {
+                        if (Platform.OS === 'web') {
+                          const res = await fetch(uri);
+                          const blob = await res.blob();
+                          const dataUrl = await new Promise((resolve, reject) => {
+                            const reader = new FileReader();
+                            reader.onloadend = () => resolve(reader.result);
+                            reader.onerror = reject;
+                            reader.readAsDataURL(blob);
+                          });
+                          return dataUrl;
+                        } else {
+                          if (uri.startsWith('file:')) {
+                        const base64 = await FileSystemLegacy.readAsStringAsync(uri, { encoding: 'base64' });
+                            const mime = guessMime(uri);
+                            return `data:${mime};base64,${base64}`;
+                          } else {
+                            const tmp = `${FileSystem.cacheDirectory}img-${Date.now()}`;
+                            const dl = await FileSystemLegacy.downloadAsync(uri, tmp);
+                            const base64 = await FileSystemLegacy.readAsStringAsync(dl.uri, { encoding: 'base64' });
+                            const mime = guessMime(uri);
+                            return `data:${mime};base64,${base64}`;
+                          }
+                        }
+                      } catch (err) {
+                        console.warn('[TemplatePicker][toDataUrl] Failed:', err?.message || err);
+                        return uri;
+                      }
+                    };
+
+                    // Resolve logo/signature robustly: prefer in-memory, then AsyncStorage caches, then a web asset
+                    const getCachedLogo = async () => {
+                      try {
+                        const existingRaw = await AsyncStorage.getItem('companyData');
+                        const existing = existingRaw ? JSON.parse(existingRaw) : null;
+                        if (existing?.logo) return existing.logo;
+                      } catch {}
+                      try {
+                        const cache = await AsyncStorage.getItem('companyLogoCache');
+                        if (cache) return cache;
+                      } catch {}
+                      if (Platform.OS === 'web') {
+                        try {
+                          const resp = await fetch('/logo.png');
+                          if (resp.ok) {
+                            const blob = await resp.blob();
+                            const reader = new FileReader();
+                            const dataUrl = await new Promise((resolve) => { reader.onloadend = () => resolve(reader.result); reader.readAsDataURL(blob); });
+                            return String(dataUrl);
+                          }
+                        } catch {}
+                      }
+                      return '';
+                    };
+
+                    let logoCandidate = tempPdfLogo || company?.logo || await getCachedLogo();
+                    const resolvedLogo = await toDataUrl(logoCandidate);
+                    const resolvedSignature = await toDataUrl(company?.signature);
+
+                    // Generate a client-side invoice number for HTML export (server has its own sequence)
+                    const invNo = invoice.invoiceNumber || `INV-${(company?.companyId || 'LOCAL')}-${Date.now()}`;
+
+                    const html = buildInvoiceHtml({
+                      company: {
+                        name: company?.companyName,
+                        address: company?.address,
+                        email: company?.email,
+                        phone: company?.phoneNumber,
+                        bankName: company?.bankName,
+                        accountName: company?.bankAccountName,
+                        accountNumber: company?.bankAccountNumber,
+                        logo: resolvedLogo,
+                        signature: resolvedSignature,
+                      },
+                      invoice: {
+                        customerName: invoice.customerName,
+                        customerAddress: invoice.customerAddress,
+                        customerContact: invoice.customerContact,
+                        invoiceDate: invoice.invoiceDate?.toISOString().slice(0,10),
+                        dueDate: invoice.dueDate?.toISOString().slice(0,10),
+                        invoiceNumber: invNo,
+                      },
+                      items: items.map((it) => ({ description: it.description, qty: Number(it.qty || 0), price: Number(it.price || 0) })),
+                      template: invoiceTemplate,
+                      brandColor,
+                      currencySymbol,
+                    });
+
+                    if (Platform.OS === 'web') {
+                      const withPrint = html.replace('</body>', '<script>setTimeout(()=>{try{window.print()}catch(_){}},300)</script></body>');
+                      const dataUrl = 'data:text/html;charset=utf-8,' + encodeURIComponent(withPrint);
+                      await Linking.openURL(dataUrl);
+                      return;
+                    }
+
+                    const file = await Print.printToFileAsync({ html });
+                    const safeName = `${invNo}.pdf`.replace(/[^a-zA-Z0-9_.-]/g, '_');
+                    // Web: force browser download with custom filename
+                    if (Platform.OS === 'web') {
+                      try {
+                        const resp = await fetch(file.uri);
+                        const blob = await resp.blob();
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = safeName;
+                        document.body.appendChild(a);
+                        a.click();
+                        a.remove();
+                        setTimeout(() => URL.revokeObjectURL(url), 1500);
+                      } catch (webErr) {
+                        console.warn('[TemplatePicker][HTML->PDF][Web] Download fallback failed, opening URI:', webErr?.message || webErr);
+                        await Linking.openURL(file.uri);
+                      }
+                    } else {
+                      // Native: move to a path with expected filename then share/open
+                      try {
+                        const baseDir = FileSystem.documentDirectory || FileSystem.cacheDirectory || '';
+                        const targetUri = `${baseDir}${safeName}`;
+                        await FileSystem.moveAsync({ from: file.uri, to: targetUri });
+                        if (await Sharing.isAvailableAsync()) {
+                          await Sharing.shareAsync(targetUri, { UTI: 'com.adobe.pdf', mimeType: 'application/pdf' });
+                        } else {
+                          await Linking.openURL(targetUri);
+                        }
+                      } catch (nativeErr) {
+                        console.warn('[TemplatePicker][HTML->PDF][Native] Rename failed, sharing original file:', nativeErr?.message || nativeErr);
+                        if (await Sharing.isAvailableAsync()) {
+                          await Sharing.shareAsync(file.uri, { UTI: 'com.adobe.pdf', mimeType: 'application/pdf' });
+                        } else {
+                          await Linking.openURL(file.uri);
+                        }
+                      }
+                    }
+                  } catch (err) {
+                    console.error('[TemplatePicker][HTML->PDF] Failed:', err?.message || err);
+                    Alert.alert('Export failed', String(err?.message || err));
+                  } finally {
+                    setSavingHtmlPdf(false);
+                  }
+                }} style={[styles.primaryHollowButton, { flex: 1, borderColor: Colors.success }, savingHtmlPdf && { opacity: 0.7 }]} disabled={savingHtmlPdf}>
+                  <Text style={[styles.primaryHollowButtonText, { color: Colors.success }]}>{savingHtmlPdf ? 'Generating…' : 'Download Invoice/Share'}</Text>
+                </TouchableOpacity>
                 <TouchableOpacity onPress={async () => {
                   if (!company?.companyId) return Alert.alert('Error', 'Missing company ID. Please login again.');
                   try {
@@ -742,11 +940,26 @@ export default function TemplatePickerScreen({ navigation }) {
                     if (!res?.pdfUrl) throw new Error(res?.message || 'Failed to generate PDF');
                     console.log('[TemplatePicker] Server pdfUrl:', res.pdfUrl);
                     if (Platform.OS === 'web') {
-                      console.log('[TemplatePicker][Web] Opening remote PDF URL');
-                      await Linking.openURL(res.pdfUrl);
+                      try {
+                        const fname = (res.filename || (invoice.invoiceNumber ? `${invoice.invoiceNumber}.pdf` : 'invoice.pdf')).replace(/[^a-zA-Z0-9_.-]/g, '_');
+                        const resp = await fetch(res.pdfUrl);
+                        const blob = await resp.blob();
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = fname;
+                        document.body.appendChild(a);
+                        a.click();
+                        a.remove();
+                        setTimeout(() => URL.revokeObjectURL(url), 1500);
+                      } catch (webErr) {
+                        console.warn('[TemplatePicker][Server->PDF][Web] Direct download failed, opening URL:', webErr?.message || webErr);
+                        await Linking.openURL(res.pdfUrl);
+                      }
                       return;
                     }
-                    const filename = `invoice-${Date.now()}.pdf`;
+                    const invNoServer = invoice.invoiceNumber || `INV-${(company?.companyId || 'LOCAL')}-${Date.now()}`;
+                    const filename = `${invNoServer}.pdf`.replace(/[^a-zA-Z0-9_.-]/g, '_');
                     let baseDir = FileSystem.cacheDirectory || FileSystem.documentDirectory || null;
                     if (!baseDir && FileSystem.documentDirectory) {
                       // Create a temporary dir under documentDirectory
@@ -774,8 +987,8 @@ export default function TemplatePickerScreen({ navigation }) {
                         if (perm.granted && perm.directoryUri) {
                           const fileUri = await FileSystem.StorageAccessFramework.createFileAsync(perm.directoryUri, filename, 'application/pdf');
                           console.log('[TemplatePicker][Android] SAF fileUri:', fileUri);
-                          const base64 = await FileSystem.readAsStringAsync(dl.uri, { encoding: FileSystem.EncodingType.Base64 });
-                          await FileSystem.StorageAccessFramework.writeAsStringAsync(fileUri, base64, { encoding: FileSystem.EncodingType.Base64 });
+                    const base64 = await FileSystemLegacy.readAsStringAsync(dl.uri, { encoding: 'base64' });
+                          await FileSystem.StorageAccessFramework.writeAsStringAsync(fileUri, base64, { encoding: 'base64' });
                           Alert.alert('Saved', 'Invoice PDF saved to selected folder.');
                         } else {
                           // Fallback: open file from cache
@@ -805,37 +1018,8 @@ export default function TemplatePickerScreen({ navigation }) {
                   } finally {
                     setDownloading(false);
                   }
-                }} style={[styles.primaryButton, downloading && { opacity: 0.7 }]} disabled={downloading}>
-                  <Text style={styles.primaryButtonText}>{downloading ? 'Downloading…' : 'Download'}</Text>
-                </TouchableOpacity>
-                <TouchableOpacity onPress={async () => {
-                  if (!company?.companyId) return Alert.alert('Error', 'Missing company ID. Please login again.');
-                  try {
-                    setPrinting(true);
-                    const payload = {
-                      companyId: company.companyId,
-                      invoiceDate: invoice.invoiceDate?.toISOString().slice(0,10),
-                      dueDate: invoice.dueDate?.toISOString().slice(0,10),
-                      customer: {
-                        name: invoice.customerName,
-                        address: invoice.customerAddress,
-                        contact: invoice.customerContact,
-                      },
-                      items: items.map((it) => ({ description: it.description, qty: Number(it.qty || 0), price: Number(it.price || 0) })),
-                      template: invoiceTemplate,
-                      brandColor,
-                      currencySymbol,
-                    };
-                    const res = await createInvoice(payload);
-                    if (!res?.pdfUrl) throw new Error(res?.message || 'Failed to generate PDF');
-                    await Linking.openURL(res.pdfUrl);
-                  } catch (err) {
-                    Alert.alert('Print failed', String(err?.message || err));
-                  } finally {
-                    setPrinting(false);
-                  }
-                }} style={[styles.secondaryButton, printing && { opacity: 0.7 }]} disabled={printing}>
-                  <Text style={styles.secondaryButtonText}>{printing ? 'Opening…' : 'Print (Web)'}</Text>
+                }} style={{ display: 'none' }}>
+                  <Text />
                 </TouchableOpacity>
               </View>
             </ScrollView>
