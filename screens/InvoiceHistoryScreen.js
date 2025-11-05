@@ -5,12 +5,13 @@ import dayjs from 'dayjs';
 import { Colors } from '../constants/Colors';
 import { Fonts } from '../constants/Fonts';
 import { Spacing } from '../constants/Spacing';
-import { fetchInvoices, createReceipt } from '../utils/api';
+import { fetchInvoices, fetchReceipts, createReceipt } from '../utils/api';
 
 const InvoiceHistoryScreen = ({ navigation, route }) => {
   const [loading, setLoading] = useState(true);
   const [invoices, setInvoices] = useState([]);
   const [companyId, setCompanyId] = useState(null);
+  const [receiptsByInvoice, setReceiptsByInvoice] = useState({});
 
   useEffect(() => {
     (async () => {
@@ -28,11 +29,21 @@ const InvoiceHistoryScreen = ({ navigation, route }) => {
           return;
         }
         setCompanyId(effectiveId);
-        const res = await fetchInvoices(effectiveId, 6);
-        if (res?.success) {
-          setInvoices(res.invoices || []);
+        const [invRes, rctRes] = await Promise.all([
+          fetchInvoices(effectiveId, 6),
+          fetchReceipts(effectiveId, 6),
+        ]);
+        if (invRes?.success) {
+          setInvoices(invRes.invoices || []);
         } else {
-          Alert.alert('Error', res?.message || 'Failed to load invoices');
+          Alert.alert('Error', invRes?.message || 'Failed to load invoices');
+        }
+        if (rctRes?.success && Array.isArray(rctRes.receipts)) {
+          const map = {};
+          rctRes.receipts.forEach((r) => {
+            if (r.invoiceNumber) map[r.invoiceNumber] = true;
+          });
+          setReceiptsByInvoice(map);
         }
       } catch (err) {
         Alert.alert('Error', 'Could not load invoice history');
@@ -74,7 +85,12 @@ const InvoiceHistoryScreen = ({ navigation, route }) => {
   const renderItem = ({ item }) => (
     <View style={styles.row}>
       <TouchableOpacity style={styles.rowLeft} onPress={() => openPdf(item)}>
-        <Text style={styles.invNumber}>{item.invoiceNumber}</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <Text style={styles.invNumber}>{item.invoiceNumber}</Text>
+          {receiptsByInvoice[item.invoiceNumber] ? (
+            <View style={styles.paidPill}><Text style={styles.paidPillText}>PAID</Text></View>
+          ) : null}
+        </View>
         <Text style={styles.customerName}>{item?.customer?.name || 'Unknown Customer'}</Text>
       </TouchableOpacity>
       <View style={styles.rowRight}>
@@ -199,6 +215,18 @@ const styles = StyleSheet.create({
     color: Colors.white,
     fontWeight: Fonts.weights.semiBold,
     fontSize: Fonts.sizes.sm,
+  },
+  paidPill: {
+    marginLeft: 8,
+    backgroundColor: '#22c55e',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 999,
+  },
+  paidPillText: {
+    color: '#fff',
+    fontSize: Fonts.sizes.xs,
+    fontWeight: Fonts.weights.semiBold,
   },
   loadingBox: {
     padding: Spacing.lg,

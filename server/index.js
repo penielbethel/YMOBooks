@@ -117,6 +117,8 @@ const InvoiceSchema = new mongoose.Schema(
     invoiceNumber: { type: String, index: true, required: true },
     invoiceDate: { type: Date },
     dueDate: { type: Date },
+    status: { type: String, enum: ['paid', 'unpaid'], default: 'unpaid' },
+    paidAt: { type: Date },
     customer: {
       name: String,
       address: String,
@@ -777,6 +779,17 @@ app.post('/api/receipt/create', async (req, res) => {
           amountPaid: Number(derivedAmount || 0),
           pdfPath,
         });
+        // Mark invoice as paid when possible
+        if (invoiceNumber) {
+          try {
+            await Invoice.updateOne(
+              { companyId, invoiceNumber },
+              { $set: { status: 'paid', paidAt: new Date() } }
+            );
+          } catch (e) {
+            console.warn('Mark invoice paid failed:', e.message);
+          }
+        }
       } catch (persistErr) {
         console.error('Persist receipt error:', persistErr.message);
       }
