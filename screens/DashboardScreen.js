@@ -53,7 +53,16 @@ const DashboardScreen = ({ navigation }) => {
           try {
             const resp = await fetch(`${getApiBaseUrl()}/api/company/${parsed.companyId}`);
             const json = await resp.json();
-            const logo = json?.company?.logo || json?.data?.logo || null;
+            let logo = json?.company?.logo || json?.company?.logoUrl || json?.company?.logoPath || json?.data?.logo || json?.data?.logoUrl || json?.data?.logoPath || null;
+            const normalizeUrl = (u) => {
+              if (!u || typeof u !== 'string') return null;
+              if (u.startsWith('data:')) return u;
+              if (u.startsWith('http')) return u;
+              const base = getApiBaseUrl();
+              if (u.startsWith('/')) return `${base}${u}`;
+              return `${base}/${u}`;
+            };
+            logo = normalizeUrl(logo);
             if (logo) {
               setCompanyData((prev) => ({ ...prev, logo }));
             }

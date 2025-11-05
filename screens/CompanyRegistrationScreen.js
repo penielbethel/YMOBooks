@@ -69,14 +69,22 @@ const CompanyRegistrationScreen = ({ navigation, route }) => {
               const resp = await fetchCompany(existing.companyId);
               const c = resp?.company || resp?.data;
               if (c) {
+                const normalizeUrl = (u) => {
+                  if (!u || typeof u !== 'string') return null;
+                  if (u.startsWith('data:')) return u;
+                  if (u.startsWith('http')) return u;
+                  const base = require('../utils/api').getApiBaseUrl();
+                  if (u.startsWith('/')) return `${base}${u}`;
+                  return `${base}/${u}`;
+                };
                 setFormData(prev => ({
                   ...prev,
                   companyName: c.name || prev.companyName,
                   address: c.address || prev.address,
                   email: c.email || prev.email,
                   phoneNumber: c.phone || prev.phoneNumber,
-                  logo: c.logo ?? prev.logo,
-                  signature: c.signature ?? prev.signature,
+                  logo: normalizeUrl(c.logo || c.logoUrl || c.logoPath) ?? prev.logo,
+                  signature: normalizeUrl(c.signature || c.signatureUrl || c.signaturePath) ?? prev.signature,
                   bankAccountNumber: c.accountNumber || prev.bankAccountNumber,
                   bankAccountName: c.accountName || prev.bankAccountName,
                   bankName: c.bankName || prev.bankName,
