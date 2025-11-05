@@ -1,10 +1,14 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, ScrollView, Alert, Modal, TextInput, Image } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, ScrollView, Alert, Modal, TextInput, Image, Platform, Linking, KeyboardAvoidingView } from 'react-native';
+import DateTimePicker from '@react-native-community/datetimepicker';
+import * as FileSystem from 'expo-file-system';
+import * as FileSystemLegacy from 'expo-file-system/legacy';
+import { createInvoice } from '../utils/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors } from '../constants/Colors';
 import { Fonts } from '../constants/Fonts';
 import { Spacing } from '../constants/Spacing';
-import { updateCompany } from '../utils/api';
+// removed updateCompany; preferences are not saved here anymore
 
 const TEMPLATES = [
   { key: 'classic', title: 'Classic', emoji: '📄' },
@@ -67,7 +71,7 @@ const TemplatePreview = ({ companyName, template, brandColor }) => {
   );
 };
 
-function renderFullInvoicePreview(company, template, brandColor) {
+function renderFullInvoicePreview(company, template, brandColor, liveInvoice) {
   const theme = getThemeFor(template, brandColor);
   const name = company?.companyName || 'Your Company';
   const address = company?.address || 'Company Address';
@@ -76,18 +80,38 @@ function renderFullInvoicePreview(company, template, brandColor) {
   const bankName = company?.bankName || '';
   const accountName = company?.bankAccountName || '';
   const accountNumber = company?.bankAccountNumber || '';
-  const issuanceDate = new Date();
-  const dueDate = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
+  const issuanceDate = liveInvoice?.invoiceDate ? new Date(liveInvoice.invoiceDate) : new Date();
+  const dueDate = liveInvoice?.dueDate ? new Date(liveInvoice.dueDate) : new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
+  const curr = (liveInvoice?.currencySymbol || company?.currencySymbol || '$');
+  const currencyName = (() => {
+    switch ((curr || '').trim()) {
+      case '₦': return 'Naira';
+      case '£': return 'Pounds';
+      case '€': return 'Euros';
+      case '₵': return 'Cedis';
+      case 'KSh': return 'Shillings';
+      case '$':
+      default: return 'Dollars';
+    }
+  })();
 
-  // Common sample rows
-  const sampleRows = [
-    { desc: 'Consulting Services', qty: 8, price: 120, total: 960 },
-    { desc: 'Design & Branding', qty: 1, price: 450, total: 450 },
-    { desc: 'Hosting (12 months)', qty: 1, price: 199, total: 199 },
-  ];
+  // Rows from live invoice (fallback to samples)
+  const rows = (liveInvoice?.items && liveInvoice.items.length > 0)
+    ? liveInvoice.items.map((it) => ({
+        desc: it.description || it.desc || '-',
+        qty: Number(it.qty || 0),
+        price: Number(it.price || 0),
+        total: Number(it.qty || 0) * Number(it.price || 0),
+      }))
+    : [
+        { desc: 'Consulting Services', qty: 8, price: 120, total: 960 },
+        { desc: 'Design & Branding', qty: 1, price: 450, total: 450 },
+        { desc: 'Hosting (12 months)', qty: 1, price: 199, total: 199 },
+      ];
 
-  const subtotal = sampleRows.reduce((s, r) => s + r.total, 0);
-  const tax = Math.round(subtotal * 0.075 * 100) / 100;
+  const taxRate = typeof liveInvoice?.taxPercent === 'number' ? (liveInvoice.taxPercent / 100) : 0.0;
+  const subtotal = rows.reduce((s, r) => s + r.total, 0);
+  const tax = Math.round(subtotal * taxRate * 100) / 100;
   const grand = Math.round((subtotal + tax) * 100) / 100;
 
   const amountInWords = (() => {
@@ -113,51 +137,57 @@ function renderFullInvoicePreview(company, template, brandColor) {
     let rem = whole; const parts = [];
     for (const g of groups) { if (rem >= g.v) { const c = Math.floor(rem / g.v); parts.push(`${chunk(c)} ${g.l}`); rem %= g.v; } }
     if (rem > 0 || parts.length === 0) parts.push(chunk(rem));
-    return `${parts.join(' ')}${decimals ? ` and ${decimals}/100` : ''}`;
+    const centsName = (() => {
+      switch ((curr || '').trim()) {
+        case '₦': return 'kobo';
+        case '£': return 'pence';
+        case '€': return 'cents';
+        case '₵': return 'pesewas';
+        case 'KSh': return 'cents';
+        case '$':
+        default: return 'cents';
+      }
+    })();
+    return `${parts.join(' ')} ${currencyName}${decimals ? ` and ${decimals}/100 ${centsName}` : ''}`;
   })();
 
   switch (template) {
     case 'modern':
       return (
         <View style={[styles.fullCard, { borderColor: theme.border }]}> 
-          <View style={[styles.fullHeader, { backgroundColor: theme.primary }]}> 
+          <View style={[styles.fullHeader, { backgroundColor: theme.primary, justifyContent: 'space-between' }]}> 
+            <Text style={[styles.fullCompany, { color: Colors.white }]} numberOfLines={1}>{name}</Text>
             <Text style={[styles.fullTitle, { color: Colors.white }]}>INVOICE</Text>
-            <View>
-              <Text style={[styles.fullCompany, { color: Colors.white }]} numberOfLines={1}>{name}</Text>
-              <Text style={[styles.fullMeta, { color: Colors.white }]}>{new Date().toLocaleDateString()}</Text>
-            </View>
           </View>
           <View style={[styles.fullAccent, { backgroundColor: theme.accent }]} />
           <View style={styles.fullRow}> 
-            <View style={{ flex: 1 }}>
+            <View style={[styles.fullInfoBox, { flex: 1, borderColor: theme.border, marginRight: 8 }]}> 
               <Text style={[styles.fullSection, { color: theme.primary }]}>BILL TO</Text>
-              <Text style={styles.fullText}>Sample Client LLC</Text>
-              <Text style={styles.fullText}>123 Client Street</Text>
-              <Text style={styles.fullText}>Client City, State</Text>
-              <Text style={styles.fullText}>client@email.com</Text>
-              <View style={{ marginTop: 8 }}>
-                <Text style={[styles.fullSection, { color: theme.primary }]}>Invoice</Text>
-                <Text style={styles.fullMeta}>INV-001</Text>
-                <Text style={styles.fullMeta}>Issuance: {issuanceDate.toISOString().slice(0,10)}</Text>
-                <Text style={styles.fullMeta}>Due: {dueDate.toISOString().slice(0,10)}</Text>
+              <Text style={styles.fullText}>{liveInvoice?.customerName || 'Sample Client LLC'}</Text>
+              <Text style={styles.fullText}>{liveInvoice?.customerAddress || '123 Client Street'}</Text>
+              <Text style={styles.fullText}>{liveInvoice?.customerContact || 'client@email.com / +1 (555) 555-5555'}</Text>
+            </View>
+            <View style={[styles.fullInfoBox, { flex: 1, borderColor: theme.border, marginLeft: 8 }]}> 
+              <Text style={[styles.fullSection, { color: theme.primary }]}>Invoice</Text>
+              <Text style={styles.fullMeta}>Issuance: {issuanceDate.toISOString().slice(0,10)}</Text>
+              <Text style={styles.fullMeta}>Due: {dueDate.toISOString().slice(0,10)}</Text>
+            </View>
+          </View>
+          <View style={[styles.fullInfoBox, { borderColor: theme.border, marginHorizontal: Spacing.lg }]}> 
+            {!!company?.logo && (
+              <Image source={{ uri: company.logo }} style={{ width: 64, height: 64, borderRadius: 8, marginBottom: 6 }} />
+            )}
+            <Text style={styles.fullText}>{address}</Text>
+            <Text style={styles.fullText}>Email: {email}</Text>
+            <Text style={styles.fullText}>Phone: {phone}</Text>
+            {(bankName || accountName || accountNumber) && (
+              <View style={{ marginTop: 6 }}>
+                <Text style={styles.fullSection}>Bank Details</Text>
+                {!!bankName && (<Text style={styles.fullText}>Bank: {bankName}</Text>)}
+                {!!accountName && (<Text style={styles.fullText}>Account Name: {accountName}</Text>)}
+                {!!accountNumber && (<Text style={styles.fullText}>Account Number: {accountNumber}</Text>)}
               </View>
-            </View>
-            <View style={[styles.fullInfoBox, { borderColor: theme.border }]}> 
-              {!!company?.logo && (
-                <Image source={{ uri: company.logo }} style={{ width: 64, height: 64, borderRadius: 8, marginBottom: 6 }} />
-              )}
-              <Text style={styles.fullText}>{address}</Text>
-              <Text style={styles.fullText}>Email: {email}</Text>
-              <Text style={styles.fullText}>Phone: {phone}</Text>
-              {(bankName || accountName || accountNumber) && (
-                <View style={{ marginTop: 6 }}>
-                  <Text style={styles.fullSection}>Bank Details</Text>
-                  {!!bankName && (<Text style={styles.fullText}>Bank: {bankName}</Text>)}
-                  {!!accountName && (<Text style={styles.fullText}>Account Name: {accountName}</Text>)}
-                  {!!accountNumber && (<Text style={styles.fullText}>Account Number: {accountNumber}</Text>)}
-                </View>
-              )}
-            </View>
+            )}
           </View>
           <View style={styles.fullTableHeader}> 
             <Text style={[styles.fullTh, { flex: 2 }]}>Description</Text>
@@ -165,18 +195,20 @@ function renderFullInvoicePreview(company, template, brandColor) {
             <Text style={[styles.fullTh, { flex: 1, textAlign: 'right' }]}>Price</Text>
             <Text style={[styles.fullTh, { flex: 1, textAlign: 'right' }]}>Total</Text>
           </View>
-          {sampleRows.map((r, i) => (
+          {rows.map((r, i) => (
             <View key={i} style={[styles.fullRowCard, { borderColor: theme.border }]}> 
               <Text style={[styles.fullTd, { flex: 2 }]}>{r.desc}</Text>
               <Text style={[styles.fullTd, { flex: 0.7, textAlign: 'center' }]}>{r.qty}</Text>
-              <Text style={[styles.fullTd, { flex: 1, textAlign: 'right' }]}>${r.price.toFixed(2)}</Text>
-              <Text style={[styles.fullTd, { flex: 1, textAlign: 'right' }]}>${r.total.toFixed(2)}</Text>
+              <Text style={[styles.fullTd, { flex: 1, textAlign: 'right' }]}>{`${curr}${r.price.toFixed(2)}`}</Text>
+              <Text style={[styles.fullTd, { flex: 1, textAlign: 'right' }]}>{`${curr}${r.total.toFixed(2)}`}</Text>
             </View>
           ))}
           <View style={styles.fullTotalsRight}> 
-            <View style={styles.fullTotalRow}><Text style={styles.fullMeta}>Subtotal</Text><Text style={styles.fullMeta}>${subtotal.toFixed(2)}</Text></View>
-            <View style={styles.fullTotalRow}><Text style={styles.fullMeta}>Tax (7.5%)</Text><Text style={styles.fullMeta}>${tax.toFixed(2)}</Text></View>
-            <View style={[styles.fullTotalRow, styles.fullGrand]}><Text style={styles.fullTitleSm}>Total</Text><Text style={styles.fullTitleSm}>${grand.toFixed(2)}</Text></View>
+            <View style={styles.fullTotalRow}><Text style={styles.fullMeta}>Subtotal</Text><Text style={styles.fullMeta}>{`${curr}${subtotal.toFixed(2)}`}</Text></View>
+            {tax > 0 && (
+              <View style={styles.fullTotalRow}><Text style={styles.fullMeta}>Tax</Text><Text style={styles.fullMeta}>{`${curr}${tax.toFixed(2)}`}</Text></View>
+            )}
+            <View style={[styles.fullTotalRow, styles.fullGrand]}><Text style={styles.fullTitleSm}>Total</Text><Text style={styles.fullTitleSm}>{`${curr}${grand.toFixed(2)}`}</Text></View>
             <Text style={[styles.fullMeta, { marginTop: 6 }]}>Amount in words: {amountInWords}</Text>
           </View>
           {!!company?.signature && (
@@ -214,13 +246,12 @@ function renderFullInvoicePreview(company, template, brandColor) {
           <View style={styles.fullRow}> 
              <View style={{ flex: 1 }}>
                <Text style={[styles.fullSection, { color: theme.primary }]}>BILL TO</Text>
-               <Text style={styles.fullText}>Sample Client LLC</Text>
-               <Text style={styles.fullText}>client@email.com</Text>
-               <Text style={styles.fullText}>+1 (555) 555-5555</Text>
+               <Text style={styles.fullText}>{liveInvoice?.customerName || 'Sample Client LLC'}</Text>
+               <Text style={styles.fullText}>{liveInvoice?.customerAddress || '123 Client Street'}</Text>
+               <Text style={styles.fullText}>{liveInvoice?.customerContact || 'client@email.com / +1 (555) 555-5555'}</Text>
              </View>
              <View style={{ alignItems: 'flex-end', flex: 1 }}>
                <Text style={[styles.fullSection, { color: theme.primary }]}>Invoice</Text>
-               <Text style={styles.fullMeta}>INV-001</Text>
                <Text style={styles.fullMeta}>Issuance: {issuanceDate.toISOString().slice(0,10)}</Text>
                <Text style={styles.fullMeta}>Due: {dueDate.toISOString().slice(0,10)}</Text>
              </View>
@@ -231,19 +262,21 @@ function renderFullInvoicePreview(company, template, brandColor) {
             <Text style={[styles.fullTh, { flex: 1, textAlign: 'right' }]}>Price</Text>
             <Text style={[styles.fullTh, { flex: 1, textAlign: 'right' }]}>Total</Text>
           </View>
-          {sampleRows.map((r, i) => (
+          {rows.map((r, i) => (
             <View key={i} style={styles.fullTableRow}> 
               <Text style={[styles.fullTd, { flex: 2 }]}>{r.desc}</Text>
               <Text style={[styles.fullTd, { flex: 0.7, textAlign: 'center' }]}>{r.qty}</Text>
-              <Text style={[styles.fullTd, { flex: 1, textAlign: 'right' }]}>${r.price.toFixed(2)}</Text>
-              <Text style={[styles.fullTd, { flex: 1, textAlign: 'right' }]}>${r.total.toFixed(2)}</Text>
+              <Text style={[styles.fullTd, { flex: 1, textAlign: 'right' }]}>{`${curr}${r.price.toFixed(2)}`}</Text>
+              <Text style={[styles.fullTd, { flex: 1, textAlign: 'right' }]}>{`${curr}${r.total.toFixed(2)}`}</Text>
             </View>
           ))}
           <View style={styles.fullSeparator} />
           <View style={styles.fullTotalsLeft}> 
-            <View style={styles.fullTotalRow}><Text style={styles.fullMeta}>Subtotal</Text><Text style={styles.fullMeta}>${subtotal.toFixed(2)}</Text></View>
-            <View style={styles.fullTotalRow}><Text style={styles.fullMeta}>Tax (7.5%)</Text><Text style={styles.fullMeta}>${tax.toFixed(2)}</Text></View>
-            <View style={styles.fullTotalRow}><Text style={styles.fullTitleSm}>Total</Text><Text style={styles.fullTitleSm}>${grand.toFixed(2)}</Text></View>
+            <View style={styles.fullTotalRow}><Text style={styles.fullMeta}>Subtotal</Text><Text style={styles.fullMeta}>{`${curr}${subtotal.toFixed(2)}`}</Text></View>
+            {tax > 0 && (
+              <View style={styles.fullTotalRow}><Text style={styles.fullMeta}>Tax</Text><Text style={styles.fullMeta}>{`${curr}${tax.toFixed(2)}`}</Text></View>
+            )}
+            <View style={styles.fullTotalRow}><Text style={styles.fullTitleSm}>Total</Text><Text style={styles.fullTitleSm}>{`${curr}${grand.toFixed(2)}`}</Text></View>
             <Text style={[styles.fullMeta, { marginTop: 6 }]}>Amount in words: {amountInWords}</Text>
           </View>
           {!!company?.signature && (
@@ -269,7 +302,6 @@ function renderFullInvoicePreview(company, template, brandColor) {
               <Text style={styles.fullText}>{address}</Text>
             </View>
             <View style={{ alignItems: 'flex-end' }}>
-              <Text style={styles.fullMeta}>INV-001</Text>
               <Text style={styles.fullMeta}>Issuance: {issuanceDate.toISOString().slice(0,10)}</Text>
               <Text style={styles.fullMeta}>Due: {dueDate.toISOString().slice(0,10)}</Text>
             </View>
@@ -277,9 +309,9 @@ function renderFullInvoicePreview(company, template, brandColor) {
           <View style={styles.fullRow}> 
             <View style={{ flex: 1 }}>
               <Text style={[styles.fullSection, { color: theme.primary }]}>BILL TO</Text>
-              <Text style={styles.fullText}>Sample Client LLC</Text>
-              <Text style={styles.fullText}>client@email.com</Text>
-              <Text style={styles.fullText}>+1 (555) 555-5555</Text>
+              <Text style={styles.fullText}>{liveInvoice?.customerName || 'Sample Client LLC'}</Text>
+              <Text style={styles.fullText}>{liveInvoice?.customerAddress || '123 Client Street'}</Text>
+              <Text style={styles.fullText}>{liveInvoice?.customerContact || 'client@email.com / +1 (555) 555-5555'}</Text>
             </View>
           </View>
           <View style={[styles.fullTableHeader, { backgroundColor: Colors.gray[100] }]}> 
@@ -288,18 +320,20 @@ function renderFullInvoicePreview(company, template, brandColor) {
             <Text style={[styles.fullTh, { flex: 1, textAlign: 'right' }]}>Price</Text>
             <Text style={[styles.fullTh, { flex: 1, textAlign: 'right' }]}>Total</Text>
           </View>
-          {sampleRows.map((r, i) => (
+          {rows.map((r, i) => (
             <View key={i} style={[styles.fullTableRow, { borderBottomWidth: 2 }]}> 
               <Text style={[styles.fullTd, { flex: 2 }]}>{r.desc}</Text>
               <Text style={[styles.fullTd, { flex: 0.7, textAlign: 'center' }]}>{r.qty}</Text>
-              <Text style={[styles.fullTd, { flex: 1, textAlign: 'right' }]}>${r.price.toFixed(2)}</Text>
-              <Text style={[styles.fullTd, { flex: 1, textAlign: 'right' }]}>${r.total.toFixed(2)}</Text>
+              <Text style={[styles.fullTd, { flex: 1, textAlign: 'right' }]}>{`${curr}${r.price.toFixed(2)}`}</Text>
+              <Text style={[styles.fullTd, { flex: 1, textAlign: 'right' }]}>{`${curr}${r.total.toFixed(2)}`}</Text>
             </View>
           ))}
           <View style={[styles.fullTotalsRight, { backgroundColor: Colors.gray[100], padding: Spacing.md, borderRadius: 8 }]}> 
-            <View style={styles.fullTotalRow}><Text style={styles.fullMeta}>Subtotal</Text><Text style={styles.fullMeta}>${subtotal.toFixed(2)}</Text></View>
-            <View style={styles.fullTotalRow}><Text style={styles.fullMeta}>Tax (7.5%)</Text><Text style={styles.fullMeta}>${tax.toFixed(2)}</Text></View>
-            <View style={[styles.fullTotalRow, styles.fullGrand]}><Text style={styles.fullTitleSm}>Total</Text><Text style={styles.fullTitleSm}>${grand.toFixed(2)}</Text></View>
+            <View style={styles.fullTotalRow}><Text style={styles.fullMeta}>Subtotal</Text><Text style={styles.fullMeta}>{`${curr}${subtotal.toFixed(2)}`}</Text></View>
+            {tax > 0 && (
+              <View style={styles.fullTotalRow}><Text style={styles.fullMeta}>Tax</Text><Text style={styles.fullMeta}>{`${curr}${tax.toFixed(2)}`}</Text></View>
+            )}
+            <View style={[styles.fullTotalRow, styles.fullGrand]}><Text style={styles.fullTitleSm}>Total</Text><Text style={styles.fullTitleSm}>{`${curr}${grand.toFixed(2)}`}</Text></View>
             <Text style={[styles.fullMeta, { marginTop: 6 }]}>Amount in words: {amountInWords}</Text>
           </View>
           {!!company?.signature && (
@@ -317,7 +351,6 @@ function renderFullInvoicePreview(company, template, brandColor) {
           <View style={styles.fullRow}> 
             <Text style={[styles.fullTitleSm, { color: theme.primary }]}>INVOICE</Text>
             <View style={{ alignItems: 'flex-end', flex: 1 }}>
-              <Text style={styles.fullMeta}>INV-001</Text>
               <Text style={styles.fullMeta}>{new Date().toLocaleDateString()}</Text>
             </View>
           </View>
@@ -339,9 +372,9 @@ function renderFullInvoicePreview(company, template, brandColor) {
             </View>
             <View style={{ flex: 1 }}>
               <Text style={[styles.fullSection, { color: theme.primary }]}>BILL TO</Text>
-              <Text style={styles.fullText}>Sample Client LLC</Text>
-              <Text style={styles.fullText}>client@email.com</Text>
-              <Text style={styles.fullText}>+1 (555) 555-5555</Text>
+              <Text style={styles.fullText}>{liveInvoice?.customerName || 'Sample Client LLC'}</Text>
+              <Text style={styles.fullText}>{liveInvoice?.customerAddress || '123 Client Street'}</Text>
+              <Text style={styles.fullText}>{liveInvoice?.customerContact || 'client@email.com / +1 (555) 555-5555'}</Text>
             </View>
           </View>
           <View style={styles.fullTableHeader}> 
@@ -350,12 +383,12 @@ function renderFullInvoicePreview(company, template, brandColor) {
             <Text style={[styles.fullTh, { flex: 1, textAlign: 'right', fontWeight: '700' }]}>Price</Text>
             <Text style={[styles.fullTh, { flex: 1, textAlign: 'right', fontWeight: '700' }]}>Total</Text>
           </View>
-          {sampleRows.map((r, i) => (
+          {rows.map((r, i) => (
             <View key={i} style={[styles.fullTableRow, { paddingVertical: 6 }]}> 
               <Text style={[styles.fullTd, { flex: 2 }]}>{r.desc}</Text>
               <Text style={[styles.fullTd, { flex: 0.6, textAlign: 'center' }]}>{r.qty}</Text>
-              <Text style={[styles.fullTd, { flex: 1, textAlign: 'right' }]}>${r.price.toFixed(2)}</Text>
-              <Text style={[styles.fullTd, { flex: 1, textAlign: 'right' }]}>${r.total.toFixed(2)}</Text>
+              <Text style={[styles.fullTd, { flex: 1, textAlign: 'right' }]}>{`${curr}${r.price.toFixed(2)}`}</Text>
+              <Text style={[styles.fullTd, { flex: 1, textAlign: 'right' }]}>{`${curr}${r.total.toFixed(2)}`}</Text>
             </View>
           ))}
           <View style={styles.fullTotalsRight}> 
@@ -386,17 +419,15 @@ function renderFullInvoicePreview(company, template, brandColor) {
           <View style={styles.fullRow}> 
             <View style={{ flex: 1 }}>
               <Text style={[styles.fullSection, { color: theme.primary }]}>BILL TO</Text>
-              <Text style={styles.fullText}>Sample Client LLC</Text>
-              <Text style={styles.fullText}>123 Client Street</Text>
-              <Text style={styles.fullText}>client@email.com</Text>
-              <Text style={styles.fullText}>+1 (555) 555-5555</Text>
-              <View style={{ marginTop: 8 }}>
-                <Text style={[styles.fullSection, { color: theme.primary }]}>Invoice</Text>
-                <Text style={styles.fullMeta}>INV-001</Text>
-                <Text style={styles.fullMeta}>Issuance: {issuanceDate.toISOString().slice(0,10)}</Text>
-                <Text style={styles.fullMeta}>Due: {dueDate.toISOString().slice(0,10)}</Text>
-              </View>
+        <Text style={styles.fullText}>{liveInvoice?.customerName || 'Sample Client LLC'}</Text>
+        <Text style={styles.fullText}>{liveInvoice?.customerAddress || '123 Client Street'}</Text>
+        <Text style={styles.fullText}>{liveInvoice?.customerContact || 'client@email.com / +1 (555) 555-5555'}</Text>
+            <View style={{ marginTop: 8 }}>
+              <Text style={[styles.fullSection, { color: theme.primary }]}>Invoice</Text>
+              <Text style={styles.fullMeta}>Issuance: {issuanceDate.toISOString().slice(0,10)}</Text>
+              <Text style={styles.fullMeta}>Due: {dueDate.toISOString().slice(0,10)}</Text>
             </View>
+          </View>
             <View style={{ alignItems: 'flex-end', flex: 1 }}>
               <View style={[styles.fullInfoBox, { borderColor: theme.border }]}> 
                 {!!company?.logo && (
@@ -422,7 +453,7 @@ function renderFullInvoicePreview(company, template, brandColor) {
             <Text style={[styles.fullTh, { flex: 1, textAlign: 'right' }]}>Price</Text>
             <Text style={[styles.fullTh, { flex: 1, textAlign: 'right' }]}>Total</Text>
           </View>
-          {sampleRows.map((r, i) => (
+          {rows.map((r, i) => (
             <View key={i} style={styles.fullTableRow}> 
               <Text style={[styles.fullTd, { flex: 2 }]}>{r.desc}</Text>
               <Text style={[styles.fullTd, { flex: 0.7, textAlign: 'center' }]}>{r.qty}</Text>
@@ -431,9 +462,11 @@ function renderFullInvoicePreview(company, template, brandColor) {
             </View>
           ))}
           <View style={styles.fullTotalsRight}> 
-            <View style={styles.fullTotalRow}><Text style={styles.fullMeta}>Subtotal</Text><Text style={styles.fullMeta}>${subtotal.toFixed(2)}</Text></View>
-            <View style={styles.fullTotalRow}><Text style={styles.fullMeta}>Tax (7.5%)</Text><Text style={styles.fullMeta}>${tax.toFixed(2)}</Text></View>
-            <View style={styles.fullTotalRow}><Text style={[styles.fullTitleSm, { color: theme.primary }]}>Total</Text><Text style={[styles.fullTitleSm, { color: theme.primary }]}>${grand.toFixed(2)}</Text></View>
+            <View style={styles.fullTotalRow}><Text style={styles.fullMeta}>Subtotal</Text><Text style={styles.fullMeta}>{`${curr}${subtotal.toFixed(2)}`}</Text></View>
+            {tax > 0 && (
+              <View style={styles.fullTotalRow}><Text style={styles.fullMeta}>Tax</Text><Text style={styles.fullMeta}>{`${curr}${tax.toFixed(2)}`}</Text></View>
+            )}
+            <View style={styles.fullTotalRow}><Text style={[styles.fullTitleSm, { color: theme.primary }]}>Total</Text><Text style={[styles.fullTitleSm, { color: theme.primary }]}>{`${curr}${grand.toFixed(2)}`}</Text></View>
             <Text style={[styles.fullMeta, { marginTop: 6 }]}>Amount in words: {amountInWords}</Text>
           </View>
           {!!company?.signature && (
@@ -452,8 +485,29 @@ export default function TemplatePickerScreen({ navigation }) {
   const [company, setCompany] = useState(null);
   const [invoiceTemplate, setInvoiceTemplate] = useState('classic');
   const [brandColor, setBrandColor] = useState('');
-  const [saving, setSaving] = useState(false);
+  const [currencySymbol, setCurrencySymbol] = useState('₦');
   const [previewVisible, setPreviewVisible] = useState(false);
+  const [showInvoiceDatePicker, setShowInvoiceDatePicker] = useState(false);
+  const [showDueDatePicker, setShowDueDatePicker] = useState(false);
+
+  // Live invoice editor state (auto-generate invoice number on server, minimal fields here)
+  const [invoice, setInvoice] = useState({
+    customerName: '',
+    customerAddress: '',
+    customerContact: '', // email or phone
+    invoiceDate: new Date(),
+    dueDate: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
+  });
+  const [items, setItems] = useState([
+    { description: 'Service 1', qty: '1', price: '100' },
+  ]);
+  const [downloading, setDownloading] = useState(false);
+  const [printing, setPrinting] = useState(false);
+
+  const updateInvoice = (patch) => setInvoice((prev) => ({ ...prev, ...patch }));
+  const updateItem = (index, patch) => setItems((prev) => prev.map((it, i) => (i === index ? { ...it, ...patch } : it)));
+  const addItem = () => setItems((prev) => [...prev, { description: '', qty: '1', price: '0' }]);
+  const removeItem = (index) => setItems((prev) => prev.filter((_, i) => i !== index));
 
   useEffect(() => {
     (async () => {
@@ -464,6 +518,7 @@ export default function TemplatePickerScreen({ navigation }) {
           setCompany(parsed);
           setInvoiceTemplate(parsed.invoiceTemplate || 'classic');
           setBrandColor(parsed.brandColor || Colors.primary);
+          setCurrencySymbol(parsed.currencySymbol || '₦');
         }
       } catch (err) {
         Alert.alert('Error', 'Failed to load company data');
@@ -471,26 +526,7 @@ export default function TemplatePickerScreen({ navigation }) {
     })();
   }, []);
 
-  const saveSelection = async () => {
-    if (!company?.companyId) return Alert.alert('Not Found', 'Company ID missing. Please login again.');
-    setSaving(true);
-    try {
-      // Save receiptTemplate equal to invoiceTemplate as requested
-      const res = await updateCompany(company.companyId, { invoiceTemplate, receiptTemplate: invoiceTemplate, brandColor });
-      if (res?.success) {
-        const updated = { ...company, invoiceTemplate, receiptTemplate: invoiceTemplate, brandColor };
-        await AsyncStorage.setItem('companyData', JSON.stringify(updated));
-        Alert.alert('Saved', 'Template preferences updated successfully. New invoices will use your selected style.');
-        navigation.goBack();
-      } else {
-        Alert.alert('Error', res?.message || 'Failed to save templates');
-      }
-    } catch (err) {
-      Alert.alert('Error', 'Failed to save templates');
-    } finally {
-      setSaving(false);
-    }
-  };
+  // No preference saving on this screen anymore per new flow
 
   const renderTemplate = (tplKey, title, emoji, selected, onSelect) => (
     <TouchableOpacity
@@ -505,13 +541,17 @@ export default function TemplatePickerScreen({ navigation }) {
 
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }} keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 80}>
+      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
         <View style={styles.header}>
           <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
             <Text style={styles.backButtonText}>← Back</Text>
           </TouchableOpacity>
           <Text style={styles.title}>Pick Your Invoice Template</Text>
           <Text style={styles.subtitle}>Choose how your invoice looks. Tap preview for full layout.</Text>
+          <View style={{ marginTop: 8, alignSelf: 'flex-start', backgroundColor: Colors.success, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 }}>
+            <Text style={{ color: Colors.white, fontWeight: '700' }}>Currency: {currencySymbol} {currencySymbol === '₦' ? 'Naira' : currencySymbol === '$' ? 'Dollar' : currencySymbol}</Text>
+          </View>
         </View>
 
         <View style={styles.section}>
@@ -555,9 +595,73 @@ export default function TemplatePickerScreen({ navigation }) {
           </View>
         </View>
 
-        <TouchableOpacity style={[styles.saveButton, saving && styles.saveButtonDisabled]} onPress={saveSelection} disabled={saving}>
-          <Text style={styles.saveButtonText}>{saving ? 'Saving...' : 'Save Preference'}</Text>
-        </TouchableOpacity>
+        {/* Live Invoice Editor */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Invoice Details</Text>
+          <Text style={styles.subtitle}>Only customer and items are required. Template applies automatically.</Text>
+          <View style={{ gap: 10 }}>
+            <TextInput style={styles.input} placeholder="Customer Name" placeholderTextColor={Colors.textSecondary} value={invoice.customerName} onChangeText={(t) => updateInvoice({ customerName: t })} />
+            <TextInput style={styles.input} placeholder="Customer Address" placeholderTextColor={Colors.textSecondary} value={invoice.customerAddress} onChangeText={(t) => updateInvoice({ customerAddress: t })} />
+            <TextInput style={styles.input} placeholder="Email or Phone (optional)" placeholderTextColor={Colors.textSecondary} value={invoice.customerContact} onChangeText={(t) => updateInvoice({ customerContact: t })} autoCapitalize="none" />
+          </View>
+          <View style={{ marginTop: 10 }}>
+            <Text style={styles.fullMeta}>Currency</Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 6 }}>
+              {['$','₦','£','€','₵','KSh'].map((sym) => (
+                <TouchableOpacity key={sym} onPress={() => setCurrencySymbol(sym)} style={[styles.swatch, { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 6, backgroundColor: sym === currencySymbol ? Colors.primary : Colors.gray[200] }]}>
+                  <Text style={{ color: sym === currencySymbol ? Colors.white : Colors.text, fontWeight: '600' }}>{sym}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+          <View style={{ flexDirection: 'row', gap: 10, marginTop: 10 }}>
+            <TouchableOpacity style={[styles.input, { flex: 1, justifyContent: 'center' }]} onPress={() => setShowInvoiceDatePicker(true)}>
+              <Text style={styles.dateText}>Issuance Date: {invoice.invoiceDate?.toISOString().slice(0,10)}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.input, { flex: 1, justifyContent: 'center' }]} onPress={() => setShowDueDatePicker(true)}>
+              <Text style={styles.dateText}>Due Date: {invoice.dueDate?.toISOString().slice(0,10)}</Text>
+            </TouchableOpacity>
+          </View>
+          {showInvoiceDatePicker && (
+            <DateTimePicker value={invoice.invoiceDate || new Date()} mode="date" display="default" onChange={(e, d) => { setShowInvoiceDatePicker(false); if (d) updateInvoice({ invoiceDate: d }); }} />
+          )}
+          {showDueDatePicker && (
+            <DateTimePicker value={invoice.dueDate || new Date()} mode="date" display="default" onChange={(e, d) => { setShowDueDatePicker(false); if (d) updateInvoice({ dueDate: d }); }} />
+          )}
+
+          <Text style={[styles.sectionTitle, { marginTop: Spacing.md }]}>Items</Text>
+          <View style={{ flexDirection: 'row', gap: 8, marginBottom: 6, paddingHorizontal: 2 }}>
+            <Text style={[styles.fullMeta, { flex: 2 }]}>Item Description</Text>
+            <Text style={[styles.fullMeta, { flex: 0.6, textAlign: 'center' }]}>Qty</Text>
+            <Text style={[styles.fullMeta, { flex: 1, textAlign: 'right' }]}>Price ({currencySymbol})</Text>
+            <Text style={[styles.fullMeta, { flex: 1, textAlign: 'right' }]}>Total ({currencySymbol})</Text>
+          </View>
+          {items.map((it, i) => {
+            const qty = Number(it.qty || 0);
+            const price = Number(it.price || 0);
+            const total = Math.round(qty * price * 100) / 100;
+            return (
+              <View key={i} style={{ flexDirection: 'row', gap: 8, alignItems: 'center', marginBottom: 8 }}>
+                <TextInput style={[styles.input, { flex: 2 }]} placeholder="Description" placeholderTextColor={Colors.textSecondary} value={it.description} onChangeText={(t) => updateItem(i, { description: t })} />
+                <TextInput style={[styles.input, { flex: 0.6, textAlign: 'center' }]} placeholder="Qty" placeholderTextColor={Colors.textSecondary} value={it.qty} onChangeText={(t) => updateItem(i, { qty: t })} keyboardType="numeric" />
+                <TextInput style={[styles.input, { flex: 1, textAlign: 'right' }]} placeholder="Price" placeholderTextColor={Colors.textSecondary} value={it.price} onChangeText={(t) => updateItem(i, { price: t })} keyboardType="decimal-pad" />
+                <Text style={[styles.fullText, { flex: 1, textAlign: 'right' }]}>{`${currencySymbol}${total.toFixed(2)}`}</Text>
+                <TouchableOpacity onPress={() => removeItem(i)} style={[styles.iconButton, { backgroundColor: Colors.error }]}>
+                  <Text style={styles.iconButtonText}>✕</Text>
+                </TouchableOpacity>
+              </View>
+            );
+          })}
+          <View style={{ flexDirection: 'row', gap: 10 }}>
+            <TouchableOpacity onPress={addItem} style={[styles.secondaryButton, { flex: 1 }]}>
+              <Text style={styles.secondaryButtonText}>+ Add Item</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => setPreviewVisible(true)} style={[styles.primaryHollowButton, { flex: 1 }]}>
+              <Text style={styles.primaryHollowButtonText}>Preview</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
 
         {/* Full-screen preview modal */}
         <Modal visible={previewVisible} animationType="slide" onRequestClose={() => setPreviewVisible(false)}>
@@ -569,11 +673,142 @@ export default function TemplatePickerScreen({ navigation }) {
               <Text style={styles.title}>Invoice Preview — {invoiceTemplate.charAt(0).toUpperCase() + invoiceTemplate.slice(1)}</Text>
             </View>
             <ScrollView contentContainerStyle={{ padding: Spacing.lg }}>
-              {renderFullInvoicePreview(company, invoiceTemplate, brandColor)}
+              {renderFullInvoicePreview(company, invoiceTemplate, brandColor, {
+                customerName: invoice.customerName,
+                customerAddress: invoice.customerAddress,
+                customerContact: invoice.customerContact,
+                invoiceDate: invoice.invoiceDate?.toISOString().slice(0,10),
+                dueDate: invoice.dueDate?.toISOString().slice(0,10),
+                items,
+                currencySymbol,
+              })}
+              <View style={{ height: 12 }} />
+              <View style={{ flexDirection: 'row', gap: 10, paddingHorizontal: Spacing.lg }}>
+                <TouchableOpacity onPress={async () => {
+                  if (!company?.companyId) return Alert.alert('Error', 'Missing company ID. Please login again.');
+                  try {
+                    setDownloading(true);
+                    console.log('[TemplatePicker] Download clicked');
+                    const payload = {
+                      companyId: company.companyId,
+                      invoiceDate: invoice.invoiceDate?.toISOString().slice(0,10),
+                      dueDate: invoice.dueDate?.toISOString().slice(0,10),
+                      customer: {
+                        name: invoice.customerName,
+                        address: invoice.customerAddress,
+                        contact: invoice.customerContact,
+                      },
+                      items: items.map((it) => ({ description: it.description, qty: Number(it.qty || 0), price: Number(it.price || 0) })),
+                      template: invoiceTemplate,
+                      brandColor,
+                      currencySymbol,
+                    };
+                    console.log('[TemplatePicker] Payload:', payload);
+                    const res = await createInvoice(payload);
+                    if (!res?.pdfUrl) throw new Error(res?.message || 'Failed to generate PDF');
+                    console.log('[TemplatePicker] Server pdfUrl:', res.pdfUrl);
+                    if (Platform.OS === 'web') {
+                      console.log('[TemplatePicker][Web] Opening remote PDF URL');
+                      await Linking.openURL(res.pdfUrl);
+                      return;
+                    }
+                    const filename = `invoice-${Date.now()}.pdf`;
+                    let baseDir = FileSystem.cacheDirectory || FileSystem.documentDirectory || null;
+                    if (!baseDir && FileSystem.documentDirectory) {
+                      // Create a temporary dir under documentDirectory
+                      const tmpDir = `${FileSystem.documentDirectory}tmp/`;
+                      try {
+                        await FileSystem.makeDirectoryAsync(tmpDir, { intermediates: true });
+                        baseDir = tmpDir;
+                      } catch (mkErr) {
+                        console.warn('[TemplatePicker] makeDirectory tmp failed:', mkErr?.message || mkErr);
+                      }
+                    }
+                    if (!baseDir) {
+                      console.warn('[TemplatePicker] No writable temp directory available, opening remote URL');
+                      await Linking.openURL(res.pdfUrl);
+                      return;
+                    }
+                    const tempUri = `${baseDir}${filename}`;
+                    console.log('[TemplatePicker] tempUri:', tempUri);
+                    const dl = await FileSystemLegacy.downloadAsync(res.pdfUrl, tempUri);
+                    console.log('[TemplatePicker] Downloaded to temp:', dl?.uri);
+                    if (Platform.OS === 'android') {
+                      try {
+                        const perm = await FileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync();
+                        console.log('[TemplatePicker][Android] SAF permission:', perm);
+                        if (perm.granted && perm.directoryUri) {
+                          const fileUri = await FileSystem.StorageAccessFramework.createFileAsync(perm.directoryUri, filename, 'application/pdf');
+                          console.log('[TemplatePicker][Android] SAF fileUri:', fileUri);
+                          const base64 = await FileSystem.readAsStringAsync(dl.uri, { encoding: FileSystem.EncodingType.Base64 });
+                          await FileSystem.StorageAccessFramework.writeAsStringAsync(fileUri, base64, { encoding: FileSystem.EncodingType.Base64 });
+                          Alert.alert('Saved', 'Invoice PDF saved to selected folder.');
+                        } else {
+                          // Fallback: open file from cache
+                          console.log('[TemplatePicker][Android] SAF not granted, opening from cache');
+                          const contentUri = await FileSystem.getContentUriAsync(dl.uri);
+                          console.log('[TemplatePicker][Android] contentUri:', contentUri);
+                          await Linking.openURL(contentUri);
+                        }
+                      } catch (e) {
+                        // Fallback open
+                        console.warn('[TemplatePicker][Android] SAF write failed:', e?.message || e);
+                        try {
+                          const contentUri = await FileSystem.getContentUriAsync(dl.uri);
+                          console.log('[TemplatePicker][Android] Fallback contentUri:', contentUri);
+                          await Linking.openURL(contentUri);
+                        } catch (openErr) {
+                          console.error('[TemplatePicker][Android] Fallback open failed:', openErr?.message || openErr);
+                        }
+                      }
+                    } else {
+                      console.log('[TemplatePicker][iOS/Web] Opening temp file');
+                      await Linking.openURL(dl.uri);
+                    }
+                  } catch (err) {
+                    console.error('[TemplatePicker] Download failed:', err?.message || err);
+                    Alert.alert('Download failed', String(err?.message || err));
+                  } finally {
+                    setDownloading(false);
+                  }
+                }} style={[styles.primaryButton, downloading && { opacity: 0.7 }]} disabled={downloading}>
+                  <Text style={styles.primaryButtonText}>{downloading ? 'Downloading…' : 'Download'}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={async () => {
+                  if (!company?.companyId) return Alert.alert('Error', 'Missing company ID. Please login again.');
+                  try {
+                    setPrinting(true);
+                    const payload = {
+                      companyId: company.companyId,
+                      invoiceDate: invoice.invoiceDate?.toISOString().slice(0,10),
+                      dueDate: invoice.dueDate?.toISOString().slice(0,10),
+                      customer: {
+                        name: invoice.customerName,
+                        address: invoice.customerAddress,
+                        contact: invoice.customerContact,
+                      },
+                      items: items.map((it) => ({ description: it.description, qty: Number(it.qty || 0), price: Number(it.price || 0) })),
+                      template: invoiceTemplate,
+                      brandColor,
+                      currencySymbol,
+                    };
+                    const res = await createInvoice(payload);
+                    if (!res?.pdfUrl) throw new Error(res?.message || 'Failed to generate PDF');
+                    await Linking.openURL(res.pdfUrl);
+                  } catch (err) {
+                    Alert.alert('Print failed', String(err?.message || err));
+                  } finally {
+                    setPrinting(false);
+                  }
+                }} style={[styles.secondaryButton, printing && { opacity: 0.7 }]} disabled={printing}>
+                  <Text style={styles.secondaryButtonText}>{printing ? 'Opening…' : 'Print (Web)'}</Text>
+                </TouchableOpacity>
+              </View>
             </ScrollView>
           </SafeAreaView>
         </Modal>
       </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
@@ -733,4 +968,55 @@ const styles = StyleSheet.create({
   },
   saveButtonDisabled: { opacity: 0.7 },
   saveButtonText: { color: Colors.white, fontSize: 16, fontFamily: Fonts.semiBold },
+  dateText: { color: Colors.text, fontSize: 12 },
+  // Editor styles
+  input: {
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    color: Colors.text,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  iconButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  iconButtonText: { color: Colors.white, fontFamily: Fonts.bold },
+  primaryButton: {
+    backgroundColor: Colors.primary,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flex: 1,
+  },
+  primaryButtonText: { color: Colors.white, fontSize: 14, fontFamily: Fonts.semiBold, textAlign: 'center' },
+  secondaryButton: {
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flex: 1,
+  },
+  secondaryButtonText: { color: Colors.text, fontSize: 14, fontFamily: Fonts.semiBold, textAlign: 'center' },
+  primaryHollowButton: {
+    borderWidth: 1,
+    borderColor: Colors.primary,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  primaryHollowButtonText: { color: Colors.primary, fontSize: 14, fontFamily: Fonts.semiBold },
 });

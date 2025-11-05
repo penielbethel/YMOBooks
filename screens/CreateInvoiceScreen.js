@@ -7,6 +7,8 @@ import { Fonts } from '../constants/Fonts';
 import { Spacing } from '../constants/Spacing';
 import { createInvoice } from '../utils/api';
 import { Linking } from 'react-native';
+import * as FileSystem from 'expo-file-system';
+import * as FileSystemLegacy from 'expo-file-system/legacy';
 import { WebView } from 'react-native-webview';
 
 const emptyItem = { description: '', qty: '1', price: '0' };
@@ -27,6 +29,7 @@ const CreateInvoiceScreen = ({ navigation }) => {
   const [previewVisible, setPreviewVisible] = useState(false);
   const [previewUrl, setPreviewUrl] = useState(null);
   const webviewRef = useRef(null);
+  const [downloading, setDownloading] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -55,6 +58,8 @@ const CreateInvoiceScreen = ({ navigation }) => {
       }
       const payload = {
         companyId: companyData.companyId,
+        template: companyData?.invoiceTemplate,
+        brandColor: companyData?.brandColor,
         invoiceDate: invoice.invoiceDate?.toISOString().slice(0, 10),
         dueDate: invoice.dueDate?.toISOString().slice(0, 10),
         customer: {
@@ -75,6 +80,56 @@ const CreateInvoiceScreen = ({ navigation }) => {
       Alert.alert('Error', 'Invoice generation failed');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDownload = async () => {
+    if (!previewUrl) return;
+    try {
+      setDownloading(true);
+      console.log('[Download] Starting download for previewUrl:', previewUrl);
+      const fileNameGuess = previewUrl.split('/').pop() || `invoice-${Date.now()}.pdf`;
+      const filename = fileNameGuess.replace(/[^a-zA-Z0-9_.-]/g, '_');
+      const baseDir = FileSystem.cacheDirectory || FileSystem.documentDirectory || '';
+      const tempUri = `${baseDir}${filename}`;
+      console.log('[Download] tempUri:', tempUri);
+      const dl = await FileSystemLegacy.downloadAsync(previewUrl, tempUri);
+      console.log('[Download] Downloaded to temp:', dl?.uri);
+      if (Platform.OS === 'android') {
+        try {
+          const perm = await FileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync();
+          console.log('[Download][Android] SAF permission:', perm);
+          if (perm.granted && perm.directoryUri) {
+            const fileUri = await FileSystem.StorageAccessFramework.createFileAsync(perm.directoryUri, filename, 'application/pdf');
+            console.log('[Download][Android] SAF created fileUri:', fileUri);
+            const base64 = await FileSystem.readAsStringAsync(dl.uri, { encoding: FileSystem.EncodingType.Base64 });
+            await FileSystem.StorageAccessFramework.writeAsStringAsync(fileUri, base64, { encoding: FileSystem.EncodingType.Base64 });
+            Alert.alert('Saved', 'Invoice PDF saved to selected folder.');
+          } else {
+            console.log('[Download][Android] SAF not granted, opening from cache');
+            const contentUri = await FileSystem.getContentUriAsync(dl.uri);
+            console.log('[Download][Android] contentUri:', contentUri);
+            await Linking.openURL(contentUri);
+          }
+        } catch (e) {
+          console.warn('[Download][Android] SAF write failed:', e?.message || e);
+          try {
+            const contentUri = await FileSystem.getContentUriAsync(dl.uri);
+            console.log('[Download][Android] Fallback contentUri:', contentUri);
+            await Linking.openURL(contentUri);
+          } catch (openErr) {
+            console.error('[Download][Android] Fallback open failed:', openErr?.message || openErr);
+          }
+        }
+      } else {
+        console.log('[Download][iOS/Web] Opening temp file');
+        await Linking.openURL(dl.uri);
+      }
+    } catch (e) {
+      console.error('[Download] Download failed:', e?.message || e);
+      Alert.alert('Download failed', String(e?.message || 'Could not save invoice to device'));
+    } finally {
+      setDownloading(false);
     }
   };
 
@@ -168,8 +223,8 @@ const CreateInvoiceScreen = ({ navigation }) => {
             )}
           </View>
           <View style={styles.previewActions}>
-            <TouchableOpacity style={[styles.actionBtn, styles.downloadBtn]} onPress={() => previewUrl && Linking.openURL(previewUrl)}>
-              <Text style={styles.actionText}>Download</Text>
+            <TouchableOpacity style={[styles.actionBtn, styles.downloadBtn, downloading && { opacity: 0.6 }]} disabled={downloading} onPress={handleDownload}>
+              <Text style={styles.actionText}>{downloading ? 'Downloading…' : 'Download'}</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.actionBtn, styles.printBtn]}

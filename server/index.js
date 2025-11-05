@@ -654,7 +654,7 @@ function drawReceiptByTemplate(doc, company, rctNo, receiptDate, invoiceNumber, 
 // Create invoice PDF (A4, multi-page if needed)
 app.post('/api/invoice/create', async (req, res) => {
   try {
-    const { companyId, invoiceNumber, invoiceDate, dueDate, customer = {}, items = [] } = req.body;
+    const { companyId, invoiceNumber, invoiceDate, dueDate, customer = {}, items = [], template, brandColor, currencySymbol } = req.body;
     if (!companyId) return res.status(400).json({ success: false, message: 'companyId is required' });
     let company;
     try {
@@ -676,8 +676,13 @@ app.post('/api/invoice/create', async (req, res) => {
     const stream = fs.createWriteStream(filePath);
     doc.pipe(stream);
 
+    // Honor client-provided template/branding to match on-device preview
+    const companyForRender = { ...company };
+    if (template) companyForRender.invoiceTemplate = template;
+    if (brandColor) companyForRender.brandColor = brandColor;
+    if (currencySymbol) companyForRender.currencySymbol = currencySymbol;
     // Template-aware rendering
-    drawInvoiceByTemplate(doc, company, invNo, invoiceDate, dueDate, customer, items);
+    drawInvoiceByTemplate(doc, companyForRender, invNo, invoiceDate, dueDate, customer, items);
 
     doc.end();
 

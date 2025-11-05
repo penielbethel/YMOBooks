@@ -61,11 +61,11 @@ const DashboardScreen = ({ navigation }) => {
       color: Colors.primary
     },
     {
-      id: 'receipt',
-      title: 'Create Receipt',
-      description: 'Generate digital receipts',
-      icon: '🧾',
-      color: Colors.accent
+      id: 'history',
+      title: 'Invoice History',
+      description: 'View invoices from the last 6 months',
+      icon: '🗂️',
+      color: Colors.success
     },
     {
       id: 'calculator',
@@ -73,30 +73,13 @@ const DashboardScreen = ({ navigation }) => {
       description: 'Perform financial calculations',
       icon: '🧮',
       color: Colors.success
-    },
-    {
-      id: 'letterhead',
-      title: 'Pick Invoice/Receipt Template',
-      description: 'Choose your document styles',
-      icon: '🏢',
-      color: Colors.secondary
-    },
-    {
-      id: 'history',
-      title: 'Invoice History',
-      description: 'View invoices from the last 6 months',
-      icon: '🗂️',
-      color: Colors.success
     }
   ]), []);
 
   const handleMenuPress = useCallback((itemId) => {
     switch (itemId) {
-      case 'letterhead':
-        navigation.navigate('TemplatePicker');
-        break;
       case 'invoice':
-        navigation.navigate('CreateInvoice');
+        navigation.navigate('TemplatePicker');
         break;
       case 'history':
         navigation.navigate('InvoiceHistory');
