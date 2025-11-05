@@ -12,6 +12,7 @@ import {
   Alert
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getApiBaseUrl } from '../utils/api';
 import { Colors } from '../constants/Colors';
 import { Fonts } from '../constants/Fonts';
 import { Spacing } from '../constants/Spacing';
@@ -45,7 +46,21 @@ const DashboardScreen = ({ navigation }) => {
     try {
       const data = await AsyncStorage.getItem('companyData');
       if (data) {
-        setCompanyData(JSON.parse(data));
+        const parsed = JSON.parse(data);
+        setCompanyData(parsed);
+        // On-demand logo fetch if not stored locally
+        if (!parsed.logo && parsed.companyId && parsed.hasLogo) {
+          try {
+            const resp = await fetch(`${getApiBaseUrl()}/api/company/${parsed.companyId}`);
+            const json = await resp.json();
+            const logo = json?.company?.logo || json?.data?.logo || null;
+            if (logo) {
+              setCompanyData((prev) => ({ ...prev, logo }));
+            }
+          } catch (logoErr) {
+            console.warn('[Dashboard] Logo fetch failed:', logoErr?.message || logoErr);
+          }
+        }
       }
     } catch (error) {
       Alert.alert('Error', 'Failed to load company data');
