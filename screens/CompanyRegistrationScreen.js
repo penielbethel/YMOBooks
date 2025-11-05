@@ -21,7 +21,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors } from '../constants/Colors';
 import { Fonts } from '../constants/Fonts';
 import { Spacing } from '../constants/Spacing';
-import { registerCompany, updateCompany } from '../utils/api';
+import { registerCompany, updateCompany, fetchCompany } from '../utils/api';
 
 const CompanyRegistrationScreen = ({ navigation, route }) => {
   const mode = route?.params?.mode === 'edit' ? 'edit' : 'register';
@@ -42,13 +42,14 @@ const CompanyRegistrationScreen = ({ navigation, route }) => {
   const [generatedCompanyId, setGeneratedCompanyId] = useState('');
   const [signatureModalVisible, setSignatureModalVisible] = useState(false);
 
-  // Prefill form when editing
+  // Prefill form when editing - prefer backend values to ensure latest DB state
   useEffect(() => {
     const loadExisting = async () => {
       try {
         const stored = await AsyncStorage.getItem('companyData');
-        if (stored) {
-          const existing = JSON.parse(stored);
+        const existing = stored ? JSON.parse(stored) : null;
+        if (existing) {
+          // First, set from local storage as immediate fallback
           setFormData(prev => ({
             ...prev,
             companyName: existing.companyName || '',
@@ -61,6 +62,27 @@ const CompanyRegistrationScreen = ({ navigation, route }) => {
             bankAccountName: existing.bankAccountName || '',
             bankName: existing.bankName || ''
           }));
+          // Then, fetch authoritative record from backend and prefer its values
+          if (existing.companyId) {
+            try {
+              const resp = await fetchCompany(existing.companyId);
+              const c = resp?.company;
+              if (c) {
+                setFormData(prev => ({
+                  ...prev,
+                  companyName: c.name || prev.companyName,
+                  address: c.address || prev.address,
+                  email: c.email || prev.email,
+                  phoneNumber: c.phone || prev.phoneNumber,
+                  logo: c.logo ?? prev.logo,
+                  signature: c.signature ?? prev.signature,
+                  bankAccountNumber: c.accountNumber || prev.bankAccountNumber,
+                  bankAccountName: c.accountName || prev.bankAccountName,
+                  bankName: c.bankName || prev.bankName,
+                }));
+              }
+            } catch {}
+          }
         }
       } catch {}
     };
@@ -163,8 +185,24 @@ const CompanyRegistrationScreen = ({ navigation, route }) => {
         } else {
           const result = await updateCompany(existing.companyId, payload);
           if (result?.success) {
-            const stored = { ...formData, companyId: existing.companyId };
-            await AsyncStorage.setItem('companyData', JSON.stringify(stored));
+            const server = result.company || {};
+            const normalized = {
+              companyName: server.name || formData.companyName,
+              address: server.address ?? formData.address,
+              email: server.email ?? formData.email,
+              phoneNumber: server.phone ?? formData.phoneNumber,
+              logo: server.logo ?? formData.logo,
+              signature: server.signature ?? formData.signature,
+              companyId: server.companyId || existing.companyId,
+              invoiceTemplate: server.invoiceTemplate || existing.invoiceTemplate || 'classic',
+              receiptTemplate: server.receiptTemplate || existing.receiptTemplate || 'classic',
+              bankName: server.bankName ?? formData.bankName,
+              bankAccountName: server.accountName || server.bankAccountName || formData.bankAccountName || '',
+              bankAccountNumber: server.accountNumber || server.bankAccountNumber || formData.bankAccountNumber || '',
+              brandColor: server.brandColor || existing.brandColor || null,
+              currencySymbol: server.currencySymbol || existing.currencySymbol || '$',
+            };
+            await AsyncStorage.setItem('companyData', JSON.stringify(normalized));
             Alert.alert('Profile Updated Successfully', 'Your company profile has been updated.');
             navigation.navigate('Dashboard');
           } else {
@@ -179,8 +217,30 @@ const CompanyRegistrationScreen = ({ navigation, route }) => {
         const result = await registerCompany(payload);
         if (result?.success) {
           setGeneratedCompanyId(result.companyId);
-          const stored = { ...formData, companyId: result.companyId };
-          await AsyncStorage.setItem('companyData', JSON.stringify(stored));
+          try {
+            const resp = await fetchCompany(result.companyId);
+            const c = resp?.company || {};
+            const stored = {
+              companyName: c.name || formData.companyName,
+              address: c.address || formData.address,
+              email: c.email || formData.email,
+              phoneNumber: c.phone || formData.phoneNumber,
+              logo: c.logo ?? formData.logo,
+              signature: c.signature ?? formData.signature,
+              companyId: c.companyId || result.companyId,
+              invoiceTemplate: c.invoiceTemplate || 'classic',
+              receiptTemplate: c.receiptTemplate || 'classic',
+              bankName: c.bankName || formData.bankName || '',
+              bankAccountName: c.accountName || c.bankAccountName || formData.bankAccountName || '',
+              bankAccountNumber: c.accountNumber || c.bankAccountNumber || formData.bankAccountNumber || '',
+              brandColor: c.brandColor || null,
+              currencySymbol: c.currencySymbol || '$',
+            };
+            await AsyncStorage.setItem('companyData', JSON.stringify(stored));
+          } catch {
+            const storedFallback = { ...formData, companyId: result.companyId };
+            await AsyncStorage.setItem('companyData', JSON.stringify(storedFallback));
+          }
           setSuccessModalVisible(true);
         } else {
           if (Array.isArray(result?.conflicts) && result.conflicts.length > 0) {
