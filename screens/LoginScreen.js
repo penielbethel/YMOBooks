@@ -47,6 +47,12 @@ const LoginScreen = ({ navigation }) => {
           companyId: result.company.companyId,
           invoiceTemplate: result.company.invoiceTemplate || 'classic',
           receiptTemplate: result.company.receiptTemplate || 'classic',
+          // Persist bank and brand fields so they survive relogin
+          bankName: result.company.bankName || '',
+          bankAccountName: result.company.accountName || result.company.bankAccountName || '',
+          bankAccountNumber: result.company.accountNumber || result.company.bankAccountNumber || '',
+          brandColor: result.company.brandColor || null,
+          currencySymbol: result.company.currencySymbol || '$',
         };
         await AsyncStorage.setItem('companyData', JSON.stringify(stored));
         navigation.navigate('Dashboard');

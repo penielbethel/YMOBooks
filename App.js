@@ -55,6 +55,12 @@ export default function App() {
                 companyId: c.companyId,
                 invoiceTemplate: c.invoiceTemplate || 'classic',
                 receiptTemplate: c.receiptTemplate || 'classic',
+                // Include bank and brand fields so they persist across sessions
+                bankName: c.bankName || '',
+                bankAccountName: c.accountName || c.bankAccountName || '',
+                bankAccountNumber: c.accountNumber || c.bankAccountNumber || '',
+                brandColor: c.brandColor || null,
+                currencySymbol: c.currencySymbol || '$',
               };
               await AsyncStorage.setItem('companyData', JSON.stringify(stored));
               setHasCompanyData(true);
