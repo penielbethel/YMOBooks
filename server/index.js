@@ -999,6 +999,43 @@ app.get('/api/invoices', async (req, res) => {
     return res.status(500).json({ success: false, message: 'Server error fetching invoices' });
   }
 });
+
+// Delete an invoice by invoiceNumber for a company
+app.delete('/api/invoices/:invoiceNumber', async (req, res) => {
+  try {
+    const { companyId } = req.query;
+    const { invoiceNumber } = req.params;
+    if (!companyId || !invoiceNumber) {
+      return res.status(400).json({ success: false, message: 'companyId and invoiceNumber are required' });
+    }
+    let deleted = null;
+    try {
+      deleted = await Invoice.findOneAndDelete({ companyId, invoiceNumber }).lean();
+    } catch (dbErr) {
+      console.warn('Delete invoice DB failed:', dbErr.message);
+    }
+    // Attempt to remove PDF file from disk if known
+    try {
+      const pdfPath = deleted?.pdfPath;
+      if (pdfPath && typeof pdfPath === 'string') {
+        const relative = pdfPath.replace(/^\/?files\//, '');
+        const full = path.join(GENERATED_DIR, relative);
+        if (fs.existsSync(full)) {
+          fs.unlinkSync(full);
+        }
+      }
+    } catch (fsErr) {
+      console.warn('Delete invoice PDF failed:', fsErr.message);
+    }
+    if (!deleted) {
+      return res.json({ success: true, message: 'No invoice found (already deleted?)' });
+    }
+    return res.json({ success: true, message: 'Invoice deleted', invoiceNumber, companyId });
+  } catch (err) {
+    console.error('Delete invoice error:', err);
+    return res.status(500).json({ success: false, message: 'Server error deleting invoice' });
+  }
+});
 app.post('/api/login', async (req, res) => {
   try {
     const { companyId } = req.body;

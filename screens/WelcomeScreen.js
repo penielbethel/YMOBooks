@@ -7,7 +7,8 @@ import {
   TouchableOpacity,
   Image,
   SafeAreaView,
-  Dimensions
+  Dimensions,
+  Linking
 } from 'react-native';
 import { Colors } from '../constants/Colors';
 import { Fonts } from '../constants/Fonts';
@@ -98,6 +99,17 @@ const WelcomeScreen = ({ navigation }) => {
             onPress={() => navigation.navigate('Login')}
           >
             <Text style={styles.loginButtonText}>LOGIN WITH COMPANY ID</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity
+            style={styles.helpdeskButton}
+            onPress={() => {
+              // Use WhatsApp direct link (Nigeria +234 for 08169114903)
+              const url = 'https://wa.me/2348169114903?text=Hello%20YMOBooks%20Help%20Desk';
+              Linking.openURL(url).catch(() => {});
+            }}
+          >
+            <Text style={styles.helpdeskText}>WhatsApp Help Desk: 08169114903</Text>
           </TouchableOpacity>
           
           <Text style={styles.footerText}>
@@ -242,6 +254,26 @@ const styles = StyleSheet.create({
     fontSize: Fonts.sizes.lg,
     fontWeight: Fonts.weights.bold,
     letterSpacing: 1,
+  },
+  helpdeskButton: {
+    backgroundColor: '#25D366',
+    borderWidth: 0,
+    paddingVertical: Spacing.md,
+    paddingHorizontal: Spacing.xl,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginTop: Spacing.lg,
+    shadowColor: '#25D366',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    elevation: 3,
+    width: '100%',
+  },
+  helpdeskText: {
+    color: Colors.white,
+    fontSize: Fonts.sizes.md,
+    fontWeight: Fonts.weights.semiBold,
   },
   footerText: {
     fontSize: Fonts.sizes.sm,

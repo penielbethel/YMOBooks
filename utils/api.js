@@ -125,6 +125,13 @@ export async function fetchReceipts(companyId, months = 6) {
   return data;
 }
 
+export async function deleteInvoice(companyId, invoiceNumber) {
+  const url = new URL(`${Config.API_BASE_URL}/api/invoices/${encodeURIComponent(invoiceNumber)}`);
+  url.searchParams.set('companyId', companyId);
+  const res = await fetch(url.toString(), { method: 'DELETE' });
+  return res.json();
+}
+
 // Admin APIs
 export async function adminFetchCompanies(adminId = 'pbmsrvr') {
   const url = new URL(`${Config.API_BASE_URL}/api/admin/companies`);

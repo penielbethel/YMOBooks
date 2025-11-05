@@ -1,17 +1,20 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, FlatList, Linking, SafeAreaView, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, FlatList, Linking, SafeAreaView, ActivityIndicator, Alert, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import dayjs from 'dayjs';
 import { Colors } from '../constants/Colors';
 import { Fonts } from '../constants/Fonts';
 import { Spacing } from '../constants/Spacing';
-import { fetchInvoices, fetchReceipts, createReceipt } from '../utils/api';
+import { fetchInvoices, fetchReceipts, createReceipt, deleteInvoice } from '../utils/api';
+import * as FileSystem from 'expo-file-system';
+import * as FileSystemLegacy from 'expo-file-system/legacy';
 
 const InvoiceHistoryScreen = ({ navigation, route }) => {
   const [loading, setLoading] = useState(true);
   const [invoices, setInvoices] = useState([]);
   const [companyId, setCompanyId] = useState(null);
   const [receiptsByInvoice, setReceiptsByInvoice] = useState({});
+  const [downloadingFor, setDownloadingFor] = useState(null);
 
   useEffect(() => {
     (async () => {
@@ -72,14 +75,74 @@ const InvoiceHistoryScreen = ({ navigation, route }) => {
       };
       const res = await createReceipt(payload);
       if (res?.success && res?.pdfUrl) {
-        Alert.alert('Receipt Generated', 'Opening Receipt PDF...');
-        await Linking.openURL(res.pdfUrl);
+        await handleDownload(res.pdfUrl);
       } else {
         Alert.alert('Failed', res?.message || 'Could not generate receipt');
       }
     } catch (e) {
       Alert.alert('Error', 'Receipt generation failed');
     }
+  };
+
+  const handleDownload = async (pdfUrl) => {
+    if (!pdfUrl) return;
+    try {
+      setDownloadingFor(pdfUrl);
+      const fileNameGuess = pdfUrl.split('/').pop() || `document-${Date.now()}.pdf`;
+      const filename = fileNameGuess.replace(/[^a-zA-Z0-9_.-]/g, '_');
+      const baseDir = FileSystem.cacheDirectory || FileSystem.documentDirectory || '';
+      const tempUri = `${baseDir}${filename}`;
+      const dl = await FileSystemLegacy.downloadAsync(pdfUrl, tempUri);
+      if (Platform.OS === 'android') {
+        try {
+          const perm = await FileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync();
+          if (perm.granted && perm.directoryUri) {
+            const fileUri = await FileSystem.StorageAccessFramework.createFileAsync(perm.directoryUri, filename, 'application/pdf');
+            const base64 = await FileSystemLegacy.readAsStringAsync(dl.uri, { encoding: 'base64' });
+            await FileSystem.StorageAccessFramework.writeAsStringAsync(fileUri, base64, { encoding: 'base64' });
+            Alert.alert('Saved', 'PDF saved to selected folder.');
+          } else {
+            const contentUri = await FileSystem.getContentUriAsync(dl.uri);
+            await Linking.openURL(contentUri);
+          }
+        } catch (e) {
+          try {
+            const contentUri = await FileSystem.getContentUriAsync(dl.uri);
+            await Linking.openURL(contentUri);
+          } catch (_) {}
+        }
+      } else {
+        await Linking.openURL(dl.uri);
+      }
+    } catch (e) {
+      Alert.alert('Download failed', String(e?.message || 'Could not save PDF to device'));
+    } finally {
+      setDownloadingFor(null);
+    }
+  };
+
+  const onDeleteInvoice = async (item) => {
+    if (!companyId) return Alert.alert('Missing Company', 'Company ID not found');
+    Alert.alert(
+      'Delete Invoice',
+      `Are you sure you want to delete ${item.invoiceNumber}?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Delete', style: 'destructive', onPress: async () => {
+          try {
+            const res = await deleteInvoice(companyId, item.invoiceNumber);
+            if (res?.success) {
+              setInvoices((prev) => prev.filter((x) => x.invoiceNumber !== item.invoiceNumber));
+              Alert.alert('Deleted', 'Invoice removed from history');
+            } else {
+              Alert.alert('Failed', res?.message || 'Could not delete invoice');
+            }
+          } catch (e) {
+            Alert.alert('Error', 'Delete failed');
+          }
+        } },
+      ]
+    );
   };
 
   const renderItem = ({ item }) => (
@@ -96,9 +159,16 @@ const InvoiceHistoryScreen = ({ navigation, route }) => {
       <View style={styles.rowRight}>
         <Text style={styles.amount}>₦ {Number(item.grandTotal || 0).toLocaleString()}</Text>
         <Text style={styles.dateText}>{dayjs(item.invoiceDate || item.createdAt).format('DD MMM, YYYY')}</Text>
-        <TouchableOpacity style={styles.receiptBtn} onPress={() => onGenerateReceipt(item)}>
-          <Text style={styles.receiptBtnText}>Receipt</Text>
-        </TouchableOpacity>
+        <View style={{ flexDirection: 'row', marginTop: 6 }}>
+          <TouchableOpacity style={[styles.smallBtn, styles.receiptBtn]}
+            disabled={!!downloadingFor}
+            onPress={() => onGenerateReceipt(item)}>
+            <Text style={styles.smallBtnText}>{downloadingFor ? 'Saving…' : 'Receipt'}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.smallBtn, styles.deleteBtn]} onPress={() => onDeleteInvoice(item)}>
+            <Text style={styles.smallBtnText}>Delete</Text>
+          </TouchableOpacity>
+        </View>
       </View>
     </View>
   );
@@ -205,13 +275,18 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   receiptBtn: {
-    marginTop: 6,
     backgroundColor: Colors.secondary,
+  },
+  deleteBtn: {
+    backgroundColor: '#ef4444',
+    marginLeft: 8,
+  },
+  smallBtn: {
     paddingVertical: 6,
     paddingHorizontal: 10,
     borderRadius: 6,
   },
-  receiptBtnText: {
+  smallBtnText: {
     color: Colors.white,
     fontWeight: Fonts.weights.semiBold,
     fontSize: Fonts.sizes.sm,
