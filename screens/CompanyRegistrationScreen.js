@@ -67,24 +67,16 @@ const CompanyRegistrationScreen = ({ navigation, route }) => {
           if (existing.companyId) {
             try {
               const resp = await fetchCompany(existing.companyId);
-              const c = resp?.company || resp?.data;
+              const c = resp?.company;
               if (c) {
-                const normalizeUrl = (u) => {
-                  if (!u || typeof u !== 'string') return null;
-                  if (u.startsWith('data:')) return u;
-                  if (u.startsWith('http')) return u;
-                  const base = require('../utils/api').getApiBaseUrl();
-                  if (u.startsWith('/')) return `${base}${u}`;
-                  return `${base}/${u}`;
-                };
                 setFormData(prev => ({
                   ...prev,
                   companyName: c.name || prev.companyName,
                   address: c.address || prev.address,
                   email: c.email || prev.email,
                   phoneNumber: c.phone || prev.phoneNumber,
-                  logo: normalizeUrl(c.logo || c.logoUrl || c.logoPath) ?? prev.logo,
-                  signature: normalizeUrl(c.signature || c.signatureUrl || c.signaturePath) ?? prev.signature,
+                  logo: c.logo ?? prev.logo,
+                  signature: c.signature ?? prev.signature,
                   bankAccountNumber: c.accountNumber || prev.bankAccountNumber,
                   bankAccountName: c.accountName || prev.bankAccountName,
                   bankName: c.bankName || prev.bankName,
@@ -105,14 +97,14 @@ const CompanyRegistrationScreen = ({ navigation, route }) => {
     }));
   };
 
-      const pickImage = async (type) => {
-        try {
-          const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
-          
-          if (permissionResult.granted === false) {
-            Alert.alert('Permission Required', 'Permission to access camera roll is required!');
-            return;
-          }
+  const pickImage = async (type) => {
+    try {
+      const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      
+      if (permissionResult.granted === false) {
+        Alert.alert('Permission Required', 'Permission to access camera roll is required!');
+        return;
+      }
 
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ['images'],
@@ -125,11 +117,12 @@ const CompanyRegistrationScreen = ({ navigation, route }) => {
         const uri = result.assets[0].uri;
         if (type === 'logo') {
           try {
-            // Only set in-memory preview; avoid persisting large base64 into AsyncStorage
+            // Persist a cacheable data URL for the logo so it survives backend omissions
             const ext = (uri.split('?')[0].split('#')[0].split('.').pop() || '').toLowerCase();
             const mime = ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg' : 'image/png';
-            const base64 = await FileSystemLegacy.readAsStringAsync(uri, { encoding: 'base64' });
+      const base64 = await FileSystemLegacy.readAsStringAsync(uri, { encoding: 'base64' });
             const dataUrl = `data:${mime};base64,${base64}`;
+            await AsyncStorage.setItem('companyLogoCache', dataUrl);
             updateFormData(type, dataUrl);
           } catch {
             updateFormData(type, uri);
@@ -211,12 +204,14 @@ const CompanyRegistrationScreen = ({ navigation, route }) => {
         } else {
           const result = await updateCompany(existing.companyId, payload);
           if (result?.success) {
-            const server = result.company || result.data || {};
+            const server = result.company || {};
             const normalized = {
               companyName: server.name || formData.companyName,
               address: server.address ?? formData.address,
               email: server.email ?? formData.email,
               phoneNumber: server.phone ?? formData.phoneNumber,
+              logo: server.logo ?? formData.logo,
+              signature: server.signature ?? formData.signature,
               companyId: server.companyId || existing.companyId,
               invoiceTemplate: server.invoiceTemplate || existing.invoiceTemplate || 'classic',
               receiptTemplate: server.receiptTemplate || existing.receiptTemplate || 'classic',
@@ -225,8 +220,6 @@ const CompanyRegistrationScreen = ({ navigation, route }) => {
               bankAccountNumber: server.accountNumber || server.bankAccountNumber || formData.bankAccountNumber || '',
               brandColor: server.brandColor || existing.brandColor || null,
               currencySymbol: server.currencySymbol || existing.currencySymbol || '$',
-              hasLogo: !!(server.logo || formData.logo),
-              hasSignature: !!(server.signature || formData.signature),
             };
             await AsyncStorage.setItem('companyData', JSON.stringify(normalized));
             Alert.alert('Profile Updated Successfully', 'Your company profile has been updated.');
@@ -245,12 +238,14 @@ const CompanyRegistrationScreen = ({ navigation, route }) => {
           setGeneratedCompanyId(result.companyId);
           try {
             const resp = await fetchCompany(result.companyId);
-            const c = resp?.company || resp?.data || {};
+            const c = resp?.company || {};
             const stored = {
               companyName: c.name || formData.companyName,
               address: c.address || formData.address,
               email: c.email || formData.email,
               phoneNumber: c.phone || formData.phoneNumber,
+              logo: c.logo ?? formData.logo,
+              signature: c.signature ?? formData.signature,
               companyId: c.companyId || result.companyId,
               invoiceTemplate: c.invoiceTemplate || 'classic',
               receiptTemplate: c.receiptTemplate || 'classic',
@@ -259,27 +254,10 @@ const CompanyRegistrationScreen = ({ navigation, route }) => {
               bankAccountNumber: c.accountNumber || c.bankAccountNumber || formData.bankAccountNumber || '',
               brandColor: c.brandColor || null,
               currencySymbol: c.currencySymbol || '$',
-              hasLogo: !!(c.logo || formData.logo),
-              hasSignature: !!(c.signature || formData.signature),
             };
             await AsyncStorage.setItem('companyData', JSON.stringify(stored));
           } catch {
-            const storedFallback = {
-              companyName: formData.companyName,
-              address: formData.address,
-              email: formData.email,
-              phoneNumber: formData.phoneNumber,
-              companyId: result.companyId,
-              invoiceTemplate: 'classic',
-              receiptTemplate: 'classic',
-              bankName: formData.bankName || '',
-              bankAccountName: formData.bankAccountName || '',
-              bankAccountNumber: formData.bankAccountNumber || '',
-              brandColor: null,
-              currencySymbol: '$',
-              hasLogo: !!formData.logo,
-              hasSignature: !!formData.signature,
-            };
+            const storedFallback = { ...formData, companyId: result.companyId };
             await AsyncStorage.setItem('companyData', JSON.stringify(storedFallback));
           }
           setSuccessModalVisible(true);

@@ -537,6 +537,19 @@ export default function TemplatePickerScreen({ navigation }) {
               console.warn('[TemplatePicker] Signature fetch failed:', sigErr?.message || sigErr);
             }
           }
+          // On-demand logo fetch
+          if (!parsed.logo && parsed.companyId && parsed.hasLogo) {
+            try {
+              const resp = await fetch(`${getApiBaseUrl()}/api/company/${parsed.companyId}`);
+              const json = await resp.json();
+              const logo = json?.company?.logo || json?.data?.logo || null;
+              if (logo) {
+                setCompany((prev) => ({ ...prev, logo }));
+              }
+            } catch (logoErr) {
+              console.warn('[TemplatePicker] Logo fetch failed:', logoErr?.message || logoErr);
+            }
+          }
         }
       } catch (err) {
         Alert.alert('Error', 'Failed to load company data');
