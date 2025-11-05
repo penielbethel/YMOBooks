@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, SafeAreaView, Alert, KeyboardAvoidingView, Platform } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, SafeAreaView, Alert, KeyboardAvoidingView, Platform, Modal, ActivityIndicator } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors } from '../constants/Colors';
@@ -7,6 +7,7 @@ import { Fonts } from '../constants/Fonts';
 import { Spacing } from '../constants/Spacing';
 import { createInvoice } from '../utils/api';
 import { Linking } from 'react-native';
+import { WebView } from 'react-native-webview';
 
 const emptyItem = { description: '', qty: '1', price: '0' };
 
@@ -22,6 +23,19 @@ const CreateInvoiceScreen = ({ navigation }) => {
   const [loading, setLoading] = useState(false);
   const [showInvoiceDatePicker, setShowInvoiceDatePicker] = useState(false);
   const [showDueDatePicker, setShowDueDatePicker] = useState(false);
+  const [companyData, setCompanyData] = useState(null);
+  const [previewVisible, setPreviewVisible] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState(null);
+  const webviewRef = useRef(null);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const stored = await AsyncStorage.getItem('companyData');
+        if (stored) setCompanyData(JSON.parse(stored));
+      } catch (_) {}
+    })();
+  }, []);
 
   const updateInvoice = (field, value) => setInvoice(prev => ({ ...prev, [field]: value }));
   const updateItem = (index, field, value) => {
@@ -52,8 +66,8 @@ const CreateInvoiceScreen = ({ navigation }) => {
       };
       const res = await createInvoice(payload);
       if (res?.success && res?.pdfUrl) {
-        Alert.alert('Invoice Generated', 'Opening Invoice PDF...');
-        Linking.openURL(res.pdfUrl);
+        setPreviewUrl(res.pdfUrl);
+        setPreviewVisible(true);
       } else {
         Alert.alert('Failed', res?.message || 'Could not generate invoice');
       }
@@ -76,6 +90,14 @@ const CreateInvoiceScreen = ({ navigation }) => {
 
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+        {!!companyData?.invoiceTemplate && (
+          <View style={styles.usingTemplateBox}>
+            <Text style={styles.usingTemplateText}>
+              Using Template: {String(companyData.invoiceTemplate).charAt(0).toUpperCase() + String(companyData.invoiceTemplate).slice(1)}
+            </Text>
+          </View>
+        )}
+
         <Text style={styles.sectionTitle}>Customer</Text>
         <TextInput style={styles.input} placeholder="Name" placeholderTextColor={Colors.textSecondary} value={invoice.customerName} onChangeText={(t) => updateInvoice('customerName', t)} />
         <TextInput style={[styles.input, styles.textArea]} placeholder="Address" placeholderTextColor={Colors.textSecondary} value={invoice.customerAddress} onChangeText={(t) => updateInvoice('customerAddress', t)} multiline />
@@ -114,6 +136,57 @@ const CreateInvoiceScreen = ({ navigation }) => {
         </TouchableOpacity>
       </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* Preview Modal */}
+      <Modal visible={!!previewVisible} animationType="slide" onRequestClose={() => setPreviewVisible(false)}>
+        <SafeAreaView style={styles.container}>
+          <View style={styles.header}>
+            <TouchableOpacity style={styles.backButton} onPress={() => setPreviewVisible(false)}>
+              <Text style={styles.backButtonText}>← Close</Text>
+            </TouchableOpacity>
+            <Text style={styles.title}>Invoice Preview</Text>
+            <Text style={styles.subtitle}>Review, then Download or Print</Text>
+          </View>
+          <View style={styles.previewBody}>
+            {previewUrl ? (
+              <WebView
+                ref={webviewRef}
+                source={{ uri: previewUrl }}
+                startInLoadingState
+                renderLoading={() => (
+                  <View style={styles.previewLoading}> 
+                    <ActivityIndicator size="large" color={Colors.primary} />
+                    <Text style={styles.loadingHint}>Loading preview…</Text>
+                  </View>
+                )}
+                style={styles.webview}
+              />
+            ) : (
+              <View style={styles.previewLoading}> 
+                <ActivityIndicator size="large" color={Colors.primary} />
+              </View>
+            )}
+          </View>
+          <View style={styles.previewActions}>
+            <TouchableOpacity style={[styles.actionBtn, styles.downloadBtn]} onPress={() => previewUrl && Linking.openURL(previewUrl)}>
+              <Text style={styles.actionText}>Download</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.actionBtn, styles.printBtn]}
+              onPress={() => {
+                try {
+                  // Attempt in-webview print
+                  webviewRef.current?.injectJavaScript('window.print(); true;');
+                } catch (_) {
+                  if (previewUrl) Linking.openURL(previewUrl);
+                }
+              }}
+            >
+              <Text style={styles.actionText}>Print</Text>
+            </TouchableOpacity>
+          </View>
+        </SafeAreaView>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -126,6 +199,8 @@ const styles = StyleSheet.create({
   title: { fontSize: Fonts.sizes.title, fontWeight: Fonts.weights.bold, color: Colors.white, marginBottom: Spacing.sm },
   subtitle: { fontSize: Fonts.sizes.md, color: Colors.white, opacity: 0.9 },
   content: { padding: Spacing.lg, paddingBottom: Spacing.xl },
+  usingTemplateBox: { backgroundColor: Colors.white, borderColor: Colors.border, borderWidth: 1, borderRadius: 8, padding: Spacing.md, marginTop: Spacing.md },
+  usingTemplateText: { color: Colors.textSecondary },
   sectionTitle: { fontSize: Fonts.sizes.lg, fontWeight: Fonts.weights.semiBold, color: Colors.text, marginTop: Spacing.lg, marginBottom: Spacing.sm },
   input: { backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border, borderRadius: 8, paddingHorizontal: Spacing.md, paddingVertical: Spacing.md, fontSize: Fonts.sizes.md, color: Colors.text, marginBottom: Spacing.sm },
   textArea: { height: 80, textAlignVertical: 'top' },
@@ -143,6 +218,15 @@ const styles = StyleSheet.create({
   generateButton: { backgroundColor: Colors.primary, paddingVertical: Spacing.lg, borderRadius: 8, alignItems: 'center', marginTop: Spacing.lg },
   generateButtonDisabled: { opacity: 0.6 },
   generateButtonText: { color: Colors.white, fontSize: Fonts.sizes.lg, fontWeight: Fonts.weights.bold },
+  previewBody: { flex: 1, backgroundColor: Colors.background },
+  webview: { flex: 1 },
+  previewLoading: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  loadingHint: { marginTop: Spacing.sm, color: Colors.textSecondary },
+  previewActions: { flexDirection: 'row', gap: 12, padding: Spacing.md, backgroundColor: Colors.white, borderTopWidth: 1, borderTopColor: Colors.border, justifyContent: 'flex-end' },
+  actionBtn: { paddingVertical: Spacing.md, paddingHorizontal: Spacing.lg, borderRadius: 8 },
+  downloadBtn: { backgroundColor: Colors.secondary },
+  printBtn: { backgroundColor: Colors.primary },
+  actionText: { color: Colors.white, fontWeight: Fonts.weights.bold },
 });
 
 export default CreateInvoiceScreen;

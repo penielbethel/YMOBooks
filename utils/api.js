@@ -81,6 +81,19 @@ export async function createInvoice(payload) {
   return data;
 }
 
+export async function createReceipt(payload) {
+  const res = await fetch(`${Config.API_BASE_URL}/api/receipt/create`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  const data = await res.json();
+  if (data?.pdfPath) {
+    return { ...data, pdfUrl: `${Config.API_BASE_URL}${data.pdfPath}` };
+  }
+  return data;
+}
+
 export async function fetchInvoices(companyId, months = 6) {
   const url = new URL(`${Config.API_BASE_URL}/api/invoices`);
   url.searchParams.set('companyId', companyId);
@@ -92,6 +105,21 @@ export async function fetchInvoices(companyId, months = 6) {
     data.invoices = data.invoices.map((inv) => ({
       ...inv,
       pdfUrl: inv.pdfPath ? `${Config.API_BASE_URL}${inv.pdfPath}` : undefined,
+    }));
+  }
+  return data;
+}
+
+export async function fetchReceipts(companyId, months = 6) {
+  const url = new URL(`${Config.API_BASE_URL}/api/receipts`);
+  url.searchParams.set('companyId', companyId);
+  url.searchParams.set('months', String(months));
+  const res = await fetch(url.toString());
+  const data = await res.json();
+  if (data?.receipts) {
+    data.receipts = data.receipts.map((r) => ({
+      ...r,
+      pdfUrl: r.pdfPath ? `${Config.API_BASE_URL}${r.pdfPath}` : undefined,
     }));
   }
   return data;

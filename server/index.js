@@ -18,7 +18,9 @@ app.use(express.static(PUBLIC_DIR));
 // Serve generated files (PDFs)
 const GENERATED_DIR = path.join(process.env.GENERATED_ROOT || __dirname, 'generated');
 const INVOICES_DIR = path.join(GENERATED_DIR, 'invoices');
+const RECEIPTS_DIR = path.join(GENERATED_DIR, 'receipts');
 fs.mkdirSync(INVOICES_DIR, { recursive: true });
+fs.mkdirSync(RECEIPTS_DIR, { recursive: true });
 app.use('/files', express.static(GENERATED_DIR));
 
 // Local file fallback store for companies when Mongo is unavailable
@@ -60,7 +62,8 @@ let DB_CONNECTED = false;
 if (MONGO_URI) {
   mongoose
     .connect(MONGO_URI, {
-      serverSelectionTimeoutMS: 5000,
+      serverSelectionTimeoutMS: 8000,
+      dbName: process.env.MONGO_DB_NAME || 'ymobooks',
     })
     .then(() => {
       DB_CONNECTED = true;
@@ -133,6 +136,25 @@ const InvoiceSchema = new mongoose.Schema(
   { timestamps: true }
 );
 const Invoice = mongoose.model('Invoice', InvoiceSchema);
+
+// Receipt model for history
+const ReceiptSchema = new mongoose.Schema(
+  {
+    companyId: { type: String, index: true, required: true },
+    receiptNumber: { type: String, index: true, required: true },
+    invoiceNumber: { type: String },
+    receiptDate: { type: Date },
+    customer: {
+      name: String,
+      address: String,
+      contact: String,
+    },
+    amountPaid: { type: Number },
+    pdfPath: { type: String },
+  },
+  { timestamps: true }
+);
+const Receipt = mongoose.model('Receipt', ReceiptSchema);
 
 // Helpers
 async function generateCompanyId(name) {
@@ -363,7 +385,12 @@ app.post('/api/update-company', async (req, res) => {
       const mergedUpdate = { ...(existing || {}), ...(fileExisting || {}), ...update };
       // Ensure we don't set undefined keys
       Object.keys(mergedUpdate).forEach((k) => mergedUpdate[k] === undefined && delete mergedUpdate[k]);
-      company = await Company.findOneAndUpdate({ companyId }, { $set: mergedUpdate }, { new: true, upsert: false }).lean();
+      // Upsert to guarantee DB persistence if company exists only in file fallback
+      company = await Company.findOneAndUpdate(
+        { companyId },
+        { $set: mergedUpdate },
+        { new: true, upsert: true }
+      ).lean();
     } catch (dbErr) {
       console.warn('Update company DB failed, updating file fallback:', dbErr.message);
     }
@@ -518,6 +545,109 @@ function drawInvoiceByTemplate(doc, company, invNo, invoiceDate, dueDate, custom
   doc.fontSize(9).fillColor('#777').text('Powered by YMOBooks', { align: 'right' });
 }
 
+// Helper: draw receipt by template style
+function drawReceiptByTemplate(doc, company, rctNo, receiptDate, invoiceNumber, customer, amountPaid) {
+  const template = (company.receiptTemplate || company.invoiceTemplate || 'classic').toLowerCase();
+  const theme = {
+    classic: { primary: '#000000', accent: '#333333', tableHeader: '#eeeeee' },
+    modern: { primary: '#1f6feb', accent: '#0ea5e9', tableHeader: '#e0f2fe' },
+    minimal: { primary: '#111827', accent: '#6b7280', tableHeader: '#f3f4f6' },
+    bold: { primary: '#d97706', accent: '#b45309', tableHeader: '#fef3c7' },
+    compact: { primary: '#10b981', accent: '#047857', tableHeader: '#d1fae5' },
+  }[template] || { primary: '#000000', accent: '#333333', tableHeader: '#eeeeee' };
+
+  if (company.brandColor && /^#?[0-9a-fA-F]{3,6}$/.test(company.brandColor)) {
+    const base = company.brandColor.startsWith('#') ? company.brandColor : `#${company.brandColor}`;
+    theme.primary = base;
+    theme.accent = shadeColor(base, -20);
+    theme.tableHeader = shadeColor(base, 70);
+  }
+
+  const curr = (company.currencySymbol && String(company.currencySymbol).trim()) || '$';
+
+  // Top decorative bar
+  doc.save();
+  doc.rect(doc.page.margins.left, doc.page.margins.top, doc.page.width - doc.page.margins.left - doc.page.margins.right, 18).fill(theme.primary);
+  doc.restore();
+
+  doc.fillColor('#ffffff').fontSize(12).text((company.name || 'Company'), doc.page.margins.left + 6, doc.page.margins.top + 2, { continued: true });
+  if (company.companyId) {
+    doc.fillColor('#ffffff').text(` • ${company.companyId}`);
+  }
+
+  // Right-side Receipt meta
+  doc.fillColor(theme.accent).fontSize(20).text('Receipt', { align: 'right' });
+  doc.fontSize(10).fillColor('#000').text(`Receipt No: ${rctNo}`, { align: 'right' });
+  doc.text(`Receipt Date: ${dayjs(receiptDate || undefined).isValid() ? dayjs(receiptDate).format('YYYY-MM-DD') : dayjs().format('YYYY-MM-DD')}`, { align: 'right' });
+  if (invoiceNumber) doc.text(`For Invoice: ${invoiceNumber}`, { align: 'right' });
+
+  // Logo
+  try {
+    const logoBuf = dataUrlToBuffer(company.logo);
+    if (logoBuf) {
+      const imgWidth = 60;
+      const x = doc.page.width - doc.page.margins.right - imgWidth;
+      const y = doc.page.margins.top + 24;
+      doc.image(logoBuf, x, y, { width: imgWidth });
+    }
+  } catch (_) {}
+
+  // Contact block
+  doc.moveDown(0.5);
+  doc.fillColor('#333').fontSize(10);
+  if (company.address) doc.text(company.address);
+  if (company.email) doc.text(company.email);
+  if (company.phone) doc.text(company.phone);
+
+  // Customer section
+  doc.moveDown(1);
+  doc.fontSize(template === 'bold' ? 13 : 12).fillColor(theme.primary).text('Received From:', { underline: template === 'classic' });
+  doc.fontSize(10).fillColor('#333');
+  if (customer?.name) doc.text(customer.name);
+  if (customer?.address) doc.text(customer.address);
+  if (customer?.contact) doc.text(`Contact: ${customer.contact}`);
+
+  // Payment summary table
+  doc.moveDown(1);
+  const startX = doc.page.margins.left;
+  const tableTop = doc.y;
+  const colDesc = 300;
+  const colAmt = 120;
+  const rowHeight = 22;
+
+  doc.save();
+  doc.rect(startX, tableTop, doc.page.width - startX - doc.page.margins.right, rowHeight).fill(theme.tableHeader);
+  doc.restore();
+  doc.fillColor('#000').fontSize(10).text('Description', startX + 8, tableTop + 6, { width: colDesc });
+  doc.text('Amount', startX + 8 + colDesc, tableTop + 6, { width: colAmt, align: 'right' });
+
+  let y = tableTop + rowHeight;
+  const desc = invoiceNumber ? `Payment for ${invoiceNumber}` : 'Payment received';
+  doc.fillColor('#333').fontSize(10).text(desc, startX + 8, y + 6, { width: colDesc });
+  doc.text(`${curr}${Number(amountPaid || 0).toFixed(2)}`, startX + 8 + colDesc, y + 6, { width: colAmt, align: 'right' });
+  y += rowHeight;
+
+  // Amount in words
+  doc.moveDown(0.5);
+  doc.fontSize(10).fillColor('#333').text(`Amount in words: ${numberToWords(Number(amountPaid || 0))}`);
+
+  // Footer
+  doc.moveDown(0.5);
+  doc.fontSize(9).fillColor('#555').text(
+    `This receipt acknowledges payment to ${company.name || company.companyName || 'Company'} — Printed on ${dayjs().format('YYYY-MM-DD')}`
+  );
+  try {
+    const sigBuf = dataUrlToBuffer(company.signature);
+    if (sigBuf) {
+      doc.moveDown(1);
+      doc.fontSize(10).fillColor('#333').text('Authorized Signature');
+      doc.image(sigBuf, doc.page.margins.left, doc.y + 4, { width: 120 });
+    }
+  } catch (_) {}
+  doc.moveDown(1);
+  doc.fontSize(9).fillColor('#777').text('Powered by YMOBooks', { align: 'right' });
+}
+
 // Create invoice PDF (A4, multi-page if needed)
 app.post('/api/invoice/create', async (req, res) => {
   try {
@@ -588,6 +718,102 @@ app.post('/api/invoice/create', async (req, res) => {
   }
 });
 
+// Create receipt PDF
+app.post('/api/receipt/create', async (req, res) => {
+  try {
+    const { companyId, invoiceNumber, receiptNumber, receiptDate, customer = {}, amountPaid } = req.body;
+    if (!companyId) return res.status(400).json({ success: false, message: 'companyId is required' });
+    let company;
+    try {
+      company = await Company.findOne({ companyId }).lean();
+    } catch (dbErr) {
+      console.warn('Fetch company for receipt DB failed, using file fallback:', dbErr.message);
+    }
+    if (!company) company = findCompanyFile(companyId);
+    if (!company) return res.status(404).json({ success: false, message: 'Company not found' });
+
+    // Optionally load invoice to derive amount or customer
+    let derivedCustomer = customer;
+    let derivedAmount = amountPaid;
+    if ((!derivedCustomer?.name || derivedAmount == null) && invoiceNumber) {
+      try {
+        const invDoc = await Invoice.findOne({ companyId, invoiceNumber }).lean();
+        if (invDoc) {
+          if (!derivedCustomer?.name) derivedCustomer = invDoc.customer || derivedCustomer;
+          if (derivedAmount == null) derivedAmount = Number(invDoc.grandTotal || 0);
+        }
+      } catch (e) {
+        console.warn('Lookup invoice for receipt failed:', e.message);
+      }
+    }
+    if (derivedAmount == null) derivedAmount = 0;
+
+    const rctNo = receiptNumber || `RCT-${companyId}-${Date.now()}`;
+    const filename = `${rctNo}.pdf`.replace(/[^a-zA-Z0-9_.-]/g, '_');
+    const filePath = path.join(RECEIPTS_DIR, filename);
+
+    // Generate PDF
+    const doc = new PDFDocument({ size: 'A4', margin: 40 });
+    const stream = fs.createWriteStream(filePath);
+    doc.pipe(stream);
+
+    drawReceiptByTemplate(doc, company, rctNo, receiptDate, invoiceNumber, derivedCustomer, derivedAmount);
+
+    doc.end();
+
+    stream.on('finish', async () => {
+      const pdfPath = `/files/receipts/${filename}`;
+      try {
+        await Receipt.create({
+          companyId,
+          receiptNumber: rctNo,
+          invoiceNumber: invoiceNumber || undefined,
+          receiptDate: receiptDate ? dayjs(receiptDate).toDate() : new Date(),
+          customer: {
+            name: derivedCustomer?.name,
+            address: derivedCustomer?.address,
+            contact: derivedCustomer?.contact,
+          },
+          amountPaid: Number(derivedAmount || 0),
+          pdfPath,
+        });
+      } catch (persistErr) {
+        console.error('Persist receipt error:', persistErr.message);
+      }
+      return res.json({ success: true, pdfPath, filename });
+    });
+    stream.on('error', (err) => {
+      console.error('PDF receipt stream error:', err);
+      return res.status(500).json({ success: false, message: 'Error generating receipt PDF' });
+    });
+  } catch (err) {
+    console.error('Receipt create error:', err);
+    return res.status(500).json({ success: false, message: 'Server error creating receipt' });
+  }
+});
+
+// Fetch receipts history
+app.get('/api/receipts', async (req, res) => {
+  try {
+    const { companyId, months = 6 } = req.query;
+    if (!companyId) return res.status(400).json({ success: false, message: 'companyId is required' });
+    const since = dayjs().subtract(Number(months), 'month').toDate();
+    let list = [];
+    try {
+      list = await Receipt.find({ companyId, createdAt: { $gte: since } })
+        .sort({ createdAt: -1 })
+        .limit(200)
+        .lean();
+    } catch (dbErr) {
+      console.warn('Fetch receipts DB failed:', dbErr.message);
+    }
+    return res.json({ success: true, receipts: list });
+  } catch (err) {
+    console.error('Fetch receipts error:', err);
+    return res.status(500).json({ success: false, message: 'Server error fetching receipts' });
+  }
+});
+
 // Fetch invoice history for last N months (default 6)
 app.get('/api/invoices', async (req, res) => {
   try {
@@ -614,17 +840,15 @@ app.post('/api/login', async (req, res) => {
     const { companyId } = req.body;
     if (!companyId) return res.status(400).json({ success: false, message: 'Company ID is required' });
     console.log('Login attempt:', companyId);
-    let company;
+    const fileCompany = findCompanyFile(companyId);
+    let dbCompany = null;
     try {
-      company = await Company.findOne({ companyId }).lean();
+      dbCompany = await Company.findOne({ companyId }).lean();
     } catch (dbErr) {
       console.warn('Login DB query failed, using file fallback:', dbErr.message);
     }
-    // Only use file fallback when DB is not connected
-    if (!company && !DB_CONNECTED) {
-      company = findCompanyFile(companyId);
-    }
-    if (!company) return res.status(404).json({ success: false, message: 'Company not found' });
+    const company = { ...(fileCompany || {}), ...(dbCompany || {}) };
+    if (!company || Object.keys(company).length === 0) return res.status(404).json({ success: false, message: 'Company not found' });
     return res.json({ success: true, company });
   } catch (err) {
     console.error('Login error:', err);
@@ -635,16 +859,15 @@ app.post('/api/login', async (req, res) => {
 app.get('/api/company/:companyId', async (req, res) => {
   try {
     const { companyId } = req.params;
-    let company;
+    const fileCompany = findCompanyFile(companyId);
+    let dbCompany = null;
     try {
-      company = await Company.findOne({ companyId }).lean();
+      dbCompany = await Company.findOne({ companyId }).lean();
     } catch (dbErr) {
       console.warn('Get company DB failed, using file fallback:', dbErr.message);
     }
-    if (!company && !DB_CONNECTED) {
-      company = findCompanyFile(companyId);
-    }
-    if (!company) return res.status(404).json({ success: false, message: 'Company not found' });
+    const company = { ...(fileCompany || {}), ...(dbCompany || {}) };
+    if (!company || Object.keys(company).length === 0) return res.status(404).json({ success: false, message: 'Company not found' });
     return res.json({ success: true, company });
   } catch (err) {
     console.error('Get company error:', err);

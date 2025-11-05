@@ -173,8 +173,11 @@ const CompanyRegistrationScreen = ({ navigation, route }) => {
         // Preserve existing data URLs, otherwise convert selected file URIs to base64
         logo: formData.logo ? (isDataUrl(formData.logo) ? formData.logo : await toBase64(formData.logo)) : null,
         signature: formData.signature ? (isDataUrl(formData.signature) ? formData.signature : await toBase64(formData.signature)) : null,
+        // Send both modern and legacy keys so server can map reliably
         bankAccountNumber: formData.bankAccountNumber,
         bankAccountName: formData.bankAccountName,
+        accountNumber: formData.bankAccountNumber,
+        accountName: formData.bankAccountName,
         bankName: formData.bankName,
       };
       const storedExisting = await AsyncStorage.getItem('companyData');
