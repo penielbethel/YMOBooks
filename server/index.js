@@ -291,6 +291,36 @@ function numberToWords(num) {
   return `${words}${decimals ? ` and ${decimals}/100` : ''}`;
 }
 
+// Helper: currency labels for amount-in-words
+function currencyLabels(symbol) {
+  const s = (symbol || '').trim();
+  switch (s) {
+    case '₦':
+      return { currencyName: 'Naira', minorName: 'kobo' };
+    case '£':
+      return { currencyName: 'Pounds', minorName: 'pence' };
+    case '€':
+      return { currencyName: 'Euros', minorName: 'cents' };
+    case '₵':
+      return { currencyName: 'Cedis', minorName: 'pesewas' };
+    case 'KSh':
+      return { currencyName: 'Shillings', minorName: 'cents' };
+    case '$':
+    default:
+      return { currencyName: 'Dollars', minorName: 'cents' };
+  }
+}
+
+// Format amount in words with currency name and minor units, mirroring client preview
+function amountInWordsWithCurrency(amount, symbol) {
+  if (isNaN(amount)) return '';
+  const whole = Math.floor(Math.abs(Number(amount)));
+  const decimals = Math.round((Math.abs(Number(amount)) - whole) * 100);
+  const baseWords = numberToWords(whole).replace(/\s+and\s+\d+\/100$/, '');
+  const { currencyName, minorName } = currencyLabels(symbol);
+  return `${baseWords} ${currencyName}${decimals ? ` and ${decimals}/100 ${minorName}` : ''}`;
+}
+
 // Routes
 app.post('/api/register-company', async (req, res) => {
   try {
@@ -430,34 +460,111 @@ function drawInvoiceByTemplate(doc, company, invNo, invoiceDate, dueDate, custom
     theme.tableHeader = shadeColor(base, 70);
   }
 
-  const curr = (company.currencySymbol && String(company.currencySymbol).trim()) || '$';
+  const curr = (company.currencySymbol && String(company.currencySymbol).trim()) || '₦';
 
-  // Top decorative bar
-  doc.save();
-  doc.rect(doc.page.margins.left, doc.page.margins.top, doc.page.width - doc.page.margins.left - doc.page.margins.right, 18).fill(theme.primary);
-  doc.restore();
+  const pageLeft = doc.page.margins.left;
+  const pageRight = doc.page.width - doc.page.margins.right;
+  const pageWidth = pageRight - pageLeft;
 
-  doc.fillColor('#ffffff').fontSize(12).text((company.name || 'Company'), doc.page.margins.left + 6, doc.page.margins.top + 2, { continued: true });
-  if (company.companyId) {
-    doc.fillColor('#ffffff').text(` • ${company.companyId}`);
-  }
+  // Header layout — match client Classic preview
+  if (template === 'classic') {
+    // Header row: company name left, INVOICE right
+    doc.fontSize(16).fillColor('#000').text((company.name || company.companyName || 'Company'), pageLeft, doc.page.margins.top);
+    doc.fontSize(20).fillColor(theme.primary).text('INVOICE', pageLeft, doc.page.margins.top, { align: 'right', width: pageWidth });
+    // Accent bar
+    doc.save();
+    doc.rect(pageLeft, doc.page.margins.top + 24, pageWidth, 6).fill(theme.accent);
+    doc.restore();
+    // Separator
+    doc.moveTo(pageLeft, doc.page.margins.top + 36).lineTo(pageRight, doc.page.margins.top + 36).stroke('#dddddd');
 
-  // Right-side Invoice meta
-  doc.fillColor(theme.accent).fontSize(20).text('Invoice', { align: 'right' });
-  doc.fontSize(10).fillColor('#000').text(`Invoice No: ${invNo}`, { align: 'right' });
-  doc.text(`Invoice Date: ${dayjs(invoiceDate || undefined).isValid() ? dayjs(invoiceDate).format('YYYY-MM-DD') : dayjs().format('YYYY-MM-DD')}`, { align: 'right' });
-  if (dueDate) doc.text(`Due Date: ${dueDate}`, { align: 'right' });
+    // Two-column info section
+    const colGap = 16;
+    const colWidth = (pageWidth - colGap) / 2;
+    let yTop = doc.page.margins.top + 42;
 
-  // Logo in header area (top-right)
-  try {
-    const logoBuf = dataUrlToBuffer(company.logo);
-    if (logoBuf) {
-      const imgWidth = 60;
-      const x = doc.page.width - doc.page.margins.right - imgWidth;
-      const y = doc.page.margins.top + 24;
-      doc.image(logoBuf, x, y, { width: imgWidth });
+    // Left: Bill To + invoice meta
+    doc.fontSize(12).fillColor(theme.primary).text('BILL TO', pageLeft, yTop);
+    doc.fontSize(10).fillColor('#333');
+    if (customer.name) doc.text(customer.name, pageLeft, doc.y);
+    if (customer.address) doc.text(customer.address, pageLeft, doc.y);
+    if (customer.contact) doc.text(customer.contact, pageLeft, doc.y);
+    doc.moveDown(0.5);
+    doc.fontSize(12).fillColor(theme.primary).text('Invoice', pageLeft, doc.y);
+    doc.fontSize(10).fillColor('#333');
+    doc.text(`Issuance: ${dayjs(invoiceDate || undefined).isValid() ? dayjs(invoiceDate).format('YYYY-MM-DD') : dayjs().format('YYYY-MM-DD')}`, pageLeft, doc.y);
+    if (dueDate) doc.text(`Due: ${dueDate}`, pageLeft, doc.y);
+
+    // Right: Company info box with logo and bank details
+    const rightX = pageLeft + colWidth + colGap;
+    const boxY = yTop - 6;
+    const boxH = 140;
+    doc.save();
+    doc.rect(rightX, boxY, colWidth, boxH).stroke('#dddddd');
+    doc.restore();
+    try {
+      const logoBuf = dataUrlToBuffer(company.logo);
+      if (logoBuf) {
+        doc.image(logoBuf, rightX + 10, boxY + 10, { width: 64 });
+      }
+    } catch (_) {}
+    let infoY = boxY + 10;
+    infoY += 74; // space under logo
+    doc.fontSize(10).fillColor('#333');
+    if (company.address) doc.text(company.address, rightX + 10, infoY, { width: colWidth - 20 });
+    if (company.email) doc.text(`Email: ${company.email}`, { width: colWidth - 20 });
+    if (company.phone) doc.text(`Phone: ${company.phone}`, { width: colWidth - 20 });
+    if (company.bankName || company.accountName || company.accountNumber) {
+      doc.moveDown(0.2);
+      doc.fontSize(11).fillColor('#000').text('Bank Details', { width: colWidth - 20 });
+      doc.fontSize(10).fillColor('#333');
+      if (company.bankName) doc.text(`Bank: ${company.bankName}`, { width: colWidth - 20 });
+      if (company.accountName) doc.text(`Account Name: ${company.accountName}`, { width: colWidth - 20 });
+      if (company.accountNumber) doc.text(`Account Number: ${company.accountNumber}`, { width: colWidth - 20 });
     }
-  } catch (_) {}
+
+    // Move below box to start table
+    doc.y = Math.max(doc.y, boxY + boxH + 12);
+  } else {
+    // Legacy header for other templates
+    doc.save();
+    doc.rect(doc.page.margins.left, doc.page.margins.top, doc.page.width - doc.page.margins.left - doc.page.margins.right, 18).fill(theme.primary);
+    doc.restore();
+    doc.fillColor('#ffffff').fontSize(12).text((company.name || 'Company'), doc.page.margins.left + 6, doc.page.margins.top + 2, { continued: true });
+    if (company.companyId) {
+      doc.fillColor('#ffffff').text(` • ${company.companyId}`);
+    }
+    doc.fillColor(theme.accent).fontSize(20).text('Invoice', { align: 'right' });
+    doc.fontSize(10).fillColor('#000').text(`Invoice No: ${invNo}`, { align: 'right' });
+    doc.text(`Invoice Date: ${dayjs(invoiceDate || undefined).isValid() ? dayjs(invoiceDate).format('YYYY-MM-DD') : dayjs().format('YYYY-MM-DD')}`, { align: 'right' });
+    if (dueDate) doc.text(`Due Date: ${dueDate}`, { align: 'right' });
+    try {
+      const logoBuf = dataUrlToBuffer(company.logo);
+      if (logoBuf) {
+        const imgWidth = 60;
+        const x = doc.page.width - doc.page.margins.right - imgWidth;
+        const y = doc.page.margins.top + 24;
+        doc.image(logoBuf, x, y, { width: imgWidth });
+      }
+    } catch (_) {}
+    doc.moveDown(0.5);
+    doc.fillColor('#333').fontSize(10);
+    if (company.address) doc.text(company.address);
+    if (company.email) doc.text(company.email);
+    if (company.phone) doc.text(company.phone);
+    if (company.bankName || company.accountName || company.accountNumber) {
+      doc.moveDown(0.2);
+      doc.text(`Bank: ${company.bankName || ''}`);
+      doc.text(`Account Name: ${company.accountName || ''}`);
+      doc.text(`Account Number: ${company.accountNumber || ''}`);
+    }
+    doc.moveDown(1);
+    doc.fontSize(template === 'bold' ? 13 : 12).fillColor(theme.primary).text('Bill To:', { underline: template === 'classic' });
+    doc.fontSize(10).fillColor('#333');
+    if (customer.name) doc.text(customer.name);
+    if (customer.address) doc.text(customer.address);
+    if (customer.contact) doc.text(`Contact: ${customer.contact}`);
+  }
 
   // Contact block
   doc.moveDown(0.5);
@@ -496,7 +603,7 @@ function drawInvoiceByTemplate(doc, company, invNo, invoiceDate, dueDate, custom
   doc.restore();
   doc.fillColor('#000').fontSize(10).text('Description', startX + 8, tableTop + 6, { width: colDesc });
   doc.text('Qty', startX + 8 + colDesc, tableTop + 6, { width: colQty, align: 'center' });
-  doc.text('Unit Price', startX + 8 + colDesc + colQty, tableTop + 6, { width: colUnit, align: 'right' });
+  doc.text('Price', startX + 8 + colDesc + colQty, tableTop + 6, { width: colUnit, align: 'right' });
   doc.text('Total', startX + 8 + colDesc + colQty + colUnit, tableTop + 6, { width: colTotal, align: 'right' });
 
   let y = tableTop + rowHeight;
@@ -524,9 +631,9 @@ function drawInvoiceByTemplate(doc, company, invNo, invoiceDate, dueDate, custom
   doc.text('Total:', startX + colDesc + colQty + 8, y + 20, { width: colUnit, align: 'right' });
   doc.text(`${curr}${grandTotal.toFixed(2)}`, startX + colDesc + colQty + colUnit + 8, y + 20, { width: colTotal, align: 'right' });
 
-  // Amount in words
+  // Amount in words (currency-aware)
   doc.moveDown(0.5);
-  doc.fontSize(10).fillColor('#333').text(`Amount in words: ${numberToWords(grandTotal)}`);
+  doc.fontSize(10).fillColor('#333').text(`Amount in words: ${amountInWordsWithCurrency(grandTotal, curr)}`);
 
   // Footer
   // Electronic generation notice with printed date
@@ -654,7 +761,7 @@ function drawReceiptByTemplate(doc, company, rctNo, receiptDate, invoiceNumber, 
 // Create invoice PDF (A4, multi-page if needed)
 app.post('/api/invoice/create', async (req, res) => {
   try {
-    const { companyId, invoiceNumber, invoiceDate, dueDate, customer = {}, items = [], template, brandColor, currencySymbol } = req.body;
+    const { companyId, invoiceNumber, invoiceDate, dueDate, customer = {}, items = [], template, brandColor, currencySymbol, companyOverride } = req.body;
     if (!companyId) return res.status(400).json({ success: false, message: 'companyId is required' });
     let company;
     try {
@@ -681,6 +788,28 @@ app.post('/api/invoice/create', async (req, res) => {
     if (template) companyForRender.invoiceTemplate = template;
     if (brandColor) companyForRender.brandColor = brandColor;
     if (currencySymbol) companyForRender.currencySymbol = currencySymbol;
+    // Merge client-provided company details to ensure PDF matches preview exactly
+    if (companyOverride && typeof companyOverride === 'object') {
+      const map = {
+        name: 'name',
+        companyName: 'name',
+        address: 'address',
+        email: 'email',
+        phone: 'phone',
+        phoneNumber: 'phone',
+        logo: 'logo',
+        signature: 'signature',
+        bankName: 'bankName',
+        accountName: 'accountName',
+        bankAccountName: 'accountName',
+        accountNumber: 'accountNumber',
+        bankAccountNumber: 'accountNumber',
+      };
+      for (const [k, v] of Object.entries(companyOverride)) {
+        const target = map[k] || k;
+        if (v != null) companyForRender[target] = v;
+      }
+    }
     // Template-aware rendering
     drawInvoiceByTemplate(doc, companyForRender, invNo, invoiceDate, dueDate, customer, items);
 

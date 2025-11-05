@@ -606,10 +606,32 @@ export default function TemplatePickerScreen({ navigation }) {
           </View>
           <View style={{ marginTop: 10 }}>
             <Text style={styles.fullMeta}>Currency</Text>
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 6 }}>
-              {['$','₦','£','€','₵','KSh'].map((sym) => (
-                <TouchableOpacity key={sym} onPress={() => setCurrencySymbol(sym)} style={[styles.swatch, { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 6, backgroundColor: sym === currencySymbol ? Colors.primary : Colors.gray[200] }]}>
-                  <Text style={{ color: sym === currencySymbol ? Colors.white : Colors.text, fontWeight: '600' }}>{sym}</Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 8 }}>
+              {[
+                { sym: '₦', name: 'Naira' },
+                { sym: '$', name: 'Dollar' },
+                { sym: '£', name: 'Pounds' },
+                { sym: '€', name: 'Euros' },
+                { sym: '₵', name: 'Cedis' },
+                { sym: 'KSh', name: 'Shillings' },
+              ].map(({ sym, name }) => (
+                <TouchableOpacity
+                  key={sym}
+                  onPress={() => setCurrencySymbol(sym)}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 8,
+                    paddingHorizontal: 16,
+                    paddingVertical: 10,
+                    borderRadius: 10,
+                    borderWidth: 1,
+                    borderColor: sym === currencySymbol ? Colors.primary : Colors.gray[300],
+                    backgroundColor: sym === currencySymbol ? Colors.primary : Colors.gray[100],
+                  }}
+                >
+                  <Text style={{ color: sym === currencySymbol ? Colors.white : Colors.text, fontWeight: '700', fontSize: 16 }}>{sym}</Text>
+                  <Text style={{ color: sym === currencySymbol ? Colors.white : Colors.textSecondary, fontWeight: '600' }}>{name}</Text>
                 </TouchableOpacity>
               ))}
             </View>
@@ -702,6 +724,18 @@ export default function TemplatePickerScreen({ navigation }) {
                       template: invoiceTemplate,
                       brandColor,
                       currencySymbol,
+                      companyOverride: {
+                        name: company?.companyName,
+                        companyName: company?.companyName,
+                        address: company?.address,
+                        email: company?.email,
+                        phone: company?.phoneNumber,
+                        logo: company?.logo,
+                        signature: company?.signature,
+                        bankName: company?.bankName,
+                        accountName: company?.bankAccountName,
+                        accountNumber: company?.bankAccountNumber,
+                      },
                     };
                     console.log('[TemplatePicker] Payload:', payload);
                     const res = await createInvoice(payload);
