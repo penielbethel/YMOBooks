@@ -66,7 +66,6 @@ const LoginScreen = ({ navigation }) => {
           email: result.company.email || '',
           phoneNumber: result.company.phone || '',
           logo: result.company.logo || previousLogo || cachedLogo || null,
-          signature: result.company.signature || null,
           companyId: result.company.companyId,
           invoiceTemplate: result.company.invoiceTemplate || 'classic',
           receiptTemplate: result.company.receiptTemplate || 'classic',
@@ -76,7 +75,11 @@ const LoginScreen = ({ navigation }) => {
           bankAccountNumber: result.company.accountNumber || result.company.bankAccountNumber || '',
           brandColor: result.company.brandColor || null,
           currencySymbol: result.company.currencySymbol || '$',
+          // Hint for on-demand signature fetch to avoid huge AsyncStorage writes
+          hasSignature: !!result.company.signature,
         };
+        // Never persist potentially large base64 signature to AsyncStorage to avoid SQLITE_FULL
+        // If needed, screens should fetch signature on-demand from the backend using companyId
         await AsyncStorage.setItem('companyData', JSON.stringify(stored));
         navigation.navigate('Dashboard');
       } else {

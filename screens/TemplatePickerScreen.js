@@ -6,7 +6,7 @@ import * as FileSystemLegacy from 'expo-file-system/legacy';
   import * as Print from 'expo-print';
   import * as Sharing from 'expo-sharing';
   import * as ImagePicker from 'expo-image-picker';
-import { createInvoice } from '../utils/api';
+import { createInvoice, getApiBaseUrl } from '../utils/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors } from '../constants/Colors';
 import { Fonts } from '../constants/Fonts';
@@ -524,6 +524,19 @@ export default function TemplatePickerScreen({ navigation }) {
           setInvoiceTemplate(parsed.invoiceTemplate || 'classic');
           setBrandColor(parsed.brandColor || Colors.primary);
           setCurrencySymbol(parsed.currencySymbol || '₦');
+          // On-demand signature fetch: if signature is missing but server likely has it, fetch and set in memory only
+          if (!parsed.signature && parsed.companyId && parsed.hasSignature) {
+            try {
+              const resp = await fetch(`${getApiBaseUrl()}/api/company/${parsed.companyId}`);
+              const json = await resp.json();
+              const sig = json?.company?.signature || json?.data?.signature || null;
+              if (sig) {
+                setCompany((prev) => ({ ...prev, signature: sig }));
+              }
+            } catch (sigErr) {
+              console.warn('[TemplatePicker] Signature fetch failed:', sigErr?.message || sigErr);
+            }
+          }
         }
       } catch (err) {
         Alert.alert('Error', 'Failed to load company data');
