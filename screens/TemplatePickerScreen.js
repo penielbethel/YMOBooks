@@ -86,7 +86,7 @@ function renderFullInvoicePreview(company, template, brandColor, liveInvoice) {
   const accountNumber = company?.bankAccountNumber || '';
   const issuanceDate = liveInvoice?.invoiceDate ? new Date(liveInvoice.invoiceDate) : new Date();
   const dueDate = liveInvoice?.dueDate ? new Date(liveInvoice.dueDate) : new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
-  const curr = (liveInvoice?.currencySymbol || company?.currencySymbol || '$');
+  const curr = (company?.currencySymbol || '$');
   const currencyName = (() => {
     switch ((curr || '').trim()) {
       case '₦': return 'Naira';
@@ -396,9 +396,9 @@ function renderFullInvoicePreview(company, template, brandColor, liveInvoice) {
             </View>
           ))}
           <View style={styles.fullTotalsRight}> 
-            <View style={styles.fullTotalRow}><Text style={styles.fullMeta}>Subtotal</Text><Text style={styles.fullMeta}>${subtotal.toFixed(2)}</Text></View>
-            <View style={styles.fullTotalRow}><Text style={styles.fullMeta}>Tax</Text><Text style={styles.fullMeta}>${tax.toFixed(2)}</Text></View>
-            <View style={styles.fullTotalRow}><Text style={styles.fullTitleSm}>Total</Text><Text style={styles.fullTitleSm}>${grand.toFixed(2)}</Text></View>
+            <View style={styles.fullTotalRow}><Text style={styles.fullMeta}>Subtotal</Text><Text style={styles.fullMeta}>{`${curr}${subtotal.toFixed(2)}`}</Text></View>
+            <View style={styles.fullTotalRow}><Text style={styles.fullMeta}>Tax</Text><Text style={styles.fullMeta}>{`${curr}${tax.toFixed(2)}`}</Text></View>
+            <View style={styles.fullTotalRow}><Text style={styles.fullTitleSm}>Total</Text><Text style={styles.fullTitleSm}>{`${curr}${grand.toFixed(2)}`}</Text></View>
             <Text style={[styles.fullMeta, { marginTop: 6 }]}>Amount in words: {amountInWords}</Text>
           </View>
           {!!company?.signature && (
@@ -461,8 +461,8 @@ function renderFullInvoicePreview(company, template, brandColor, liveInvoice) {
             <View key={i} style={styles.fullTableRow}> 
               <Text style={[styles.fullTd, { flex: 2 }]}>{r.desc}</Text>
               <Text style={[styles.fullTd, { flex: 0.7, textAlign: 'center' }]}>{r.qty}</Text>
-              <Text style={[styles.fullTd, { flex: 1, textAlign: 'right' }]}>${r.price.toFixed(2)}</Text>
-              <Text style={[styles.fullTd, { flex: 1, textAlign: 'right' }]}>${r.total.toFixed(2)}</Text>
+              <Text style={[styles.fullTd, { flex: 1, textAlign: 'right' }]}>{`${curr}${r.price.toFixed(2)}`}</Text>
+              <Text style={[styles.fullTd, { flex: 1, textAlign: 'right' }]}>{`${curr}${r.total.toFixed(2)}`}</Text>
             </View>
           ))}
           <View style={styles.fullTotalsRight}> 
@@ -489,7 +489,8 @@ export default function TemplatePickerScreen({ navigation }) {
   const [company, setCompany] = useState(null);
   const [invoiceTemplate, setInvoiceTemplate] = useState('classic');
   const [brandColor, setBrandColor] = useState('');
-  const [currencySymbol, setCurrencySymbol] = useState('₦');
+  // Currency is globally determined by company settings
+  const companyCurrencySymbol = company?.currencySymbol || '$';
   const [previewVisible, setPreviewVisible] = useState(false);
   const [showInvoiceDatePicker, setShowInvoiceDatePicker] = useState(false);
   const [showDueDatePicker, setShowDueDatePicker] = useState(false);
@@ -514,6 +515,20 @@ export default function TemplatePickerScreen({ navigation }) {
   const addItem = () => setItems((prev) => [...prev, { description: '', qty: '1', price: '0' }]);
   const removeItem = (index) => setItems((prev) => prev.filter((_, i) => i !== index));
 
+  // Persist selection so CreateInvoice screen uses it too
+  const handleSelectTemplate = async (tplKey) => {
+    try {
+      setInvoiceTemplate(tplKey);
+      const stored = await AsyncStorage.getItem('companyData');
+      const obj = stored ? JSON.parse(stored) : {};
+      const updated = { ...obj, invoiceTemplate: tplKey };
+      await AsyncStorage.setItem('companyData', JSON.stringify(updated));
+      setCompany((prev) => (prev ? { ...prev, invoiceTemplate: tplKey } : prev));
+    } catch (_) {
+      // non-fatal
+    }
+  };
+
   useEffect(() => {
     (async () => {
       try {
@@ -523,7 +538,7 @@ export default function TemplatePickerScreen({ navigation }) {
           setCompany(parsed);
           setInvoiceTemplate(parsed.invoiceTemplate || 'classic');
           setBrandColor(parsed.brandColor || Colors.primary);
-          setCurrencySymbol(parsed.currencySymbol || '₦');
+          // Currency is controlled by Settings; do not override here
           // On-demand signature fetch: if signature is missing but server likely has it, fetch and set in memory only
           if (!parsed.signature && parsed.companyId && parsed.hasSignature) {
             try {
@@ -556,6 +571,8 @@ export default function TemplatePickerScreen({ navigation }) {
       }
     })();
   }, []);
+
+  // Currency sync handled via companyCurrencySymbol; no local state
 
   // No preference saving on this screen anymore per new flow
 
@@ -615,7 +632,7 @@ export default function TemplatePickerScreen({ navigation }) {
           <Text style={styles.title}>Pick Your Invoice Template</Text>
           <Text style={styles.subtitle}>Choose how your invoice looks. Tap preview for full layout.</Text>
           <View style={{ marginTop: 8, alignSelf: 'flex-start', backgroundColor: Colors.success, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 }}>
-            <Text style={{ color: Colors.white, fontWeight: '700' }}>Currency: {currencySymbol} {currencySymbol === '₦' ? 'Naira' : currencySymbol === '$' ? 'Dollar' : currencySymbol}</Text>
+            <Text style={{ color: Colors.white, fontWeight: '700' }}>Currency: {companyCurrencySymbol} {companyCurrencySymbol === '₦' ? 'Naira' : companyCurrencySymbol === '$' ? 'Dollar' : companyCurrencySymbol}</Text>
           </View>
         </View>
 
@@ -624,7 +641,7 @@ export default function TemplatePickerScreen({ navigation }) {
           <View style={styles.grid}>
             {TEMPLATES.map((t) => (
               <View key={`inv-${t.key}`} style={styles.gridItem}>
-                {renderTemplate(t.key, t.title, t.emoji, invoiceTemplate === t.key, setInvoiceTemplate)}
+                {renderTemplate(t.key, t.title, t.emoji, invoiceTemplate === t.key, handleSelectTemplate)}
               </View>
             ))}
           </View>
@@ -669,38 +686,7 @@ export default function TemplatePickerScreen({ navigation }) {
             <TextInput style={styles.input} placeholder="Customer Address" placeholderTextColor={Colors.textSecondary} value={invoice.customerAddress} onChangeText={(t) => updateInvoice({ customerAddress: t })} />
             <TextInput style={styles.input} placeholder="Email or Phone (optional)" placeholderTextColor={Colors.textSecondary} value={invoice.customerContact} onChangeText={(t) => updateInvoice({ customerContact: t })} autoCapitalize="none" />
           </View>
-          <View style={{ marginTop: 10 }}>
-            <Text style={styles.fullMeta}>Currency</Text>
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 8 }}>
-              {[
-                { sym: '₦', name: 'Naira' },
-                { sym: '$', name: 'Dollar' },
-                { sym: '£', name: 'Pounds' },
-                { sym: '€', name: 'Euros' },
-                { sym: '₵', name: 'Cedis' },
-                { sym: 'KSh', name: 'Shillings' },
-              ].map(({ sym, name }) => (
-                <TouchableOpacity
-                  key={sym}
-                  onPress={() => setCurrencySymbol(sym)}
-                  style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    gap: 8,
-                    paddingHorizontal: 16,
-                    paddingVertical: 10,
-                    borderRadius: 10,
-                    borderWidth: 1,
-                    borderColor: sym === currencySymbol ? Colors.primary : Colors.gray[300],
-                    backgroundColor: sym === currencySymbol ? Colors.primary : Colors.gray[100],
-                  }}
-                >
-                  <Text style={{ color: sym === currencySymbol ? Colors.white : Colors.text, fontWeight: '700', fontSize: 16 }}>{sym}</Text>
-                  <Text style={{ color: sym === currencySymbol ? Colors.white : Colors.textSecondary, fontWeight: '600' }}>{name}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
+          {/* Currency is determined by company settings */}
           <View style={{ flexDirection: 'row', gap: 10, marginTop: 10 }}>
             <TouchableOpacity style={[styles.input, { flex: 1, justifyContent: 'center' }]} onPress={() => setShowInvoiceDatePicker(true)}>
               <Text style={styles.dateText}>Issuance Date: {invoice.invoiceDate?.toISOString().slice(0,10)}</Text>
@@ -720,8 +706,8 @@ export default function TemplatePickerScreen({ navigation }) {
           <View style={{ flexDirection: 'row', gap: 8, marginBottom: 6, paddingHorizontal: 2 }}>
             <Text style={[styles.fullMeta, { flex: 2 }]}>Item Description</Text>
             <Text style={[styles.fullMeta, { flex: 0.6, textAlign: 'center' }]}>Qty</Text>
-            <Text style={[styles.fullMeta, { flex: 1, textAlign: 'right' }]}>Price ({currencySymbol})</Text>
-            <Text style={[styles.fullMeta, { flex: 1, textAlign: 'right' }]}>Total ({currencySymbol})</Text>
+            <Text style={[styles.fullMeta, { flex: 1, textAlign: 'right' }]}>Price ({companyCurrencySymbol})</Text>
+            <Text style={[styles.fullMeta, { flex: 1, textAlign: 'right' }]}>Total ({companyCurrencySymbol})</Text>
           </View>
           {items.map((it, i) => {
             const qty = Number(it.qty || 0);
@@ -732,7 +718,7 @@ export default function TemplatePickerScreen({ navigation }) {
                 <TextInput style={[styles.input, { flex: 2 }]} placeholder="Description" placeholderTextColor={Colors.textSecondary} value={it.description} onChangeText={(t) => updateItem(i, { description: t })} />
                 <TextInput style={[styles.input, { flex: 0.6, textAlign: 'center' }]} placeholder="Qty" placeholderTextColor={Colors.textSecondary} value={it.qty} onChangeText={(t) => updateItem(i, { qty: t })} keyboardType="numeric" />
                 <TextInput style={[styles.input, { flex: 1, textAlign: 'right' }]} placeholder="Price" placeholderTextColor={Colors.textSecondary} value={it.price} onChangeText={(t) => updateItem(i, { price: t })} keyboardType="decimal-pad" />
-                <Text style={[styles.fullText, { flex: 1, textAlign: 'right' }]}>{`${currencySymbol}${total.toFixed(2)}`}</Text>
+                <Text style={[styles.fullText, { flex: 1, textAlign: 'right' }]}>{`${companyCurrencySymbol}${total.toFixed(2)}`}</Text>
                 <TouchableOpacity onPress={() => removeItem(i)} style={[styles.iconButton, { backgroundColor: Colors.error }]}>
                   <Text style={styles.iconButtonText}>✕</Text>
                 </TouchableOpacity>
@@ -767,7 +753,6 @@ export default function TemplatePickerScreen({ navigation }) {
                 invoiceDate: invoice.invoiceDate?.toISOString().slice(0,10),
                 dueDate: invoice.dueDate?.toISOString().slice(0,10),
                 items,
-                currencySymbol,
               })}
               <View style={{ height: 12 }} />
               <View style={{ flexDirection: 'row', gap: 10, paddingHorizontal: Spacing.lg, flexWrap: 'wrap' }}>
@@ -872,14 +857,14 @@ export default function TemplatePickerScreen({ navigation }) {
                       items: items.map((it) => ({ description: it.description, qty: Number(it.qty || 0), price: Number(it.price || 0) })),
                       template: invoiceTemplate,
                       brandColor,
-                      currencySymbol,
+                      currencySymbol: companyCurrencySymbol,
                     });
 
                     if (Platform.OS === 'web') {
                       const withPrint = html.replace('</body>', '<script>setTimeout(()=>{try{window.print()}catch(_){}},300)</script></body>');
                       const dataUrl = 'data:text/html;charset=utf-8,' + encodeURIComponent(withPrint);
                       await Linking.openURL(dataUrl);
-                      return;
+                      // Do not return here; continue to register history below
                     }
 
                     const file = await Print.printToFileAsync({ html });
@@ -921,6 +906,45 @@ export default function TemplatePickerScreen({ navigation }) {
                         }
                       }
                     }
+
+                    // After client-side generation/sharing, register invoice history on server
+                    try {
+                      if (!company?.companyId) {
+                        console.warn('[TemplatePicker][HTML->PDF] Skipping history registration: missing companyId');
+                      } else {
+                        const payload = {
+                          companyId: company.companyId,
+                          invoiceDate: invoice.invoiceDate?.toISOString().slice(0,10),
+                          dueDate: invoice.dueDate?.toISOString().slice(0,10),
+                          customer: {
+                            name: invoice.customerName,
+                            address: invoice.customerAddress,
+                            contact: invoice.customerContact,
+                          },
+                          items: items.map((it) => ({ description: it.description, qty: Number(it.qty || 0), price: Number(it.price || 0) })),
+                          template: invoiceTemplate,
+                          brandColor,
+                          currencySymbol: companyCurrencySymbol,
+                          companyOverride: {
+                            name: company?.companyName,
+                            companyName: company?.companyName,
+                            address: company?.address,
+                            email: company?.email,
+                            phone: company?.phoneNumber,
+                            logo: company?.logo,
+                            signature: company?.signature,
+                            bankName: company?.bankName,
+                            accountName: company?.bankAccountName,
+                            accountNumber: company?.bankAccountNumber,
+                          },
+                        };
+                        await createInvoice(payload);
+                        console.log('[TemplatePicker][HTML->PDF] Invoice registered in history');
+                      }
+                    } catch (histErr) {
+                      console.warn('[TemplatePicker][HTML->PDF] Failed to register history:', histErr?.message || histErr);
+                    }
+
                   } catch (err) {
                     console.error('[TemplatePicker][HTML->PDF] Failed:', err?.message || err);
                     Alert.alert('Export failed', String(err?.message || err));
@@ -947,7 +971,7 @@ export default function TemplatePickerScreen({ navigation }) {
                       items: items.map((it) => ({ description: it.description, qty: Number(it.qty || 0), price: Number(it.price || 0) })),
                       template: invoiceTemplate,
                       brandColor,
-                      currencySymbol,
+                      // currency set by server/company settings
                       companyOverride: {
                         name: company?.companyName,
                         companyName: company?.companyName,

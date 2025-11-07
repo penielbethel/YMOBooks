@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, FlatList, Linking, SafeAreaView, ActivityIndicator, Alert, Platform } from 'react-native';
+import React, { useEffect, useState, useRef } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Linking, SafeAreaView, ActivityIndicator, Alert, Platform, Modal, TextInput, SectionList } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import dayjs from 'dayjs';
 import { Colors } from '../constants/Colors';
@@ -8,13 +8,54 @@ import { Spacing } from '../constants/Spacing';
 import { fetchInvoices, fetchReceipts, createReceipt, deleteInvoice } from '../utils/api';
 import * as FileSystem from 'expo-file-system';
 import * as FileSystemLegacy from 'expo-file-system/legacy';
+import * as Print from 'expo-print';
+import * as Sharing from 'expo-sharing';
+import { WebView } from 'react-native-webview';
+import { buildInvoiceHtml } from '../utils/invoiceHtml';
 
 const InvoiceHistoryScreen = ({ navigation, route }) => {
   const [loading, setLoading] = useState(true);
   const [invoices, setInvoices] = useState([]);
   const [companyId, setCompanyId] = useState(null);
   const [receiptsByInvoice, setReceiptsByInvoice] = useState({});
+  const [company, setCompany] = useState(null);
   const [downloadingFor, setDownloadingFor] = useState(null);
+  const [previewVisible, setPreviewVisible] = useState(false);
+  const [previewHtml, setPreviewHtml] = useState('');
+  const [previewTitle, setPreviewTitle] = useState('');
+  const [savingHtmlPdf, setSavingHtmlPdf] = useState(false);
+  const currentPreviewRef = useRef({ type: 'invoice', invoiceItem: null });
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterDays, setFilterDays] = useState(null); // null = All
+  const [selectedCurrencies, setSelectedCurrencies] = useState([]); // [] means ALL currencies
+  const [paidFilter, setPaidFilter] = useState('ALL'); // ALL | PAID | UNPAID
+  const [refreshing, setRefreshing] = useState(false);
+  const [collapsedMap, setCollapsedMap] = useState({});
+
+  // Persist and restore filters/search
+  useEffect(() => {
+    (async () => {
+      try {
+        const raw = await AsyncStorage.getItem('invoiceHistoryFilters');
+        const saved = raw ? JSON.parse(raw) : null;
+        if (saved) {
+          if (typeof saved.searchQuery === 'string') setSearchQuery(saved.searchQuery);
+          if (saved.filterDays === null || typeof saved.filterDays === 'number') setFilterDays(saved.filterDays);
+          if (Array.isArray(saved.selectedCurrencies)) setSelectedCurrencies(saved.selectedCurrencies);
+          if (typeof saved.paidFilter === 'string') setPaidFilter(saved.paidFilter);
+        }
+      } catch (_e) {}
+    })();
+  }, []);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const payload = { searchQuery, filterDays, selectedCurrencies, paidFilter };
+        await AsyncStorage.setItem('invoiceHistoryFilters', JSON.stringify(payload));
+      } catch (_e) {}
+    })();
+  }, [searchQuery, filterDays, selectedCurrencies, paidFilter]);
 
   useEffect(() => {
     (async () => {
@@ -24,6 +65,7 @@ const InvoiceHistoryScreen = ({ navigation, route }) => {
         if (!effectiveId) {
           const stored = await AsyncStorage.getItem('companyData');
           const parsed = stored ? JSON.parse(stored) : null;
+          setCompany(parsed || null);
           effectiveId = parsed?.companyId;
         }
         if (!effectiveId) {
@@ -32,22 +74,24 @@ const InvoiceHistoryScreen = ({ navigation, route }) => {
           return;
         }
         setCompanyId(effectiveId);
-        const [invRes, rctRes] = await Promise.all([
-          fetchInvoices(effectiveId, 6),
-          fetchReceipts(effectiveId, 6),
-        ]);
-        if (invRes?.success) {
-          setInvoices(invRes.invoices || []);
-        } else {
-          Alert.alert('Error', invRes?.message || 'Failed to load invoices');
-        }
-        if (rctRes?.success && Array.isArray(rctRes.receipts)) {
-          const map = {};
-          rctRes.receipts.forEach((r) => {
-            if (r.invoiceNumber) map[r.invoiceNumber] = true;
-          });
-          setReceiptsByInvoice(map);
-        }
+        await (async () => {
+          const [invRes, rctRes] = await Promise.all([
+            fetchInvoices(effectiveId, 12),
+            fetchReceipts(effectiveId, 12),
+          ]);
+          if (invRes?.success) {
+            setInvoices(invRes.invoices || []);
+          } else {
+            Alert.alert('Error', invRes?.message || 'Failed to load invoices');
+          }
+          if (rctRes?.success && Array.isArray(rctRes.receipts)) {
+            const map = {};
+            rctRes.receipts.forEach((r) => {
+              if (r.invoiceNumber) map[r.invoiceNumber] = true;
+            });
+            setReceiptsByInvoice(map);
+          }
+        })();
       } catch (err) {
         Alert.alert('Error', 'Could not load invoice history');
       } finally {
@@ -56,32 +100,210 @@ const InvoiceHistoryScreen = ({ navigation, route }) => {
     })();
   }, [navigation]);
 
-  const openPdf = async (item) => {
-    if (!item?.pdfUrl) return;
+  const refetch = async () => {
+    if (!companyId) return;
+    setRefreshing(true);
     try {
-      await Linking.openURL(item.pdfUrl);
-    } catch {}
+      const [invRes, rctRes] = await Promise.all([
+        fetchInvoices(companyId, 12),
+        fetchReceipts(companyId, 12),
+      ]);
+      if (invRes?.success) {
+        setInvoices(invRes.invoices || []);
+      }
+      if (rctRes?.success && Array.isArray(rctRes.receipts)) {
+        const map = {};
+        rctRes.receipts.forEach((r) => {
+          if (r.invoiceNumber) map[r.invoiceNumber] = true;
+        });
+        setReceiptsByInvoice(map);
+      }
+    } catch (_e) {
+      // swallow for refresh UX
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  const toDataUrl = async (uri) => {
+    if (!uri) return '';
+    if (uri.startsWith('data:')) return uri;
+    try {
+      if (uri.startsWith('file:')) {
+        const base64 = await FileSystemLegacy.readAsStringAsync(uri, { encoding: 'base64' });
+        // best-effort mime
+        const ext = (uri.split('?')[0].split('#')[0].split('.').pop() || '').toLowerCase();
+        const mime = ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : (ext === 'jpg' || ext === 'jpeg') ? 'image/jpeg' : 'image/*';
+        return `data:${mime};base64,${base64}`;
+      } else {
+        const tmp = `${FileSystem.cacheDirectory}img-${Date.now()}`;
+        const dl = await FileSystemLegacy.downloadAsync(uri, tmp);
+        const base64 = await FileSystemLegacy.readAsStringAsync(dl.uri, { encoding: 'base64' });
+        return `data:image/*;base64,${base64}`;
+      }
+    } catch (_e) {
+      return uri;
+    }
+  };
+
+  // Helpers to resolve currency symbol consistently from invoice fields
+  const codeToSymbol = (code) => {
+    switch (String(code || '').trim().toUpperCase()) {
+      case 'NGN': return '₦';
+      case 'USD': return '$';
+      case 'GBP': return '£';
+      case 'EUR': return '€';
+      case 'GHS': return '₵';
+      case 'KES': return 'KSh';
+      default: return undefined;
+    }
+  };
+  const resolveCurrencySymbol = (inv, company) => {
+    // Display invoices in the company's currency only
+    return company?.currencySymbol || '$';
+  };
+
+  const openInvoicePreview = async (item) => {
+    try {
+      const stored = await AsyncStorage.getItem('companyData');
+      const company = stored ? JSON.parse(stored) : {};
+      const resolvedLogo = await toDataUrl(company?.logo);
+      const resolvedSignature = await toDataUrl(company?.signature);
+      const currencySymbol = resolveCurrencySymbol(item, company);
+      const html = buildInvoiceHtml({
+        company: {
+          name: company?.companyName,
+          address: company?.address,
+          email: company?.email,
+          phone: company?.phoneNumber,
+          bankName: company?.bankName,
+          accountName: company?.bankAccountName,
+          accountNumber: company?.bankAccountNumber,
+          logo: resolvedLogo,
+          signature: resolvedSignature,
+        },
+        invoice: {
+          customerName: item?.customer?.name,
+          customerAddress: item?.customer?.address,
+          customerContact: item?.customer?.contact,
+          invoiceDate: dayjs(item.invoiceDate || item.createdAt).format('YYYY-MM-DD'),
+          dueDate: item.dueDate ? dayjs(item.dueDate).format('YYYY-MM-DD') : undefined,
+          invoiceNumber: item.invoiceNumber,
+        },
+        items: (item.items || []).map((it) => ({ description: it.description, qty: Number(it.qty || 0), price: Number(it.price || 0) })),
+        template: item?.invoiceTemplate || company?.invoiceTemplate || 'classic',
+        brandColor: company?.brandColor || '',
+        currencySymbol,
+      });
+      setPreviewTitle(`${item.invoiceNumber} — Preview`);
+      setPreviewHtml(html);
+      currentPreviewRef.current = { type: 'invoice', invoiceItem: item };
+      setPreviewVisible(true);
+    } catch (e) {
+      Alert.alert('Preview failed', String(e?.message || e));
+    }
+  };
+
+  const buildReceiptHtml = (opts) => {
+    const { company = {}, invoiceNumber, customer = {}, amountPaid = 0, receiptNumber, receiptDate, currencySymbol = '₦' } = opts || {};
+    const name = company?.companyName || company?.name || 'Your Company';
+    const address = company?.address || '';
+    const email = company?.email || '';
+    const phone = company?.phoneNumber || '';
+    const logo = company?.logo || '';
+    const signature = company?.signature || '';
+    const custName = customer?.name || '';
+    const custAddr = customer?.address || '';
+    const custContact = customer?.contact || '';
+    const safe = (s) => (s == null ? '' : String(s));
+    const escapeHtml = (s) => safe(s).replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[c]));
+    return `<!DOCTYPE html><html><head><meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Receipt ${escapeHtml(receiptNumber || '')}</title>
+    <style>
+      body{font-family:Arial,Helvetica,sans-serif;background:#f6f7fb;color:#111;margin:0;padding:0}
+      .page{max-width:860px;margin:0 auto;padding:24px}
+      .card{background:#fff;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden}
+      .header{display:flex;justify-content:space-between;align-items:center;padding:16px 24px;border-bottom:1px solid #e5e7eb}
+      .title{font-size:22px;font-weight:700;color:#16a34a}
+      .paid{background:#16a34a;color:#fff;padding:4px 8px;border-radius:999px;font-size:12px;margin-left:8px}
+      .logo{height:48px}
+      .section{padding:16px 24px}
+      .row{display:flex;gap:12px}
+      .label{font-size:12px;color:#6b7280;margin-bottom:4px}
+      .text{font-size:14px;color:#111}
+      .meta{font-size:13px;color:#374151}
+      .hint{font-size:12px;color:#6b7280;padding:0 24px 16px}
+      .signature{width:140px;height:70px;object-fit:contain;margin-top:8px}
+    </style>
+    </head><body>
+      <div class="page"><div class="card">
+        <div class="header">
+          <div style="display:flex;align-items:center;gap:12px">
+            ${logo ? `<img src="${logo}" class="logo" />` : ''}
+            <div>
+              <div class="title">RECEIPT <span class="paid">PAID</span></div>
+              <div class="meta">Receipt: ${escapeHtml(receiptNumber || '')}</div>
+              <div class="meta">Invoice: ${escapeHtml(invoiceNumber || '')}</div>
+              <div class="meta">Date: ${escapeHtml(receiptDate || '')}</div>
+            </div>
+          </div>
+          <div style="text-align:right">
+            <div class="text">${escapeHtml(name)}</div>
+            ${address ? `<div class="meta">${escapeHtml(address)}</div>` : ''}
+            ${email ? `<div class="meta">Email: ${escapeHtml(email)}</div>` : ''}
+            ${phone ? `<div class="meta">Phone: ${escapeHtml(phone)}</div>` : ''}
+          </div>
+        </div>
+        <div class="section">
+          <div class="row">
+            <div style="flex:1">
+              <div class="label">Received from</div>
+              <div class="text">${escapeHtml(custName)}</div>
+              <div class="meta">${escapeHtml(custAddr)}</div>
+              <div class="meta">${escapeHtml(custContact)}</div>
+            </div>
+            <div style="flex:1;text-align:right">
+              <div class="label">Amount Paid</div>
+              <div class="text" style="font-size:18px;font-weight:700">${escapeHtml(currencySymbol)}${Number(amountPaid||0).toFixed(2)}</div>
+            </div>
+          </div>
+        </div>
+        ${signature ? `<div class="section"><div class="label">Authorized Signature</div><img src="${signature}" class="signature"/></div>` : ''}
+        <div class="hint">This receipt acknowledges payment for the above invoice.</div>
+      </div></div>
+    </body></html>`;
+  };
+
+  const openReceiptPreview = async (item) => {
+    try {
+      const stored = await AsyncStorage.getItem('companyData');
+      const company = stored ? JSON.parse(stored) : {};
+      const resolvedLogo = await toDataUrl(company?.logo);
+      const resolvedSignature = await toDataUrl(company?.signature);
+      const currencySymbol = resolveCurrencySymbol(item, company);
+      const receiptDate = dayjs().format('YYYY-MM-DD');
+      const html = buildReceiptHtml({
+        company: { ...company, logo: resolvedLogo, signature: resolvedSignature },
+        invoiceNumber: item.invoiceNumber,
+        receiptNumber: `RCT-${company?.companyId || 'LOCAL'}-${Date.now()}`,
+        receiptDate,
+        customer: item.customer || {},
+        amountPaid: Number(item.grandTotal || 0),
+        currencySymbol,
+      });
+      setPreviewTitle(`${item.invoiceNumber} — Receipt Preview (PAID)`);
+      setPreviewHtml(html);
+      currentPreviewRef.current = { type: 'receipt', invoiceItem: item };
+      setPreviewVisible(true);
+    } catch (e) {
+      Alert.alert('Preview failed', String(e?.message || e));
+    }
   };
 
   const onGenerateReceipt = async (item) => {
     if (!companyId) return Alert.alert('Missing Company', 'Company ID not found');
-    try {
-      const payload = {
-        companyId,
-        invoiceNumber: item.invoiceNumber,
-        receiptDate: new Date().toISOString().slice(0,10),
-        customer: item.customer || {},
-        amountPaid: Number(item.grandTotal || 0),
-      };
-      const res = await createReceipt(payload);
-      if (res?.success && res?.pdfUrl) {
-        await handleDownload(res.pdfUrl);
-      } else {
-        Alert.alert('Failed', res?.message || 'Could not generate receipt');
-      }
-    } catch (e) {
-      Alert.alert('Error', 'Receipt generation failed');
-    }
+    await openReceiptPreview(item);
   };
 
   const handleDownload = async (pdfUrl) => {
@@ -147,7 +369,7 @@ const InvoiceHistoryScreen = ({ navigation, route }) => {
 
   const renderItem = ({ item }) => (
     <View style={styles.row}>
-      <TouchableOpacity style={styles.rowLeft} onPress={() => openPdf(item)}>
+      <TouchableOpacity style={styles.rowLeft} onPress={() => openInvoicePreview(item)}>
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
           <Text style={styles.invNumber}>{item.invoiceNumber}</Text>
           {receiptsByInvoice[item.invoiceNumber] ? (
@@ -157,7 +379,7 @@ const InvoiceHistoryScreen = ({ navigation, route }) => {
         <Text style={styles.customerName}>{item?.customer?.name || 'Unknown Customer'}</Text>
       </TouchableOpacity>
       <View style={styles.rowRight}>
-        <Text style={styles.amount}>₦ {Number(item.grandTotal || 0).toLocaleString()}</Text>
+        <Text style={styles.amount}>{String(resolveCurrencySymbol(item, company))} {Number(item.grandTotal || 0).toLocaleString()}</Text>
         <Text style={styles.dateText}>{dayjs(item.invoiceDate || item.createdAt).format('DD MMM, YYYY')}</Text>
         <View style={{ flexDirection: 'row', marginTop: 6 }}>
           <TouchableOpacity style={[styles.smallBtn, styles.receiptBtn]}
@@ -173,6 +395,74 @@ const InvoiceHistoryScreen = ({ navigation, route }) => {
     </View>
   );
 
+  // Currency selection removed; company currency applies globally
+
+  // Filter + search
+  const normalizedQuery = String(searchQuery || '').trim().toLowerCase();
+  const now = dayjs();
+  const visibleInvoices = (invoices || []).filter((inv) => {
+    // Days filter
+    if (filterDays && Number(filterDays) > 0) {
+      const date = dayjs(inv.invoiceDate || inv.createdAt);
+      if (!date.isValid()) return false;
+      if (now.diff(date, 'day') > Number(filterDays)) return false;
+    }
+    // Paid status filter
+    const isPaid = !!receiptsByInvoice[inv.invoiceNumber];
+    if (paidFilter === 'PAID' && !isPaid) return false;
+    if (paidFilter === 'UNPAID' && isPaid) return false;
+    // Currency filter removed
+    // Search filter: by customer name, invoice number, currency
+    if (normalizedQuery) {
+      const name = (inv?.customer?.name || '').toLowerCase();
+      const number = (inv?.invoiceNumber || '').toLowerCase();
+      const currency = String(resolveCurrencySymbol(inv, company)).toLowerCase();
+      if (!name.includes(normalizedQuery) && !number.includes(normalizedQuery) && !currency.includes(normalizedQuery)) {
+        return false;
+      }
+    }
+    return true;
+  });
+
+  // Group by month for professional arrangement
+  const sections = Object.values(
+    visibleInvoices.reduce((acc, inv) => {
+      const key = dayjs(inv.invoiceDate || inv.createdAt).format('YYYY-MM');
+      const label = dayjs(inv.invoiceDate || inv.createdAt).format('MMMM YYYY');
+      if (!acc[key]) acc[key] = { title: label, key, data: [] };
+      acc[key].data.push(inv);
+      return acc;
+    }, {})
+  )
+    .sort((a, b) => (a.key < b.key ? 1 : -1))
+    .map((section) => ({
+      ...section,
+      data: section.data.sort((a, b) => {
+        const da = dayjs(a.invoiceDate || a.createdAt).valueOf();
+        const db = dayjs(b.invoiceDate || b.createdAt).valueOf();
+        return db - da;
+      }),
+    }));
+
+  // Initialize collapse map for sections (default collapsed)
+  useEffect(() => {
+    setCollapsedMap((prev) => {
+      const next = { ...prev };
+      sections.forEach((s) => {
+        if (next[s.key] === undefined) next[s.key] = true;
+      });
+      return next;
+    });
+  }, [sections.length]);
+
+  const sectionCounts = Object.fromEntries(sections.map((s) => [s.key, s.data.length]));
+  const displaySections = sections.map((s) => ({
+    ...s,
+    data: collapsedMap[s.key] ? [] : s.data,
+  }));
+
+  const subtitleText = `Showing ${visibleInvoices.length} invoice${visibleInvoices.length !== 1 ? 's' : ''}${filterDays ? ` · last ${filterDays}d` : ''}${paidFilter !== 'ALL' ? ` · ${paidFilter.toLowerCase()}` : ''}${companyId ? ` · ${companyId}` : ''}`;
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
@@ -180,7 +470,7 @@ const InvoiceHistoryScreen = ({ navigation, route }) => {
           <Text style={styles.backButtonText}>← Back</Text>
         </TouchableOpacity>
         <Text style={styles.title}>Invoice History</Text>
-        <Text style={styles.subtitle}>Showing up to 6 months of invoices{companyId ? ` · ${companyId}` : ''}</Text>
+        <Text style={styles.subtitle}>{subtitleText}</Text>
       </View>
       {loading ? (
         <View style={styles.loadingBox}>
@@ -188,18 +478,167 @@ const InvoiceHistoryScreen = ({ navigation, route }) => {
           <Text style={styles.loadingText}>Loading invoices...</Text>
         </View>
       ) : (
-        <FlatList
-          contentContainerStyle={styles.list}
-          data={invoices}
-          keyExtractor={(item) => item._id || item.invoiceNumber}
-          renderItem={renderItem}
-          ListEmptyComponent={() => (
-            <View style={styles.emptyBox}>
-              <Text style={styles.emptyText}>No invoices found in the last 6 months.</Text>
+        <>
+          <View style={styles.filtersBar}>
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search name, currency, invoice #"
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              placeholderTextColor={Colors.textSecondary}
+            />
+            <View style={styles.chipsRow}>
+              {[
+                { label: 'All days', value: null },
+                { label: '7 days', value: 7 },
+                { label: '30 days', value: 30 },
+                { label: '90 days', value: 90 },
+              ].map((opt) => (
+                <TouchableOpacity
+                  key={String(opt.value)}
+                  style={[styles.chip, filterDays === opt.value && styles.chipActive]}
+                  onPress={() => setFilterDays(opt.value)}
+                >
+                  <Text style={[styles.chipText, filterDays === opt.value && { color: Colors.white }]}>{opt.label}</Text>
+                </TouchableOpacity>
+              ))}
             </View>
-          )}
-        />
+            {/* Currency filter removed: enforced company currency */}
+            <View style={styles.chipsRow}>
+              {[
+                { label: 'All', value: 'ALL' },
+                { label: 'Paid', value: 'PAID' },
+                { label: 'Unpaid', value: 'UNPAID' },
+              ].map((opt) => (
+                <TouchableOpacity
+                  key={opt.value}
+                  style={[styles.chip, paidFilter === opt.value && styles.chipActive]}
+                  onPress={() => setPaidFilter(opt.value)}
+                >
+                  <Text style={[styles.chipText, paidFilter === opt.value && { color: Colors.white }]}>{opt.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <View style={{ flexDirection: 'row', justifyContent: 'flex-end' }}>
+              <TouchableOpacity
+                style={styles.resetBtn}
+                onPress={async () => {
+                  setSearchQuery('');
+                  setFilterDays(null);
+                  // currency selection removed
+                  setPaidFilter('ALL');
+                  try {
+                    await AsyncStorage.setItem('invoiceHistoryFilters', JSON.stringify({
+                      searchQuery: '', filterDays: null, paidFilter: 'ALL',
+                    }));
+                  } catch (_e) {}
+                }}
+              >
+                <Text style={styles.resetBtnText}>Show all invoices</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          <SectionList
+            sections={displaySections}
+            keyExtractor={(item) => item._id || item.invoiceNumber}
+            renderItem={renderItem}
+            renderSectionHeader={({ section }) => (
+              <TouchableOpacity style={styles.sectionHeader} onPress={() => setCollapsedMap((prev) => ({ ...prev, [section.key]: !prev[section.key] }))}>
+                <View style={styles.sectionHeaderRow}>
+                  <Text style={styles.sectionHeaderText}>{section.title} ({sectionCounts[section.key] || 0})</Text>
+                  <Text style={styles.sectionHeaderIcon}>{collapsedMap[section.key] ? '▶' : '▼'}</Text>
+                </View>
+              </TouchableOpacity>
+            )}
+            contentContainerStyle={styles.list}
+            refreshing={refreshing}
+            onRefresh={refetch}
+            ListEmptyComponent={() => (
+              <View style={styles.emptyBox}>
+                <Text style={styles.emptyText}>No invoices match your filters.</Text>
+              </View>
+            )}
+          />
+        </>
       )}
+
+      {/* Preview Modal */}
+      <Modal visible={previewVisible} animationType="slide" onRequestClose={() => setPreviewVisible(false)}>
+        <SafeAreaView style={[styles.container, { backgroundColor: Colors.gray[100] }]}>
+          <View style={styles.modalHeader}>
+            <TouchableOpacity style={styles.backButton} onPress={() => setPreviewVisible(false)}>
+              <Text style={styles.backButtonText}>← Close</Text>
+            </TouchableOpacity>
+            <Text style={styles.title}>{previewTitle || 'Preview'}</Text>
+          </View>
+          <View style={{ flex: 1, margin: Spacing.lg, backgroundColor: '#fff', borderRadius: 8, overflow: 'hidden' }}>
+            {!!previewHtml ? (
+              <WebView originWhitelist={["*"]} source={{ html: previewHtml }} />
+            ) : (
+              <View style={styles.loadingBox}><ActivityIndicator color={Colors.primary} /></View>
+            )}
+          </View>
+          <View style={{ flexDirection: 'row', gap: 10, paddingHorizontal: Spacing.lg, paddingBottom: Spacing.lg }}>
+            <TouchableOpacity
+              style={[styles.smallBtn, { backgroundColor: Colors.success, paddingVertical: 10, flex: 1 }, savingHtmlPdf && { opacity: 0.7 }]}
+              disabled={savingHtmlPdf}
+              onPress={async () => {
+                if (!previewHtml) return;
+                try {
+                  setSavingHtmlPdf(true);
+                  const file = await Print.printToFileAsync({ html: previewHtml });
+                  if (Platform.OS === 'web') {
+                    try {
+                      const resp = await fetch(file.uri);
+                      const blob = await resp.blob();
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement('a');
+                      a.href = url;
+                      a.download = 'document.pdf';
+                      document.body.appendChild(a);
+                      a.click();
+                      a.remove();
+                      setTimeout(() => URL.revokeObjectURL(url), 1500);
+                    } catch (_e) {
+                      await Linking.openURL(file.uri);
+                    }
+                  } else {
+                    if (await Sharing.isAvailableAsync()) {
+                      await Sharing.shareAsync(file.uri, { UTI: 'com.adobe.pdf', mimeType: 'application/pdf' });
+                    } else {
+                      await Linking.openURL(file.uri);
+                    }
+                  }
+
+                  // If this was a receipt preview, register receipt in history
+                  try {
+                    const { type, invoiceItem } = currentPreviewRef.current || {};
+                    if (type === 'receipt' && companyId && invoiceItem) {
+                      const payload = {
+                        companyId,
+                        invoiceNumber: invoiceItem.invoiceNumber,
+                        receiptDate: new Date().toISOString().slice(0,10),
+                        customer: invoiceItem.customer || {},
+                        amountPaid: Number(invoiceItem.grandTotal || 0),
+                        currencySymbol: resolveCurrencySymbol(invoiceItem, company),
+                        currencyCode: invoiceItem.currencyCode,
+                      };
+                      await createReceipt(payload);
+                    }
+                  } catch (_regErr) {}
+                } catch (err) {
+                  Alert.alert('Export failed', String(err?.message || err));
+                } finally {
+                  setSavingHtmlPdf(false);
+                }
+              }}
+            >
+              <Text style={styles.smallBtnText}>{savingHtmlPdf ? 'Generating…' : 'Download/Share'}</Text>
+            </TouchableOpacity>
+          </View>
+        </SafeAreaView>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -240,6 +679,56 @@ const styles = StyleSheet.create({
     paddingTop: Spacing.lg,
     paddingBottom: Spacing.xl,
   },
+  filtersBar: {
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.lg,
+  },
+  searchInput: {
+    backgroundColor: Colors.surface,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: Colors.gray[200],
+    color: Colors.text,
+    marginBottom: Spacing.md,
+  },
+  chipsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: Spacing.md,
+  },
+  chip: {
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 999,
+    backgroundColor: Colors.gray[100],
+    borderWidth: 1,
+    borderColor: Colors.gray[200],
+  },
+  chipActive: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
+  },
+  chipText: {
+    color: Colors.text,
+    fontSize: Fonts.sizes.sm,
+    fontWeight: Fonts.weights.medium,
+  },
+  resetBtn: {
+    marginTop: Spacing.sm,
+    alignSelf: 'flex-end',
+    backgroundColor: Colors.gray[200],
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+  },
+  resetBtnText: {
+    color: Colors.text,
+    fontSize: Fonts.sizes.sm,
+    fontWeight: Fonts.weights.semiBold,
+  },
   row: {
     backgroundColor: Colors.surface,
     padding: Spacing.lg,
@@ -247,6 +736,30 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.md,
     flexDirection: 'row',
     alignItems: 'center',
+  },
+  sectionHeader: {
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.sm,
+  },
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  sectionHeaderText: {
+    fontSize: Fonts.sizes.md,
+    fontWeight: Fonts.weights.semiBold,
+    color: Colors.textSecondary,
+  },
+  sectionHeaderIcon: {
+    fontSize: Fonts.sizes.md,
+    color: Colors.textSecondary,
+  },
+  modalHeader: {
+    backgroundColor: Colors.primary,
+    paddingTop: Spacing.md,
+    paddingBottom: Spacing.lg,
+    paddingHorizontal: Spacing.lg,
   },
   rowLeft: {
     flex: 1,

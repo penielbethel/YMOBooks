@@ -8,9 +8,10 @@
   },
   "dependencies": {
     "cors": "^2.8.5",
+    "dayjs": "^1.11.11",
     "express": "^4.19.2",
     "mongoose": "^8.6.1",
     "pdfkit": "^0.13.0",
-    "dayjs": "^1.11.11"
+    "sharp": "^0.34.4"
   }
 }

@@ -56,10 +56,13 @@ const CreateInvoiceScreen = ({ navigation }) => {
         Alert.alert('Not logged in', 'Please login to your company account');
         return;
       }
+      const companyCurrencySymbol = companyData?.currencySymbol || '$';
       const payload = {
         companyId: companyData.companyId,
         template: companyData?.invoiceTemplate,
         brandColor: companyData?.brandColor,
+        // Enforce company-wide currency
+        currencySymbol: companyCurrencySymbol,
         invoiceDate: invoice.invoiceDate?.toISOString().slice(0, 10),
         dueDate: invoice.dueDate?.toISOString().slice(0, 10),
         customer: {

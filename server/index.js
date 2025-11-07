@@ -5,6 +5,7 @@ const path = require('path');
 const fs = require('fs');
 const PDFDocument = require('pdfkit');
 const dayjs = require('dayjs');
+let sharp = null; // lazy-loaded to avoid boot issues if optional dep missing
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -57,6 +58,57 @@ function findCompanyFile(companyId) {
   return companies.find((c) => c.companyId === companyId);
 }
 
+// Image optimization helpers (logos/signatures)
+async function ensureSharp() {
+  if (!sharp) {
+    try {
+      // eslint-disable-next-line global-require
+      sharp = require('sharp');
+    } catch (e) {
+      console.warn('sharp is not installed; skipping image optimization:', e.message);
+      sharp = null;
+    }
+  }
+  return sharp;
+}
+
+function parseDataUrl(dataUrl) {
+  if (!dataUrl || typeof dataUrl !== 'string') return null;
+  const m = dataUrl.match(/^data:([^;,]+);base64,(.*)$/);
+  if (!m) return null;
+  const mime = m[1];
+  const b64 = m[2];
+  try {
+    const buf = Buffer.from(b64, 'base64');
+    return { mime, buffer: buf };
+  } catch (_e) {
+    return null;
+  }
+}
+
+async function optimizeImageDataUrl(dataUrl, kind = 'logo') {
+  try {
+    const lib = await ensureSharp();
+    if (!lib) return dataUrl; // skip if sharp missing
+    const parsed = parseDataUrl(dataUrl);
+    if (!parsed) return dataUrl;
+    const max = kind === 'signature' ? { width: 600, height: 220 } : { width: 512, height: 512 };
+    let pipeline = lib(parsed.buffer).rotate();
+    pipeline = pipeline.resize({ ...max, fit: 'inside', withoutEnlargement: true });
+    // Use PNG to preserve transparency and ensure pdfkit compatibility
+    const out = await pipeline.png({ compressionLevel: 9, palette: true }).toBuffer();
+    const outDataUrl = `data:image/png;base64,${out.toString('base64')}`;
+    // Only return optimized if significantly smaller or if original was not png
+    if (out.length < parsed.buffer.length * 0.98 || !/^data:image\/png/i.test(dataUrl)) {
+      return outDataUrl;
+    }
+    return dataUrl;
+  } catch (e) {
+    console.warn('Image optimization failed; using original:', e.message);
+    return dataUrl;
+  }
+}
+
 // Mongo connection (optional)
 let DB_CONNECTED = false;
 if (MONGO_URI) {
@@ -87,6 +139,17 @@ if (MONGO_URI) {
 }
 
 // Models
+  // Currency catalog (for clarity and consistency)
+  const CurrencySchema = new mongoose.Schema(
+  {
+    code: { type: String, required: true, unique: true }, // e.g., NGN, USD
+    name: { type: String, required: true }, // e.g., Naira, US Dollar
+    symbol: { type: String, required: true }, // e.g., ₦, $
+  },
+  { timestamps: true }
+);
+const Currency = mongoose.model('Currency', CurrencySchema);
+
   const CompanySchema = new mongoose.Schema(
   {
     companyId: { type: String, unique: true, index: true },
@@ -97,7 +160,9 @@ if (MONGO_URI) {
     logo: { type: String }, // base64 or URL
     signature: { type: String }, // base64 or URL (optional)
     brandColor: { type: String },
+    country: { type: String },
     currencySymbol: { type: String, default: '$' },
+    currencyCode: { type: String }, // e.g., NGN, USD
     termsAndConditions: { type: String },
     // Bank details
     bankName: { type: String },
@@ -119,6 +184,10 @@ const InvoiceSchema = new mongoose.Schema(
     invoiceNumber: { type: String, index: true, required: true },
     invoiceDate: { type: Date },
     dueDate: { type: Date },
+    // Store which template was used when generating this invoice (classic, bold, modern, compact, minimal)
+    invoiceTemplate: { type: String },
+    currencySymbol: { type: String },
+    currencyCode: { type: String }, // e.g., NGN, USD
     status: { type: String, enum: ['paid', 'unpaid'], default: 'unpaid' },
     paidAt: { type: Date },
     customer: {
@@ -148,6 +217,8 @@ const ReceiptSchema = new mongoose.Schema(
     receiptNumber: { type: String, index: true, required: true },
     invoiceNumber: { type: String },
     receiptDate: { type: Date },
+    currencySymbol: { type: String },
+    currencyCode: { type: String },
     customer: {
       name: String,
       address: String,
@@ -159,6 +230,22 @@ const ReceiptSchema = new mongoose.Schema(
   { timestamps: true }
 );
 const Receipt = mongoose.model('Receipt', ReceiptSchema);
+
+// Expense model for monthly P&L
+const ExpenseSchema = new mongoose.Schema(
+  {
+    companyId: { type: String, index: true, required: true },
+    month: { type: String, index: true, required: true }, // YYYY-MM
+    category: { type: String, enum: ['production', 'expense'], required: true },
+    amount: { type: Number, required: true },
+    currencySymbol: { type: String },
+    currencyCode: { type: String },
+    description: { type: String },
+    day: { type: Number }, // optional: day of month for daily tracking (1-31)
+  },
+  { timestamps: true }
+);
+const Expense = mongoose.model('Expense', ExpenseSchema);
 
 // Helpers
 async function generateCompanyId(name) {
@@ -292,6 +379,20 @@ function numberToWords(num) {
   return `${words}${decimals ? ` and ${decimals}/100` : ''}`;
 }
 
+// Currency helpers
+function mapSymbolToCode(sym) {
+  const s = String(sym || '').trim();
+  return s === '₦' ? 'NGN'
+    : s === '$' ? 'USD'
+    : s === '€' ? 'EUR'
+    : s === '£' ? 'GBP'
+    : s === '₵' ? 'GHS'
+    : s === 'KSh' ? 'KES'
+    : s === '¥' ? 'JPY'
+    : s === '₹' ? 'INR'
+    : undefined;
+}
+
 // Helper: currency labels for amount-in-words
 function currencyLabels(symbol) {
   const s = (symbol || '').trim();
@@ -324,7 +425,8 @@ function amountInWordsWithCurrency(amount, symbol) {
 // Routes
   app.post('/api/register-company', async (req, res) => {
   try {
-    const { name, address, email, phone, logo, signature, brandColor, currencySymbol, bankName, accountName, accountNumber, bankAccountName, bankAccountNumber, invoiceTemplate, receiptTemplate, termsAndConditions } = req.body;
+    const { name, address, email, phone, brandColor, currencySymbol, bankName, accountName, accountNumber, bankAccountName, bankAccountNumber, invoiceTemplate, receiptTemplate, termsAndConditions } = req.body;
+    let { logo, signature } = req.body;
     if (!name) return res.status(400).json({ success: false, message: 'Company name is required' });
 
     // Duplicate checks (prefer DB when connected)
@@ -342,6 +444,14 @@ function amountInWordsWithCurrency(amount, symbol) {
     }
 
     const companyId = await generateCompanyId(name);
+    // Optimize images when provided as data URLs
+    if (typeof logo === 'string' && logo.startsWith('data:')) {
+      logo = await optimizeImageDataUrl(logo, 'logo');
+    }
+    if (typeof signature === 'string' && signature.startsWith('data:')) {
+      signature = await optimizeImageDataUrl(signature, 'signature');
+    }
+
     const entry = {
       companyId,
       name,
@@ -352,6 +462,7 @@ function amountInWordsWithCurrency(amount, symbol) {
       signature,
       brandColor,
       currencySymbol,
+      currencyCode,
       termsAndConditions,
       bankName,
       accountName: accountName || bankAccountName,
@@ -380,8 +491,17 @@ function amountInWordsWithCurrency(amount, symbol) {
 // Update company details (including bank info)
   app.post('/api/update-company', async (req, res) => {
   try {
-    const { companyId, name, address, email, phone, logo, signature, brandColor, currencySymbol, bankName, accountName, accountNumber, bankAccountName, bankAccountNumber, invoiceTemplate, receiptTemplate, termsAndConditions } = req.body;
+    const { companyId, name, address, email, phone, brandColor, country, currencySymbol, currencyCode, bankName, accountName, accountNumber, bankAccountName, bankAccountNumber, invoiceTemplate, receiptTemplate, termsAndConditions } = req.body;
+    let { logo, signature } = req.body;
     if (!companyId) return res.status(400).json({ success: false, message: 'Company ID is required' });
+    // Optimize images when provided as data URLs (skip when unchanged or URL)
+    if (typeof logo === 'string' && logo.startsWith('data:')) {
+      logo = await optimizeImageDataUrl(logo, 'logo');
+    }
+    if (typeof signature === 'string' && signature.startsWith('data:')) {
+      signature = await optimizeImageDataUrl(signature, 'signature');
+    }
+
     const update = {
       name,
       address,
@@ -390,7 +510,9 @@ function amountInWordsWithCurrency(amount, symbol) {
       logo,
       signature,
       brandColor,
+      country,
       currencySymbol,
+      currencyCode,
       termsAndConditions,
       bankName,
       accountName: accountName || bankAccountName,
@@ -774,7 +896,7 @@ function drawReceiptByTemplate(doc, company, rctNo, receiptDate, invoiceNumber, 
 // Create invoice PDF (A4, multi-page if needed)
 app.post('/api/invoice/create', async (req, res) => {
   try {
-    const { companyId, invoiceNumber, invoiceDate, dueDate, customer = {}, items = [], template, brandColor, currencySymbol, companyOverride } = req.body;
+    const { companyId, invoiceNumber, invoiceDate, dueDate, customer = {}, items = [], template, brandColor, companyOverride } = req.body;
     if (!companyId) return res.status(400).json({ success: false, message: 'companyId is required' });
     let company;
     try {
@@ -800,7 +922,11 @@ app.post('/api/invoice/create', async (req, res) => {
     const companyForRender = { ...company };
     if (template) companyForRender.invoiceTemplate = template;
     if (brandColor) companyForRender.brandColor = brandColor;
-    if (currencySymbol) companyForRender.currencySymbol = currencySymbol;
+    // Enforce single company currency for rendering
+    const resolvedCurrencySymbol = company?.currencySymbol || '$';
+    const resolvedCurrencyCode = company?.currencyCode || mapSymbolToCode(resolvedCurrencySymbol);
+    companyForRender.currencySymbol = resolvedCurrencySymbol;
+    if (resolvedCurrencyCode) companyForRender.currencyCode = resolvedCurrencyCode;
     // Merge client-provided company details to ensure PDF matches preview exactly
     if (companyOverride && typeof companyOverride === 'object') {
       const map = {
@@ -847,6 +973,9 @@ app.post('/api/invoice/create', async (req, res) => {
           invoiceNumber: invNo,
           invoiceDate: invoiceDate ? dayjs(invoiceDate).toDate() : new Date(),
           dueDate: dueDate ? dayjs(dueDate).toDate() : undefined,
+          invoiceTemplate: (companyForRender?.invoiceTemplate || template || (company?.invoiceTemplate) || 'classic'),
+          currencySymbol: resolvedCurrencySymbol,
+          currencyCode: resolvedCurrencyCode,
           customer: {
             name: customer.name,
             address: customer.address,
@@ -894,12 +1023,14 @@ app.post('/api/receipt/create', async (req, res) => {
         if (invDoc) {
           if (!derivedCustomer?.name) derivedCustomer = invDoc.customer || derivedCustomer;
           if (derivedAmount == null) derivedAmount = Number(invDoc.grandTotal || 0);
+          // currency ignored; enforced to company currency below
         }
       } catch (e) {
         console.warn('Lookup invoice for receipt failed:', e.message);
       }
     }
     if (derivedAmount == null) derivedAmount = 0;
+    const derivedCurrency = company?.currencySymbol || '$';
 
     const rctNo = receiptNumber || `RCT-${companyId}-${Date.now()}`;
     const filename = `${rctNo}.pdf`.replace(/[^a-zA-Z0-9_.-]/g, '_');
@@ -910,7 +1041,9 @@ app.post('/api/receipt/create', async (req, res) => {
     const stream = fs.createWriteStream(filePath);
     doc.pipe(stream);
 
-    drawReceiptByTemplate(doc, company, rctNo, receiptDate, invoiceNumber, derivedCustomer, derivedAmount);
+    const derivedCurrencyCode = (company?.currencyCode) || mapSymbolToCode(derivedCurrency);
+    const companyForReceipt = { ...company, currencySymbol: derivedCurrency, currencyCode: derivedCurrencyCode };
+    drawReceiptByTemplate(doc, companyForReceipt, rctNo, receiptDate, invoiceNumber, derivedCustomer, derivedAmount);
 
     doc.end();
 
@@ -922,6 +1055,8 @@ app.post('/api/receipt/create', async (req, res) => {
           receiptNumber: rctNo,
           invoiceNumber: invoiceNumber || undefined,
           receiptDate: receiptDate ? dayjs(receiptDate).toDate() : new Date(),
+          currencySymbol: derivedCurrency,
+          currencyCode: derivedCurrencyCode,
           customer: {
             name: derivedCustomer?.name,
             address: derivedCustomer?.address,
@@ -978,6 +1113,193 @@ app.get('/api/receipts', async (req, res) => {
   }
 });
 
+// Create expense entry
+app.post('/api/expenses/create', async (req, res) => {
+  try {
+    const { companyId, month, category, amount, description } = req.body || {};
+    if (!companyId) return res.status(400).json({ success: false, message: 'Missing companyId' });
+    if (!month) return res.status(400).json({ success: false, message: 'Missing month (YYYY-MM)' });
+    if (!category || !['production', 'expense'].includes(String(category))) return res.status(400).json({ success: false, message: 'Invalid category' });
+    const amt = Number(amount);
+    if (!amt || amt <= 0) return res.status(400).json({ success: false, message: 'Amount must be positive' });
+
+    // Enforce company currency
+    let company;
+    try { company = await Company.findOne({ companyId }).lean(); } catch (_) {}
+    if (!company) company = findCompanyFile(companyId);
+    const sym = company?.currencySymbol || '$';
+    const code = company?.currencyCode || mapSymbolToCode(sym) || undefined;
+    const created = await Expense.create({ companyId, month, category, amount: amt, currencySymbol: sym, currencyCode: code, description });
+    return res.json({ success: true, expense: created });
+  } catch (err) {
+    console.error('Expense create error:', err);
+    return res.status(500).json({ success: false, message: 'Server error creating expense' });
+  }
+});
+
+// Fetch expenses for a company and month
+app.get('/api/expenses', async (req, res) => {
+  try {
+    const { companyId, month } = req.query;
+    if (!companyId) return res.status(400).json({ success: false, message: 'Missing companyId' });
+    const query = { companyId };
+    if (month) query.month = String(month);
+    const expenses = await Expense.find(query).sort({ createdAt: -1 }).lean();
+    return res.json({ success: true, expenses });
+  } catch (err) {
+    console.error('Fetch expenses error:', err);
+    return res.status(500).json({ success: false, message: 'Server error fetching expenses' });
+  }
+});
+
+// Finance summary by currency for a month
+app.get('/api/finance/summary', async (req, res) => {
+  try {
+    const { companyId, month } = req.query;
+    if (!companyId) return res.status(400).json({ success: false, message: 'Missing companyId' });
+    const m = String(month || dayjs().format('YYYY-MM'));
+    const start = dayjs(m + '-01').startOf('month').toDate();
+    const end = dayjs(m + '-01').endOf('month').toDate();
+    // Get company currency
+    let company;
+    try { company = await Company.findOne({ companyId }).lean(); } catch (_) {}
+    if (!company) company = findCompanyFile(companyId);
+    const sym = company?.currencySymbol || '$';
+    const code = company?.currencyCode || mapSymbolToCode(sym) || 'UNK';
+
+    // Receipts -> revenue (single currency)
+    const receipts = await Receipt.find({ companyId, receiptDate: { $gte: start, $lte: end } }).lean();
+    const totalRevenue = receipts.reduce((sum, r) => sum + Number(r.amountPaid || 0), 0);
+
+    // Expenses (single currency)
+    const expenses = await Expense.find({ companyId, month: m }).lean();
+    let productionCost = 0;
+    let runningExpenses = 0;
+    expenses.forEach((e) => {
+      if (String(e.category) === 'production') productionCost += Number(e.amount || 0);
+      else runningExpenses += Number(e.amount || 0);
+    });
+    const totalExpenses = productionCost + runningExpenses;
+
+    const netProfit = Number(totalRevenue || 0) - Number(totalExpenses || 0);
+
+    // Align response to simple number fields for client
+    return res.json({ success: true, summary: {
+      month: m,
+      currencyCode: code,
+      symbol: sym,
+      revenue: Number(totalRevenue || 0),
+      expenses: { productionCost, runningExpenses, totalExpenses },
+      net: Number(netProfit || 0),
+    }});
+  } catch (err) {
+    console.error('Finance summary error:', err);
+    return res.status(500).json({ success: false, message: 'Server error computing summary' });
+  }
+});
+
+// Daily revenue totals from receipts for a given month (31 days)
+app.get('/api/finance/revenue-daily', async (req, res) => {
+  try {
+    const { companyId, month } = req.query;
+    if (!companyId) return res.status(400).json({ success: false, message: 'Missing companyId' });
+    const m = String(month || dayjs().format('YYYY-MM'));
+    const start = dayjs(m + '-01').startOf('month').toDate();
+    const end = dayjs(m + '-01').endOf('month').toDate();
+
+    // Resolve company currency
+    let company;
+    try { company = await Company.findOne({ companyId }).lean(); } catch (_) {}
+    if (!company) company = findCompanyFile(companyId);
+    const sym = company?.currencySymbol || '$';
+    const code = company?.currencyCode || mapSymbolToCode(sym) || 'UNK';
+
+    // Fetch receipts within month and aggregate by day
+    // Include receipts whose receiptDate falls within month; fallback to createdAt when receiptDate is missing
+    const receipts = await Receipt.find({ companyId, $or: [
+      { receiptDate: { $gte: start, $lte: end } },
+      { receiptDate: { $exists: false }, createdAt: { $gte: start, $lte: end } },
+    ] }).lean();
+    const days = Array.from({ length: 31 }, () => 0);
+    receipts.forEach((r) => {
+      const d = r.receiptDate ? dayjs(r.receiptDate) : (r.createdAt ? dayjs(r.createdAt) : null);
+      if (!d) return;
+      const dayIdx = d.date() - 1; // 0-based
+      if (dayIdx >= 0 && dayIdx < 31) {
+        days[dayIdx] += Number(r.amountPaid || 0);
+      }
+    });
+    const total = days.reduce((a, b) => a + Number(b || 0), 0);
+    return res.json({ success: true, month: m, currencyCode: code, symbol: sym, days, total });
+  } catch (err) {
+    console.error('Revenue daily error:', err);
+    return res.status(500).json({ success: false, message: 'Server error computing daily revenue' });
+  }
+});
+
+// Daily expenses totals for a given month (31 days)
+app.get('/api/finance/expenses-daily', async (req, res) => {
+  try {
+    const { companyId, month } = req.query;
+    if (!companyId) return res.status(400).json({ success: false, message: 'Missing companyId' });
+    const m = String(month || dayjs().format('YYYY-MM'));
+    // Resolve company currency
+    let company;
+    try { company = await Company.findOne({ companyId }).lean(); } catch (_) {}
+    if (!company) company = findCompanyFile(companyId);
+    const sym = company?.currencySymbol || '$';
+    const code = company?.currencyCode || mapSymbolToCode(sym) || 'UNK';
+
+    const expenses = await Expense.find({ companyId, month: m, category: 'expense' }).lean();
+    const days = Array.from({ length: 31 }, () => 0);
+    expenses.forEach((e) => {
+      let dayIdx = null;
+      if (typeof e.day === 'number' && e.day >= 1 && e.day <= 31) {
+        dayIdx = e.day - 1;
+      } else if (e.createdAt) {
+        dayIdx = dayjs(e.createdAt).date() - 1;
+      }
+      if (dayIdx != null && dayIdx >= 0 && dayIdx < 31) {
+        days[dayIdx] += Number(e.amount || 0);
+      }
+    });
+    const total = days.reduce((a, b) => a + Number(b || 0), 0);
+    return res.json({ success: true, month: m, currencyCode: code, symbol: sym, days, total });
+  } catch (err) {
+    console.error('Expenses daily error:', err);
+    return res.status(500).json({ success: false, message: 'Server error computing daily expenses' });
+  }
+});
+
+// Upsert a daily expense value for a given company and month
+app.post('/api/finance/expenses-daily', async (req, res) => {
+  try {
+    const { companyId, month, day, amount } = req.body || {};
+    if (!companyId) return res.status(400).json({ success: false, message: 'Missing companyId' });
+    const m = String(month || dayjs().format('YYYY-MM'));
+    const d = Number(day);
+    const amt = Number(amount);
+    if (!d || d < 1 || d > 31) return res.status(400).json({ success: false, message: 'Invalid day' });
+    if (amt == null || isNaN(amt) || amt < 0) return res.status(400).json({ success: false, message: 'Invalid amount' });
+
+    // Resolve company currency
+    let company;
+    try { company = await Company.findOne({ companyId }).lean(); } catch (_) {}
+    if (!company) company = findCompanyFile(companyId);
+    const sym = company?.currencySymbol || '$';
+    const code = company?.currencyCode || mapSymbolToCode(sym) || 'UNK';
+
+    // Remove existing entry for this day to avoid duplication
+    await Expense.deleteMany({ companyId, month: m, category: 'expense', day: d });
+    // Create new entry
+    const created = await Expense.create({ companyId, month: m, category: 'expense', amount: amt, currencySymbol: sym, currencyCode: code, description: `Daily Expense D${d}`, day: d });
+    return res.json({ success: true, expense: created });
+  } catch (err) {
+    console.error('Expenses daily upsert error:', err);
+    return res.status(500).json({ success: false, message: 'Server error saving daily expense' });
+  }
+});
+
 // Fetch invoice history for last N months (default 6)
 app.get('/api/invoices', async (req, res) => {
   try {
@@ -997,6 +1319,63 @@ app.get('/api/invoices', async (req, res) => {
   } catch (err) {
     console.error('Fetch invoices error:', err);
     return res.status(500).json({ success: false, message: 'Server error fetching invoices' });
+  }
+});
+
+// Admin: backfill missing currency fields for invoices/receipts based on company
+app.post('/api/admin/backfill-currency', async (req, res) => {
+  try {
+    const adminId = (req.query && req.query.adminId) || (req.body && req.body.adminId) || '';
+    if (String(adminId) !== 'pbmsrvr') return res.status(403).json({ success: false, message: 'Forbidden' });
+    const { companyId } = req.body || {};
+    const companies = [];
+    if (companyId) {
+      const c = await Company.findOne({ companyId }).lean();
+      if (!c) return res.status(404).json({ success: false, message: 'Company not found' });
+      companies.push(c);
+    } else {
+      const list = await Company.find({}, 'companyId currencySymbol currencyCode').lean();
+      companies.push(...list);
+    }
+
+    let updatedInvoices = 0;
+    let updatedReceipts = 0;
+    let updatedExpenses = 0;
+    for (const c of companies) {
+      const sym = c.currencySymbol || '$';
+      const code = c.currencyCode || mapSymbolToCode(sym);
+      // Invoices: set missing currencySymbol/currencyCode
+      const invResult = await Invoice.updateMany(
+        {
+          companyId: c.companyId,
+          $or: [{ currencySymbol: { $exists: false } }, { currencySymbol: null }, { currencySymbol: '' }, { currencyCode: { $exists: false } }],
+        },
+        { $set: { currencySymbol: sym, currencyCode: code } }
+      );
+      updatedInvoices += invResult?.modifiedCount || 0;
+      // Receipts: set missing currencySymbol/currencyCode
+      const rctResult = await Receipt.updateMany(
+        {
+          companyId: c.companyId,
+          $or: [{ currencySymbol: { $exists: false } }, { currencySymbol: null }, { currencySymbol: '' }, { currencyCode: { $exists: false } }],
+        },
+        { $set: { currencySymbol: sym, currencyCode: code } }
+      );
+      updatedReceipts += rctResult?.modifiedCount || 0;
+      const expResult = await Expense.updateMany(
+        {
+          companyId: c.companyId,
+          $or: [{ currencySymbol: { $exists: false } }, { currencySymbol: null }, { currencySymbol: '' }, { currencyCode: { $exists: false } }],
+        },
+        { $set: { currencySymbol: sym, currencyCode: code } }
+      );
+      updatedExpenses += expResult?.modifiedCount || 0;
+    }
+
+    return res.json({ success: true, updatedInvoices, updatedReceipts, updatedExpenses, companies: companies.length });
+  } catch (err) {
+    console.error('Admin backfill currency error:', err);
+    return res.status(500).json({ success: false, message: 'Server error backfilling currency' });
   }
 });
 

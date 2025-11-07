@@ -125,6 +125,57 @@ export async function fetchReceipts(companyId, months = 6) {
   return data;
 }
 
+// Expenses and Finance Summary
+export async function createExpense(payload) {
+  const res = await fetch(`${Config.API_BASE_URL}/api/expenses/create`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  return res.json();
+}
+
+export async function fetchExpenses(companyId, month) {
+  const url = new URL(`${Config.API_BASE_URL}/api/expenses`);
+  url.searchParams.set('companyId', companyId);
+  if (month) url.searchParams.set('month', month);
+  const res = await fetch(url.toString());
+  return res.json();
+}
+
+export async function fetchFinanceSummary(companyId, month) {
+  const url = new URL(`${Config.API_BASE_URL}/api/finance/summary`);
+  url.searchParams.set('companyId', companyId);
+  if (month) url.searchParams.set('month', month);
+  const res = await fetch(url.toString());
+  return res.json();
+}
+
+export async function fetchRevenueDaily(companyId, month) {
+  const url = new URL(`${Config.API_BASE_URL}/api/finance/revenue-daily`);
+  url.searchParams.set('companyId', companyId);
+  if (month) url.searchParams.set('month', month);
+  const res = await fetch(url.toString());
+  return res.json();
+}
+
+export async function fetchExpensesDaily(companyId, month) {
+  const url = new URL(`${Config.API_BASE_URL}/api/finance/expenses-daily`);
+  url.searchParams.set('companyId', companyId);
+  if (month) url.searchParams.set('month', month);
+  const res = await fetch(url.toString());
+  return res.json();
+}
+
+export async function saveExpenseDaily(companyId, month, day, amount) {
+  const res = await fetch(`${Config.API_BASE_URL}/api/finance/expenses-daily`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ companyId, month, day, amount }),
+  });
+  return res.json();
+}
+
 export async function deleteInvoice(companyId, invoiceNumber) {
   const url = new URL(`${Config.API_BASE_URL}/api/invoices/${encodeURIComponent(invoiceNumber)}`);
   url.searchParams.set('companyId', companyId);
@@ -165,5 +216,17 @@ export async function adminScanDuplicates(adminId = 'pbmsrvr') {
   const url = new URL(`${Config.API_BASE_URL}/api/admin/duplicates`);
   url.searchParams.set('adminId', adminId);
   const res = await fetch(url.toString());
+  return res.json();
+}
+
+export async function adminBackfillCurrency(adminId = 'pbmsrvr', companyId) {
+  const url = new URL(`${Config.API_BASE_URL}/api/admin/backfill-currency`);
+  url.searchParams.set('adminId', adminId);
+  const payload = companyId ? { companyId } : {};
+  const res = await fetch(url.toString(), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
   return res.json();
 }

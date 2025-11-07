@@ -84,6 +84,9 @@ const DashboardScreen = ({ navigation }) => {
       case 'history':
         navigation.navigate('InvoiceHistory');
         break;
+      case 'calculator':
+        navigation.navigate('FinancialCalculator');
+        break;
       default:
         // For other features, show coming soon alert
         Alert.alert('Coming Soon', `${itemId} feature will be available soon!`);

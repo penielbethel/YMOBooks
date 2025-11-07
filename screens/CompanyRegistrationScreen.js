@@ -17,6 +17,7 @@ import * as FileSystem from 'expo-file-system';
 import * as FileSystemLegacy from 'expo-file-system/legacy';
 import * as Clipboard from 'expo-clipboard';
 import * as ImagePicker from 'expo-image-picker';
+import * as ImageManipulator from 'expo-image-manipulator';
 import SignatureCanvas from 'react-native-signature-canvas';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors } from '../constants/Colors';
@@ -97,6 +98,54 @@ const CompanyRegistrationScreen = ({ navigation, route }) => {
     }));
   };
 
+  // --- Client-side image compression helpers ---
+  const isDataUrl = (v) => typeof v === 'string' && v.startsWith('data:');
+  const parseDataUrl = (dataUrl) => {
+    try {
+      const [header, b64] = dataUrl.split(',');
+      const mime = header.slice(5, header.indexOf(';')) || 'image/png';
+      return { mime, base64: b64 };
+    } catch {
+      return { mime: 'image/png', base64: null };
+    }
+  };
+  const ensureFileUriFromInput = async (input, kind) => {
+    if (!input) return null;
+    if (isDataUrl(input)) {
+      try {
+        const { base64 } = parseDataUrl(input);
+        if (!base64) return null;
+        const path = `${FileSystem.cacheDirectory || ''}img-${kind}-${Date.now()}.png`;
+        await FileSystem.writeAsStringAsync(path, base64, { encoding: FileSystem.EncodingType.Base64 });
+        return path;
+      } catch {
+        return null;
+      }
+    }
+    return input;
+  };
+  const compressToDataUrl = async (input, kind = 'logo') => {
+    try {
+      const fileUri = await ensureFileUriFromInput(input, kind);
+      if (!fileUri) return null;
+      const bounds = kind === 'signature' ? { width: 600, height: 220 } : { width: 512, height: 512 };
+      const result = await ImageManipulator.manipulateAsync(
+        fileUri,
+        [{ resize: { width: bounds.width, height: bounds.height } }],
+        { compress: 0.7, format: ImageManipulator.SaveFormat.PNG, base64: true }
+      );
+      if (result?.base64) return `data:image/png;base64,${result.base64}`;
+    } catch {}
+    try {
+      const fileUri = await ensureFileUriFromInput(input, kind);
+      if (!fileUri) return null;
+      const base64 = await FileSystemLegacy.readAsStringAsync(fileUri, { encoding: 'base64' });
+      return `data:image/png;base64,${base64}`;
+    } catch {
+      return null;
+    }
+  };
+
   const pickImage = async (type) => {
     try {
       const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -117,13 +166,20 @@ const CompanyRegistrationScreen = ({ navigation, route }) => {
         const uri = result.assets[0].uri;
         if (type === 'logo') {
           try {
-            // Persist a cacheable data URL for the logo so it survives backend omissions
-            const ext = (uri.split('?')[0].split('#')[0].split('.').pop() || '').toLowerCase();
-            const mime = ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg' : 'image/png';
-      const base64 = await FileSystemLegacy.readAsStringAsync(uri, { encoding: 'base64' });
-            const dataUrl = `data:${mime};base64,${base64}`;
-            await AsyncStorage.setItem('companyLogoCache', dataUrl);
-            updateFormData(type, dataUrl);
+            const dataUrl = await compressToDataUrl(uri, 'logo');
+            if (dataUrl) {
+              await AsyncStorage.setItem('companyLogoCache', dataUrl);
+              updateFormData(type, dataUrl);
+            } else {
+              updateFormData(type, uri);
+            }
+          } catch {
+            updateFormData(type, uri);
+          }
+        } else if (type === 'signature') {
+          try {
+            const dataUrl = await compressToDataUrl(uri, 'signature');
+            updateFormData(type, dataUrl || uri);
           } catch {
             updateFormData(type, uri);
           }
@@ -169,26 +225,24 @@ const CompanyRegistrationScreen = ({ navigation, route }) => {
 
     setLoading(true);
     try {
-      // Convert images to base64 (if present)
-      const toBase64 = async (uri) => {
-        try {
-          if (!uri) return null;
-      const base64 = await FileSystemLegacy.readAsStringAsync(uri, { encoding: 'base64' });
-          return `data:image/png;base64,${base64}`;
-        } catch {
-          return null;
+      // Convert and compress images to compact base64 (if present)
+      const toCompressedData = async (val, kind) => {
+        if (!val) return null;
+        if (isDataUrl(val)) {
+          const recompressed = await compressToDataUrl(val, kind);
+          return recompressed || val;
         }
+        return await compressToDataUrl(val, kind);
       };
-      const isDataUrl = (str) => typeof str === 'string' && str.startsWith('data:');
 
       const payload = {
         name: formData.companyName,
         address: formData.address,
         email: formData.email,
         phone: formData.phoneNumber,
-        // Preserve existing data URLs, otherwise convert selected file URIs to base64
-        logo: formData.logo ? (isDataUrl(formData.logo) ? formData.logo : await toBase64(formData.logo)) : null,
-        signature: formData.signature ? (isDataUrl(formData.signature) ? formData.signature : await toBase64(formData.signature)) : null,
+        // Always send compact base64 for smaller payloads
+        logo: await toCompressedData(formData.logo, 'logo'),
+        signature: await toCompressedData(formData.signature, 'signature'),
         // Send both modern and legacy keys so server can map reliably
         bankAccountNumber: formData.bankAccountNumber,
         bankAccountName: formData.bankAccountName,
@@ -478,9 +532,10 @@ const CompanyRegistrationScreen = ({ navigation, route }) => {
           </Text>
           <View style={{ flex: 1, backgroundColor: Colors.white, borderWidth: 1, borderColor: Colors.border, borderRadius: 8 }}>
             <SignatureCanvas
-              onOK={(sig) => {
-                // sig is a base64 data URL
-                updateFormData('signature', sig);
+              onOK={async (sig) => {
+                // sig is a base64 data URL; recompress for smaller payload
+                const compact = await compressToDataUrl(sig, 'signature');
+                updateFormData('signature', compact || sig);
                 setSignatureModalVisible(false);
                 Alert.alert('Signature Saved', 'Your electronic signature has been captured.');
               }}

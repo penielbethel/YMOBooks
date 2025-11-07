@@ -16,6 +16,7 @@ import SettingsScreen from './screens/SettingsScreen';
 import CreateInvoiceScreen from './screens/CreateInvoiceScreen';
 import InvoiceHistoryScreen from './screens/InvoiceHistoryScreen';
 import SuperAdminScreen from './screens/SuperAdminScreen';
+import FinancialCalculatorScreen from './screens/FinancialCalculatorScreen';
 
 // Import constants
 import { Colors } from './constants/Colors';
@@ -162,6 +163,13 @@ export default function App() {
         <Stack.Screen 
           name="TemplatePicker" 
           component={TemplatePickerScreen}
+          options={{
+            animationEnabled: true,
+          }}
+        />
+        <Stack.Screen 
+          name="FinancialCalculator" 
+          component={FinancialCalculatorScreen}
           options={{
             animationEnabled: true,
           }}
