@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, Alert, TextInput, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, Alert, TextInput, ScrollView, RefreshControl } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors } from '../constants/Colors';
 import { Fonts } from '../constants/Fonts';
@@ -11,6 +11,7 @@ const SettingsScreen = ({ navigation }) => {
   const [country, setCountry] = useState('');
   const [currencySymbol, setCurrencySymbol] = useState('');
   const [saving, setSaving] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   const symbolToCode = (sym) => {
     switch (String(sym || '').trim()) {
@@ -35,6 +36,25 @@ const SettingsScreen = ({ navigation }) => {
       } catch (_) {}
     })();
   }, []);
+
+  const reloadCompanyData = async () => {
+    try {
+      const stored = await AsyncStorage.getItem('companyData');
+      const c = stored ? JSON.parse(stored) : null;
+      setCompany(c);
+      setCountry(c?.country || '');
+      setCurrencySymbol(c?.currencySymbol || '$');
+    } catch (_) {}
+  };
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await reloadCompanyData();
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   const handleLogout = async () => {
     try {
@@ -90,7 +110,7 @@ const SettingsScreen = ({ navigation }) => {
         <Text style={styles.subtitle}>Manage your account and preferences</Text>
       </View>
 
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Global Settings</Text>
           <View style={styles.formRow}>

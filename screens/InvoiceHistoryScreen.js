@@ -5,7 +5,7 @@ import dayjs from 'dayjs';
 import { Colors } from '../constants/Colors';
 import { Fonts } from '../constants/Fonts';
 import { Spacing } from '../constants/Spacing';
-import { fetchInvoices, fetchReceipts, createReceipt, deleteInvoice } from '../utils/api';
+import { fetchInvoices, fetchReceipts, createReceipt, deleteInvoice, deleteReceiptByInvoice } from '../utils/api';
 import * as FileSystem from 'expo-file-system';
 import * as FileSystemLegacy from 'expo-file-system/legacy';
 import * as Print from 'expo-print';
@@ -387,6 +387,38 @@ const InvoiceHistoryScreen = ({ navigation, route }) => {
             onPress={() => onGenerateReceipt(item)}>
             <Text style={styles.smallBtnText}>{downloadingFor ? 'Saving…' : 'Receipt'}</Text>
           </TouchableOpacity>
+          {receiptsByInvoice[item.invoiceNumber] ? (
+            <TouchableOpacity
+              style={[styles.smallBtn, styles.deleteBtn]}
+              onPress={() => {
+                Alert.alert(
+                  'Delete Receipt',
+                  `Remove receipt(s) for ${item.invoiceNumber}? This will reduce revenue.`,
+                  [
+                    { text: 'Cancel', style: 'cancel' },
+                    {
+                      text: 'Delete', style: 'destructive', onPress: async () => {
+                        try {
+                          const res = await deleteReceiptByInvoice(companyId, item.invoiceNumber);
+                          if (res?.success) {
+                            setReceiptsByInvoice((prev) => ({ ...prev, [item.invoiceNumber]: false }));
+                            Alert.alert('Deleted', 'Receipt removed and revenue synced');
+                            await refetch();
+                          } else {
+                            Alert.alert('Failed', res?.message || 'Could not delete receipt');
+                          }
+                        } catch (_e) {
+                          Alert.alert('Error', 'Delete failed');
+                        }
+                      }
+                    },
+                  ]
+                );
+              }}
+            >
+              <Text style={styles.smallBtnText}>Delete Receipt</Text>
+            </TouchableOpacity>
+          ) : null}
           <TouchableOpacity style={[styles.smallBtn, styles.deleteBtn]} onPress={() => onDeleteInvoice(item)}>
             <Text style={styles.smallBtnText}>Delete</Text>
           </TouchableOpacity>

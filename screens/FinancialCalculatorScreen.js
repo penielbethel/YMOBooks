@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, ScrollView, TextInput, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, ScrollView, TextInput, Alert, ActivityIndicator, RefreshControl } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import dayjs from 'dayjs';
 import { Colors } from '../constants/Colors';
@@ -15,6 +15,8 @@ const FinancialCalculatorScreen = ({ navigation }) => {
   const [year, setYear] = useState(dayjs().year());
   const [revenueDaily, setRevenueDaily] = useState(Array.from({ length: 31 }, () => 0));
   const [expensesDaily, setExpensesDaily] = useState(Array.from({ length: 31 }, () => 0));
+  const [expensesDailyInput, setExpensesDailyInput] = useState(Array.from({ length: 31 }, () => '0'));
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -46,8 +48,11 @@ const FinancialCalculatorScreen = ({ navigation }) => {
       if (expDailyRes?.success && Array.isArray(expDailyRes.days)) {
         const arrE = Array.from({ length: 31 }, (_, i) => Number(expDailyRes.days[i] || 0));
         setExpensesDaily(arrE);
+        setExpensesDailyInput(arrE.map((v) => String(v)));
       } else {
-        setExpensesDaily(Array.from({ length: 31 }, () => 0));
+        const zeros = Array.from({ length: 31 }, () => 0);
+        setExpensesDaily(zeros);
+        setExpensesDailyInput(zeros.map((v) => String(v)));
       }
     } catch (err) {
       Alert.alert('Error', 'Failed to load finance data');
@@ -73,27 +78,39 @@ const FinancialCalculatorScreen = ({ navigation }) => {
   const daysInSelectedMonth = 31; // Fixed 31 days per requirement
   const currency = companyData?.currencySymbol || '$';
 
-  const setDailyExpense = async (dayIndex, value) => {
-    const num = Number(value || 0);
-    const safe = isNaN(num) ? 0 : num;
+  const updateDailyExpenseInput = (dayIndex, text) => {
+    // allow digits and one decimal point; strip invalid chars
+    const sanitized = String(text || '').replace(/[^0-9.]/g, '')
+      .replace(/(\..*)\./g, '$1');
+    setExpensesDailyInput((prev) => {
+      const next = [...prev];
+      next[dayIndex] = sanitized;
+      return next;
+    });
+  };
+
+  const persistDailyExpense = async (dayIndex) => {
     if (!companyData?.companyId) return;
-    await saveExpenseDaily(companyData.companyId, month, dayIndex + 1, safe);
-    // Refresh after save
+    const valText = expensesDailyInput?.[dayIndex] ?? '0';
+    const num = parseFloat(valText);
+    const safe = isNaN(num) ? 0 : num;
     try {
+      await saveExpenseDaily(companyData.companyId, month, dayIndex + 1, safe);
       const expDailyRes = await fetchExpensesDaily(companyData.companyId, month);
       if (expDailyRes?.success && Array.isArray(expDailyRes.days)) {
         const arrE = Array.from({ length: 31 }, (_, i) => Number(expDailyRes.days[i] || 0));
         setExpensesDaily(arrE);
+        setExpensesDailyInput(arrE.map((v) => String(v)));
       }
     } catch (_) {}
   };
 
   const monthlyTotals = useMemo(() => {
-    const exp = (expensesDaily || []).reduce((a, b) => a + Number(b || 0), 0);
+    const exp = (expensesDailyInput || []).reduce((a, b) => a + (parseFloat(b) || 0), 0);
     const rev = (revenueDaily || []).reduce((a, b) => a + Number(b || 0), 0);
     const net = rev - exp;
     return { exp, rev, net };
-  }, [expensesDaily, revenueDaily]);
+  }, [expensesDailyInput, revenueDaily]);
 
   const [annualTotals, setAnnualTotals] = useState({ exp: 0, rev: 0 });
   const computeAnnualTotals = useCallback(async () => {
@@ -157,7 +174,11 @@ const FinancialCalculatorScreen = ({ navigation }) => {
       {loading ? (
         <View style={styles.loadingBox}><ActivityIndicator color={Colors.primary} /></View>
       ) : (
-        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="always"
+          keyboardDismissMode="none"
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); try { await loadData(); await computeAnnualTotals(); } finally { setRefreshing(false); } }} />}
+        >
           <Section title="Select Month">
             <View style={styles.monthsRow}>
               {monthsOptions.map((m) => (
@@ -199,8 +220,11 @@ const FinancialCalculatorScreen = ({ navigation }) => {
                   placeholder="0"
                   placeholderTextColor={Colors.textSecondary}
                   keyboardType="decimal-pad"
-                  value={String(expensesDaily?.[i] ?? '')}
-                  onChangeText={(t) => setDailyExpense(i, t)}
+                  value={String(expensesDailyInput?.[i] ?? '')}
+                  onChangeText={(t) => updateDailyExpenseInput(i, t)}
+                  onBlur={() => persistDailyExpense(i)}
+                  blurOnSubmit={false}
+                  returnKeyType="done"
                 />
                 <Text style={[styles.dailyCell, { flex: 1, textAlign: 'right' }]}>
                   {`${currency}${Number(revenueDaily?.[i] || 0).toLocaleString()}`}

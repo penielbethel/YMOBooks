@@ -1113,6 +1113,93 @@ app.get('/api/receipts', async (req, res) => {
   }
 });
 
+// Delete a single receipt by receiptNumber and sync invoice status
+app.delete('/api/receipts/:receiptNumber', async (req, res) => {
+  try {
+    const { companyId } = req.query;
+    const { receiptNumber } = req.params;
+    if (!companyId) return res.status(400).json({ success: false, message: 'companyId is required' });
+    if (!receiptNumber) return res.status(400).json({ success: false, message: 'receiptNumber is required' });
+
+    const found = await Receipt.findOneAndDelete({ companyId, receiptNumber }).lean();
+    if (!found) return res.status(404).json({ success: false, message: 'Receipt not found' });
+
+    // Remove generated PDF file if exists
+    try {
+      const filename = found.pdfPath ? (found.pdfPath.split('/').pop() || '') : `${receiptNumber}.pdf`;
+      if (filename) {
+        const filePath = path.join(RECEIPTS_DIR, filename);
+        if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+      }
+    } catch (fileErr) {
+      console.warn('Failed to remove receipt PDF:', fileErr.message);
+    }
+
+    // If linked to an invoice, mark unpaid when there are no remaining receipts
+    if (found.invoiceNumber) {
+      try {
+        const remaining = await Receipt.countDocuments({ companyId, invoiceNumber: found.invoiceNumber });
+        if (remaining === 0) {
+          await Invoice.updateOne(
+            { companyId, invoiceNumber: found.invoiceNumber },
+            { $set: { status: 'unpaid', paidAt: null } }
+          );
+        }
+      } catch (e) {
+        console.warn('Sync invoice status after receipt delete failed:', e.message);
+      }
+    }
+
+    return res.json({ success: true });
+  } catch (err) {
+    console.error('Delete receipt error:', err);
+    return res.status(500).json({ success: false, message: 'Server error deleting receipt' });
+  }
+});
+
+// Delete all receipts for a specific invoice and sync invoice status
+app.delete('/api/receipts/by-invoice/:invoiceNumber', async (req, res) => {
+  try {
+    const { companyId } = req.query;
+    const { invoiceNumber } = req.params;
+    if (!companyId) return res.status(400).json({ success: false, message: 'companyId is required' });
+    if (!invoiceNumber) return res.status(400).json({ success: false, message: 'invoiceNumber is required' });
+
+    const receipts = await Receipt.find({ companyId, invoiceNumber }).lean();
+    if (!receipts.length) return res.status(404).json({ success: false, message: 'No receipts found for invoice' });
+
+    // Remove files
+    for (const r of receipts) {
+      try {
+        const filename = r.pdfPath ? (r.pdfPath.split('/').pop() || '') : `${r.receiptNumber}.pdf`;
+        if (filename) {
+          const filePath = path.join(RECEIPTS_DIR, filename);
+          if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+        }
+      } catch (fileErr) {
+        console.warn('Failed to remove receipt PDF:', fileErr.message);
+      }
+    }
+
+    await Receipt.deleteMany({ companyId, invoiceNumber });
+
+    // Mark invoice as unpaid
+    try {
+      await Invoice.updateOne(
+        { companyId, invoiceNumber },
+        { $set: { status: 'unpaid', paidAt: null } }
+      );
+    } catch (e) {
+      console.warn('Sync invoice status after bulk receipt delete failed:', e.message);
+    }
+
+    return res.json({ success: true, deletedCount: receipts.length });
+  } catch (err) {
+    console.error('Delete receipts by invoice error:', err);
+    return res.status(500).json({ success: false, message: 'Server error deleting receipts' });
+  }
+});
+
 // Create expense entry
 app.post('/api/expenses/create', async (req, res) => {
   try {

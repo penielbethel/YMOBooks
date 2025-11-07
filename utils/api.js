@@ -125,6 +125,20 @@ export async function fetchReceipts(companyId, months = 6) {
   return data;
 }
 
+export async function deleteReceipt(companyId, receiptNumber) {
+  const url = new URL(`${Config.API_BASE_URL}/api/receipts/${encodeURIComponent(receiptNumber)}`);
+  url.searchParams.set('companyId', companyId);
+  const res = await fetch(url.toString(), { method: 'DELETE' });
+  return res.json();
+}
+
+export async function deleteReceiptByInvoice(companyId, invoiceNumber) {
+  const url = new URL(`${Config.API_BASE_URL}/api/receipts/by-invoice/${encodeURIComponent(invoiceNumber)}`);
+  url.searchParams.set('companyId', companyId);
+  const res = await fetch(url.toString(), { method: 'DELETE' });
+  return res.json();
+}
+
 // Expenses and Finance Summary
 export async function createExpense(payload) {
   const res = await fetch(`${Config.API_BASE_URL}/api/expenses/create`, {

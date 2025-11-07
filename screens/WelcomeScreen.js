@@ -8,7 +8,8 @@ import {
   Image,
   SafeAreaView,
   Dimensions,
-  Linking
+  Linking,
+  RefreshControl,
 } from 'react-native';
 import { Colors } from '../constants/Colors';
 import { Fonts } from '../constants/Fonts';
@@ -17,6 +18,7 @@ import { Spacing } from '../constants/Spacing';
 const { width, height } = Dimensions.get('window');
 
 const WelcomeScreen = ({ navigation }) => {
+  const [refreshing, setRefreshing] = React.useState(false);
   const features = [
     {
       icon: '📄',
@@ -55,6 +57,7 @@ const WelcomeScreen = ({ navigation }) => {
       <ScrollView 
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); setTimeout(() => setRefreshing(false), 400); }} />}
       >
         {/* Header Section */}
         <View style={styles.header}>

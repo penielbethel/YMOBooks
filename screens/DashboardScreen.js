@@ -9,7 +9,8 @@ import {
   TouchableOpacity,
   Image,
   SafeAreaView,
-  Alert
+  Alert,
+  RefreshControl,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors } from '../constants/Colors';
@@ -31,6 +32,7 @@ const MenuItem = memo(({ item, onPress }) => (
 
 const DashboardScreen = ({ navigation }) => {
   const [companyData, setCompanyData] = useState(null);
+  const [refreshing, setRefreshing] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -51,6 +53,15 @@ const DashboardScreen = ({ navigation }) => {
       Alert.alert('Error', 'Failed to load company data');
     }
   };
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await loadCompanyData();
+    } finally {
+      setRefreshing(false);
+    }
+  }, []);
 
   const menuItems = useMemo(() => ([
     {
@@ -108,6 +119,7 @@ const DashboardScreen = ({ navigation }) => {
       <ScrollView 
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
         {/* Header */}
         <View style={styles.header}>
