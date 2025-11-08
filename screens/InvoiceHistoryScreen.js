@@ -31,6 +31,9 @@ const InvoiceHistoryScreen = ({ navigation, route }) => {
   const [paidFilter, setPaidFilter] = useState('ALL'); // ALL | PAID | UNPAID
   const [refreshing, setRefreshing] = useState(false);
   const [collapsedMap, setCollapsedMap] = useState({});
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedInvoicesMap, setSelectedInvoicesMap] = useState({});
+  const [bulkDeleting, setBulkDeleting] = useState(false);
 
   // Persist and restore filters/search
   useEffect(() => {
@@ -369,9 +372,66 @@ const InvoiceHistoryScreen = ({ navigation, route }) => {
     );
   };
 
+  const toggleSelectInvoice = (invoiceNumber) => {
+    setSelectedInvoicesMap((prev) => ({ ...prev, [invoiceNumber]: !prev[invoiceNumber] }));
+  };
+
+  const clearSelection = () => setSelectedInvoicesMap({});
+
+  const selectAllVisible = () => {
+    const map = {};
+    visibleInvoices.forEach((inv) => { map[inv.invoiceNumber] = true; });
+    setSelectedInvoicesMap(map);
+  };
+
+  const deleteSelectedInvoices = async () => {
+    if (!companyId) return Alert.alert('Missing Company', 'Company ID not found');
+    const targets = Object.keys(selectedInvoicesMap).filter((k) => selectedInvoicesMap[k]);
+    if (!targets.length) return Alert.alert('Select invoices', 'Please select at least one invoice to delete');
+    Alert.alert(
+      'Delete Selected Invoices',
+      `Delete ${targets.length} selected invoice${targets.length === 1 ? '' : 's'}?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Delete', style: 'destructive', onPress: async () => {
+          try {
+            setBulkDeleting(true);
+            let successCount = 0;
+            for (const invNum of targets) {
+              try {
+                const res = await deleteInvoice(companyId, invNum);
+                if (res?.success) successCount++;
+              } catch (_) {}
+            }
+            if (successCount > 0) {
+              setInvoices((prev) => prev.filter((x) => !selectedInvoicesMap[x.invoiceNumber]));
+              clearSelection();
+              try { await refetch(); } catch (_) {}
+              Alert.alert('Deleted', `Removed ${successCount} invoice${successCount === 1 ? '' : 's'} from history`);
+            } else {
+              Alert.alert('Failed', 'Could not delete selected invoices');
+            }
+          } finally {
+            setBulkDeleting(false);
+          }
+        } },
+      ]
+    );
+  };
+
   const renderItem = ({ item }) => (
     <View style={styles.row}>
-      <TouchableOpacity style={styles.rowLeft} onPress={() => openInvoicePreview(item)}>
+      {selectMode ? (
+        <TouchableOpacity
+          onPress={() => toggleSelectInvoice(item.invoiceNumber)}
+          style={[styles.selectCheckbox, selectedInvoicesMap[item.invoiceNumber] && styles.selectCheckboxSelected]}
+        >
+          {selectedInvoicesMap[item.invoiceNumber] ? (
+            <Text style={styles.selectCheckboxTick}>✓</Text>
+          ) : null}
+        </TouchableOpacity>
+      ) : null}
+      <TouchableOpacity style={[styles.rowLeft, selectMode && { marginLeft: 8 }]} onPress={() => openInvoicePreview(item)}>
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
           <Text style={styles.invNumber}>{item.invoiceNumber}</Text>
           {receiptsByInvoice[item.invoiceNumber] ? (
@@ -573,10 +633,34 @@ const InvoiceHistoryScreen = ({ navigation, route }) => {
             </View>
           </View>
 
+          {/* Selection Toolbar */}
+          <View style={styles.selectionBar}>
+            <TouchableOpacity
+              style={[styles.selectionBtn, selectMode && styles.selectionBtnActive]}
+              onPress={() => {
+                const next = !selectMode;
+                setSelectMode(next);
+                if (!next) clearSelection();
+              }}
+            >
+              <Text style={[styles.selectionBtnText, selectMode && { color: Colors.white }]}>{selectMode ? 'Exit Select' : 'Select'}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.selectionBtn, { marginLeft: 8 }]} disabled={!selectMode || bulkDeleting} onPress={selectAllVisible}>
+              <Text style={styles.selectionBtnText}>Select All</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.selectionBtn, { marginLeft: 8 }]} disabled={!selectMode || bulkDeleting} onPress={clearSelection}>
+              <Text style={styles.selectionBtnText}>Clear</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.selectionBtn, styles.deleteBtn, { marginLeft: 8, opacity: (!selectMode || bulkDeleting) ? 0.7 : 1 }]} disabled={!selectMode || bulkDeleting} onPress={deleteSelectedInvoices}>
+              <Text style={styles.smallBtnText}>{bulkDeleting ? 'Deleting…' : 'Delete Selected'}</Text>
+            </TouchableOpacity>
+          </View>
+
           <SectionList
             sections={displaySections}
             keyExtractor={(item) => item._id || item.invoiceNumber}
             renderItem={renderItem}
+            stickySectionHeadersEnabled
             renderSectionHeader={({ section }) => (
               <TouchableOpacity style={styles.sectionHeader} onPress={() => setCollapsedMap((prev) => ({ ...prev, [section.key]: !prev[section.key] }))}>
                 <View style={styles.sectionHeaderRow}>
@@ -770,10 +854,37 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.md,
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
+  },
+  selectCheckbox: {
+    width: 20,
+    height: 20,
+    borderRadius: 4,
+    borderWidth: 2,
+    borderColor: Colors.gray[300],
+    marginRight: 8,
+  },
+  selectCheckboxSelected: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
+  },
+  selectCheckboxTick: {
+    color: Colors.white,
+    fontSize: Fonts.sizes.sm,
+    textAlign: 'center',
+    lineHeight: 16,
   },
   sectionHeader: {
     paddingHorizontal: Spacing.lg,
     paddingVertical: Spacing.sm,
+    backgroundColor: Colors.gray[100],
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.gray[200],
   },
   sectionHeaderRow: {
     flexDirection: 'row',
@@ -864,6 +975,26 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     color: Colors.textSecondary,
+  },
+  selectionBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: Spacing.lg,
+    marginTop: Spacing.sm,
+    marginBottom: Spacing.sm,
+  },
+  selectionBtn: {
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 6,
+    backgroundColor: Colors.gray[200],
+  },
+  selectionBtnActive: {
+    backgroundColor: Colors.primary,
+  },
+  selectionBtnText: {
+    color: Colors.text,
+    fontWeight: Fonts.weights.semiBold,
   },
 });
 

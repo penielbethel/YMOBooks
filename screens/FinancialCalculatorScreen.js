@@ -18,6 +18,15 @@ const FinancialCalculatorScreen = ({ navigation }) => {
   const [expensesDailyInput, setExpensesDailyInput] = useState(Array.from({ length: 31 }, () => '0'));
   const [refreshing, setRefreshing] = useState(false);
   const [toast, setToast] = useState({ visible: false, message: '', type: 'success' });
+  const [busy, setBusy] = useState({ visible: false, message: '' });
+
+  const showBusy = useCallback((message) => {
+    setBusy({ visible: true, message });
+  }, []);
+
+  const hideBusy = useCallback(() => {
+    setBusy({ visible: false, message: '' });
+  }, []);
 
   useEffect(() => {
     (async () => {
@@ -31,6 +40,8 @@ const FinancialCalculatorScreen = ({ navigation }) => {
   }, []);
 
   // Removed AsyncStorage P&L persistence; expenses are stored in DB per day.
+
+  // Removed auto-save timers and related cleanup per request
 
   const loadData = useCallback(async () => {
     if (!companyData?.companyId) return;
@@ -86,13 +97,21 @@ const FinancialCalculatorScreen = ({ navigation }) => {
   const daysInSelectedMonth = 31; // Fixed 31 days per requirement
   const currency = companyData?.currencySymbol || '$';
 
+  // Real calendar day names for the selected month
+  const dayNamesForMonth = useMemo(() => {
+    const base = dayjs(month);
+    const dim = base.daysInMonth();
+    return Array.from({ length: 31 }, (_, i) => {
+      const dayNum = i + 1;
+      return dayNum <= dim ? base.date(dayNum).format('dddd') : '-';
+    });
+  }, [month]);
+
   const updateDailyExpenseInput = (dayIndex, text) => {
-    // allow digits and one decimal point; strip invalid chars
-    const sanitized = String(text || '').replace(/[^0-9.]/g, '')
-      .replace(/(\..*)\./g, '$1');
+    // Do not sanitize: keep typing free and uninterrupted
     setExpensesDailyInput((prev) => {
       const next = [...prev];
-      next[dayIndex] = sanitized;
+      next[dayIndex] = String(text ?? '');
       return next;
     });
   };
@@ -103,14 +122,25 @@ const FinancialCalculatorScreen = ({ navigation }) => {
     const num = parseFloat(valText);
     const safe = isNaN(num) ? 0 : num;
     try {
+      showBusy('Please wait while we save your entry...');
+      const oldVal = Number(expensesDaily?.[dayIndex] || 0);
       await saveExpenseDaily(companyData.companyId, month, dayIndex + 1, safe);
-      const expDailyRes = await fetchExpensesDaily(companyData.companyId, month);
-      if (expDailyRes?.success && Array.isArray(expDailyRes.days)) {
-        const arrE = Array.from({ length: 31 }, (_, i) => Number(expDailyRes.days[i] || 0));
-        setExpensesDaily(arrE);
-        setExpensesDailyInput(arrE.map((v) => String(v)));
+      // Update local numeric array without overriding user's current typed string
+      setExpensesDaily((prev) => {
+        const next = [...prev];
+        next[dayIndex] = safe;
+        return next;
+      });
+      if (dayjs(month).year() === year) {
+        const delta = safe - oldVal;
+        setAnnualTotals((prev) => ({ ...prev, exp: prev.exp + delta }));
       }
-    } catch (_) {}
+      showToast('Saved entry', 'success');
+    } catch (_) {
+      Alert.alert('Error', 'Failed to save entry');
+    } finally {
+      hideBusy();
+    }
   };
 
   const monthlyTotals = useMemo(() => {
@@ -222,7 +252,7 @@ const FinancialCalculatorScreen = ({ navigation }) => {
             </View>
             {Array.from({ length: daysInSelectedMonth }).map((_, i) => (
               <View key={i} style={styles.dailyRow}>
-                <Text style={[styles.dailyCell, { flex: 0.6 }]}>{i + 1}</Text>
+                <Text style={[styles.dailyCell, { flex: 1 }]}>{`Day ${i + 1} (${dayNamesForMonth[i]})`}</Text>
                 <TextInput
                   style={[styles.input, styles.dailyInput]}
                   placeholder="0"
@@ -230,10 +260,15 @@ const FinancialCalculatorScreen = ({ navigation }) => {
                   keyboardType="decimal-pad"
                   value={String(expensesDailyInput?.[i] ?? '')}
                   onChangeText={(t) => updateDailyExpenseInput(i, t)}
-                  onBlur={() => persistDailyExpense(i)}
                   blurOnSubmit={false}
                   returnKeyType="done"
                 />
+                <TouchableOpacity
+                  style={styles.entrySaveButton}
+                  onPress={() => persistDailyExpense(i)}
+                >
+                  <Text style={styles.entrySaveText}>Save Entry</Text>
+                </TouchableOpacity>
                 <Text style={[styles.dailyCell, { flex: 1, textAlign: 'right' }]}>
                   {`${currency}${Number(revenueDaily?.[i] || 0).toLocaleString()}`}
                 </Text>
@@ -249,16 +284,23 @@ const FinancialCalculatorScreen = ({ navigation }) => {
                 style={[styles.saveButton, { flex: 1 }]}
                 onPress={async () => {
                   if (!companyData?.companyId) return;
-                  // Clear each day to 0 via server
-                  for (let i = 0; i < 31; i++) {
-                    try { await saveExpenseDaily(companyData.companyId, month, i + 1, 0); } catch (_) {}
-                  }
-                  const expDailyRes = await fetchExpensesDaily(companyData.companyId, month);
-                  if (expDailyRes?.success && Array.isArray(expDailyRes.days)) {
-                    const arrE = Array.from({ length: 31 }, (_, j) => Number(expDailyRes.days[j] || 0));
-                    setExpensesDaily(arrE);
-                    setExpensesDailyInput(arrE.map((v) => String(v)));
-                    showToast(`Cleared daily expenses for ${dayjs(month).format('MMMM YYYY')}`, 'success');
+                  showBusy('Please wait while we clear the month...');
+                  try {
+                    const prevMonthExp = Number(monthlyTotals.exp || 0);
+                    const res = await deleteExpenses(companyData.companyId, month);
+                    const zeros = Array.from({ length: 31 }, () => 0);
+                    setExpensesDaily(zeros);
+                    setExpensesDailyInput(zeros.map((v) => String(v)));
+                    if (dayjs(month).year() === year) {
+                      setAnnualTotals((prev) => ({ ...prev, exp: prev.exp - prevMonthExp }));
+                    }
+                    if (res?.success) {
+                      showToast(`Cleared daily expenses for ${dayjs(month).format('MMMM YYYY')}`, 'success');
+                    } else {
+                      Alert.alert('Error', 'Failed to clear month');
+                    }
+                  } finally {
+                    hideBusy();
                   }
                 }}
               >
@@ -278,10 +320,15 @@ const FinancialCalculatorScreen = ({ navigation }) => {
                         style: 'destructive',
                         onPress: async () => {
                           try {
-                            setLoading(true);
+                            showBusy('Please wait while we purge this month...');
+                            const prevMonthExp = Number(monthlyTotals.exp || 0);
                             const res = await deleteExpenses(companyData.companyId, month);
-                            await loadData();
-                            await computeAnnualTotals();
+                            const zeros = Array.from({ length: 31 }, () => 0);
+                            setExpensesDaily(zeros);
+                            setExpensesDailyInput(zeros.map((v) => String(v)));
+                            if (dayjs(month).year() === year) {
+                              setAnnualTotals((prev) => ({ ...prev, exp: prev.exp - prevMonthExp }));
+                            }
                             if (res?.success) {
                               const count = Number(res?.deletedCount || 0);
                               showToast(`Purged ${count} expense${count === 1 ? '' : 's'} for ${dayjs(month).format('MMMM YYYY')}`, 'success');
@@ -291,7 +338,7 @@ const FinancialCalculatorScreen = ({ navigation }) => {
                           } catch (_) {
                             Alert.alert('Error', 'Failed to purge expenses');
                           } finally {
-                            setLoading(false);
+                            hideBusy();
                           }
                         },
                       },
@@ -313,6 +360,7 @@ const FinancialCalculatorScreen = ({ navigation }) => {
             </Text>
           </Section>
       </ScrollView>
+      )}
       {toast.visible && (
         <View
           style={[
@@ -323,11 +371,19 @@ const FinancialCalculatorScreen = ({ navigation }) => {
           <Text style={styles.toastText}>{toast.message}</Text>
         </View>
       )}
+      {busy.visible && (
+        <View
+          style={[styles.toast, styles.toastInfo, { flexDirection: 'row', alignItems: 'center', gap: 8 }]}
+        >
+          <ActivityIndicator color={Colors.white} size="small" />
+          <Text style={styles.toastText}>{busy.message}</Text>
+        </View>
+      )}
     </SafeAreaView>
   );
 };
 
-const styles = StyleSheet.create({
+  const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
   header: { padding: Spacing.lg },
   backButton: { paddingVertical: 8, paddingHorizontal: 12, borderRadius: 8, backgroundColor: Colors.gray[200], alignSelf: 'flex-start' },
@@ -358,9 +414,10 @@ const styles = StyleSheet.create({
   saveButton: { backgroundColor: Colors.success, paddingVertical: 14, borderRadius: 10, alignItems: 'center', marginTop: Spacing.sm, minHeight: 44, justifyContent: 'center' },
   purgeButton: { backgroundColor: Colors.error, paddingVertical: 14, borderRadius: 10, alignItems: 'center', marginTop: Spacing.sm, minHeight: 44, justifyContent: 'center' },
   toast: { position: 'absolute', bottom: 24, left: 16, right: 16, paddingVertical: 10, paddingHorizontal: 12, borderRadius: 8, alignItems: 'center', shadowColor: Colors.black, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.15, shadowRadius: 4, elevation: 2 },
-  toastSuccess: { backgroundColor: Colors.success },
-  toastError: { backgroundColor: Colors.error },
-  toastText: { color: Colors.white, fontWeight: '800' },
+    toastSuccess: { backgroundColor: Colors.success },
+    toastError: { backgroundColor: Colors.error },
+    toastInfo: { backgroundColor: Colors.primary },
+    toastText: { color: Colors.white, fontWeight: '800' },
   saveButtonDisabled: { opacity: 0.6 },
   saveButtonText: { color: Colors.white, fontWeight: '800' },
   loadingBox: { flex: 1, alignItems: 'center', justifyContent: 'center' },
@@ -372,8 +429,10 @@ const styles = StyleSheet.create({
   dailyHeaderCell: { color: Colors.textSecondary },
   dailyRow: { flexDirection: 'row', gap: 8, alignItems: 'center', marginBottom: 6 },
   dailyCell: { color: Colors.textSecondary },
-  dailyInput: { flex: 1, textAlign: 'right' },
-  conclusionText: { color: Colors.text, fontWeight: '700' },
-});
+    dailyInput: { flex: 1, textAlign: 'right' },
+    entrySaveButton: { backgroundColor: Colors.primary, paddingVertical: 10, paddingHorizontal: 12, borderRadius: 8, marginLeft: 8 },
+    entrySaveText: { color: Colors.white, fontWeight: '700' },
+    conclusionText: { color: Colors.text, fontWeight: '700' },
+  });
 
 export default FinancialCalculatorScreen;
