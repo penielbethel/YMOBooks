@@ -1239,6 +1239,22 @@ app.get('/api/expenses', async (req, res) => {
   }
 });
 
+// Purge expenses for a company (optional: by month and/or category)
+app.delete('/api/expenses', async (req, res) => {
+  try {
+    const { companyId, month, category } = req.query;
+    if (!companyId) return res.status(400).json({ success: false, message: 'Missing companyId' });
+    const query = { companyId };
+    if (month) query.month = String(month);
+    if (category) query.category = String(category);
+    const result = await Expense.deleteMany(query);
+    return res.json({ success: true, deletedCount: result?.deletedCount || 0 });
+  } catch (err) {
+    console.error('Delete expenses error:', err);
+    return res.status(500).json({ success: false, message: 'Server error deleting expenses' });
+  }
+});
+
 // Finance summary by currency for a month
 app.get('/api/finance/summary', async (req, res) => {
   try {
@@ -1474,6 +1490,28 @@ app.delete('/api/invoices/:invoiceNumber', async (req, res) => {
     if (!companyId || !invoiceNumber) {
       return res.status(400).json({ success: false, message: 'companyId and invoiceNumber are required' });
     }
+
+    // First, delete any receipts tied to this invoice (and their PDFs) so revenue syncs
+    try {
+      const receipts = await Receipt.find({ companyId, invoiceNumber }).lean();
+      for (const r of receipts) {
+        try {
+          const filename = r.pdfPath ? (r.pdfPath.split('/').pop() || '') : `${r.receiptNumber}.pdf`;
+          if (filename) {
+            const filePath = path.join(RECEIPTS_DIR, filename);
+            if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+          }
+        } catch (fileErr) {
+          console.warn('Failed to remove receipt PDF during invoice delete:', fileErr.message);
+        }
+      }
+      if (receipts.length > 0) {
+        await Receipt.deleteMany({ companyId, invoiceNumber });
+      }
+    } catch (rctErr) {
+      console.warn('Cascade receipt delete failed:', rctErr.message);
+    }
+
     let deleted = null;
     try {
       deleted = await Invoice.findOneAndDelete({ companyId, invoiceNumber }).lean();
@@ -1494,9 +1532,9 @@ app.delete('/api/invoices/:invoiceNumber', async (req, res) => {
       console.warn('Delete invoice PDF failed:', fsErr.message);
     }
     if (!deleted) {
-      return res.json({ success: true, message: 'No invoice found (already deleted?)' });
+      return res.json({ success: true, message: 'No invoice found (already deleted?)', invoiceNumber, companyId });
     }
-    return res.json({ success: true, message: 'Invoice deleted', invoiceNumber, companyId });
+    return res.json({ success: true, message: 'Invoice and associated receipts deleted', invoiceNumber, companyId });
   } catch (err) {
     console.error('Delete invoice error:', err);
     return res.status(500).json({ success: false, message: 'Server error deleting invoice' });

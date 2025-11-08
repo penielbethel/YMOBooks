@@ -5,7 +5,7 @@ import dayjs from 'dayjs';
 import { Colors } from '../constants/Colors';
 import { Fonts } from '../constants/Fonts';
 import { Spacing } from '../constants/Spacing';
-import { fetchRevenueDaily, fetchExpensesDaily, saveExpenseDaily } from '../utils/api';
+import { fetchRevenueDaily, fetchExpensesDaily, saveExpenseDaily, deleteExpenses } from '../utils/api';
 
 const FinancialCalculatorScreen = ({ navigation }) => {
   const [companyData, setCompanyData] = useState(null);
@@ -254,6 +254,37 @@ const FinancialCalculatorScreen = ({ navigation }) => {
               >
                 <Text style={styles.saveButtonText}>Clear Month</Text>
               </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.purgeButton]}
+                onPress={() => {
+                  if (!companyData?.companyId) return;
+                  Alert.alert(
+                    'Confirm Purge',
+                    `Delete all expense records for ${dayjs(month).format('MMMM YYYY')}?`,
+                    [
+                      { text: 'Cancel', style: 'cancel' },
+                      {
+                        text: 'Delete',
+                        style: 'destructive',
+                        onPress: async () => {
+                          try {
+                            setLoading(true);
+                            await deleteExpenses(companyData.companyId, month);
+                            await loadData();
+                            await computeAnnualTotals();
+                          } catch (_) {
+                            Alert.alert('Error', 'Failed to purge expenses');
+                          } finally {
+                            setLoading(false);
+                          }
+                        },
+                      },
+                    ]
+                  );
+                }}
+              >
+                <Text style={styles.saveButtonText}>Purge Month (DB)</Text>
+              </TouchableOpacity>
             </View>
           </Section>
 
@@ -300,6 +331,7 @@ const styles = StyleSheet.create({
   currencyChipActive: { backgroundColor: Colors.success, borderColor: Colors.success },
   currencyChipText: { color: Colors.textSecondary },
   saveButton: { backgroundColor: Colors.success, paddingVertical: 12, borderRadius: 10, alignItems: 'center', marginTop: Spacing.sm },
+  purgeButton: { backgroundColor: Colors.error, paddingVertical: 12, borderRadius: 10, alignItems: 'center', marginTop: Spacing.sm },
   saveButtonDisabled: { opacity: 0.6 },
   saveButtonText: { color: Colors.white, fontWeight: '700' },
   loadingBox: { flex: 1, alignItems: 'center', justifyContent: 'center' },

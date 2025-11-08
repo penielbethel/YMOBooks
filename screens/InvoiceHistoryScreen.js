@@ -355,6 +355,8 @@ const InvoiceHistoryScreen = ({ navigation, route }) => {
             const res = await deleteInvoice(companyId, item.invoiceNumber);
             if (res?.success) {
               setInvoices((prev) => prev.filter((x) => x.invoiceNumber !== item.invoiceNumber));
+              // Refresh receipts map to reflect cascaded deletion and paid status change
+              try { await refetch(); } catch (_) {}
               Alert.alert('Deleted', 'Invoice removed from history');
             } else {
               Alert.alert('Failed', res?.message || 'Could not delete invoice');

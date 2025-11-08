@@ -157,6 +157,15 @@ export async function fetchExpenses(companyId, month) {
   return res.json();
 }
 
+export async function deleteExpenses(companyId, month, category) {
+  const url = new URL(`${Config.API_BASE_URL}/api/expenses`);
+  url.searchParams.set('companyId', companyId);
+  if (month) url.searchParams.set('month', month);
+  if (category) url.searchParams.set('category', category);
+  const res = await fetch(url.toString(), { method: 'DELETE' });
+  return res.json();
+}
+
 export async function fetchFinanceSummary(companyId, month) {
   const url = new URL(`${Config.API_BASE_URL}/api/finance/summary`);
   url.searchParams.set('companyId', companyId);
