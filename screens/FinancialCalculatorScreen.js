@@ -17,6 +17,7 @@ const FinancialCalculatorScreen = ({ navigation }) => {
   const [expensesDaily, setExpensesDaily] = useState(Array.from({ length: 31 }, () => 0));
   const [expensesDailyInput, setExpensesDailyInput] = useState(Array.from({ length: 31 }, () => '0'));
   const [refreshing, setRefreshing] = useState(false);
+  const [toast, setToast] = useState({ visible: false, message: '', type: 'success' });
 
   useEffect(() => {
     (async () => {
@@ -64,6 +65,13 @@ const FinancialCalculatorScreen = ({ navigation }) => {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  const showToast = useCallback((message, type = 'success') => {
+    setToast({ visible: true, message, type });
+    setTimeout(() => {
+      setToast((t) => ({ ...t, visible: false }));
+    }, 2000);
+  }, []);
 
   const monthsOptions = useMemo(() => {
     const arr = [];
@@ -269,9 +277,15 @@ const FinancialCalculatorScreen = ({ navigation }) => {
                         onPress: async () => {
                           try {
                             setLoading(true);
-                            await deleteExpenses(companyData.companyId, month);
+                            const res = await deleteExpenses(companyData.companyId, month);
                             await loadData();
                             await computeAnnualTotals();
+                            if (res?.success) {
+                              const count = Number(res?.deletedCount || 0);
+                              showToast(`Purged ${count} expense${count === 1 ? '' : 's'} for ${dayjs(month).format('MMMM YYYY')}`, 'success');
+                            } else {
+                              Alert.alert('Error', 'Failed to purge expenses');
+                            }
                           } catch (_) {
                             Alert.alert('Error', 'Failed to purge expenses');
                           } finally {
@@ -296,7 +310,17 @@ const FinancialCalculatorScreen = ({ navigation }) => {
               {finalAnnualNet > 0 ? 'Conclusion: The business is doing well.' : finalAnnualNet < 0 ? 'Conclusion: The business is operating at a loss.' : 'Conclusion: Break-even year.'}
             </Text>
           </Section>
-        </ScrollView>
+      </ScrollView>
+      {toast.visible && (
+        <View
+          style={[
+            styles.toast,
+            toast.type === 'success' ? styles.toastSuccess : styles.toastError,
+          ]}
+        >
+          <Text style={styles.toastText}>{toast.message}</Text>
+        </View>
+      )}
       )}
     </SafeAreaView>
   );
@@ -332,6 +356,10 @@ const styles = StyleSheet.create({
   currencyChipText: { color: Colors.textSecondary },
   saveButton: { backgroundColor: Colors.success, paddingVertical: 12, borderRadius: 10, alignItems: 'center', marginTop: Spacing.sm },
   purgeButton: { backgroundColor: Colors.error, paddingVertical: 12, borderRadius: 10, alignItems: 'center', marginTop: Spacing.sm },
+  toast: { position: 'absolute', bottom: 24, left: 16, right: 16, paddingVertical: 10, paddingHorizontal: 12, borderRadius: 8, alignItems: 'center', shadowColor: Colors.black, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.15, shadowRadius: 4, elevation: 2 },
+  toastSuccess: { backgroundColor: Colors.success },
+  toastError: { backgroundColor: Colors.error },
+  toastText: { color: Colors.white, fontWeight: '700' },
   saveButtonDisabled: { opacity: 0.6 },
   saveButtonText: { color: Colors.white, fontWeight: '700' },
   loadingBox: { flex: 1, alignItems: 'center', justifyContent: 'center' },
