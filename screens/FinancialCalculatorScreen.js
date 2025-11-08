@@ -246,7 +246,7 @@ const FinancialCalculatorScreen = ({ navigation }) => {
             <SummaryRow label={`Net (${currency})`} value={`${currency}${Number(monthlyTotals.net).toLocaleString()}`} />
             <View style={{ flexDirection: 'row', gap: 8, marginTop: Spacing.sm }}>
               <TouchableOpacity
-                style={[styles.saveButton]}
+                style={[styles.saveButton, { flex: 1 }]}
                 onPress={async () => {
                   if (!companyData?.companyId) return;
                   // Clear each day to 0 via server
@@ -257,13 +257,15 @@ const FinancialCalculatorScreen = ({ navigation }) => {
                   if (expDailyRes?.success && Array.isArray(expDailyRes.days)) {
                     const arrE = Array.from({ length: 31 }, (_, j) => Number(expDailyRes.days[j] || 0));
                     setExpensesDaily(arrE);
+                    setExpensesDailyInput(arrE.map((v) => String(v)));
+                    showToast(`Cleared daily expenses for ${dayjs(month).format('MMMM YYYY')}`, 'success');
                   }
                 }}
               >
                 <Text style={styles.saveButtonText}>Clear Month</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.purgeButton]}
+                style={[styles.purgeButton, { flex: 1 }]}
                 onPress={() => {
                   if (!companyData?.companyId) return;
                   Alert.alert(
@@ -321,7 +323,6 @@ const FinancialCalculatorScreen = ({ navigation }) => {
           <Text style={styles.toastText}>{toast.message}</Text>
         </View>
       )}
-      )}
     </SafeAreaView>
   );
 };
@@ -354,14 +355,14 @@ const styles = StyleSheet.create({
   currencyChip: { paddingVertical: 8, paddingHorizontal: 12, borderRadius: 999, borderWidth: 1, borderColor: Colors.gray[300], marginRight: 8 },
   currencyChipActive: { backgroundColor: Colors.success, borderColor: Colors.success },
   currencyChipText: { color: Colors.textSecondary },
-  saveButton: { backgroundColor: Colors.success, paddingVertical: 12, borderRadius: 10, alignItems: 'center', marginTop: Spacing.sm },
-  purgeButton: { backgroundColor: Colors.error, paddingVertical: 12, borderRadius: 10, alignItems: 'center', marginTop: Spacing.sm },
+  saveButton: { backgroundColor: Colors.success, paddingVertical: 14, borderRadius: 10, alignItems: 'center', marginTop: Spacing.sm, minHeight: 44, justifyContent: 'center' },
+  purgeButton: { backgroundColor: Colors.error, paddingVertical: 14, borderRadius: 10, alignItems: 'center', marginTop: Spacing.sm, minHeight: 44, justifyContent: 'center' },
   toast: { position: 'absolute', bottom: 24, left: 16, right: 16, paddingVertical: 10, paddingHorizontal: 12, borderRadius: 8, alignItems: 'center', shadowColor: Colors.black, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.15, shadowRadius: 4, elevation: 2 },
   toastSuccess: { backgroundColor: Colors.success },
   toastError: { backgroundColor: Colors.error },
-  toastText: { color: Colors.white, fontWeight: '700' },
+  toastText: { color: Colors.white, fontWeight: '800' },
   saveButtonDisabled: { opacity: 0.6 },
-  saveButtonText: { color: Colors.white, fontWeight: '700' },
+  saveButtonText: { color: Colors.white, fontWeight: '800' },
   loadingBox: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   emptyText: { color: Colors.textSecondary },
   expenseRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8 },
