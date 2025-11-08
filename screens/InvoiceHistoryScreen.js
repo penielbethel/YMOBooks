@@ -550,6 +550,12 @@ const InvoiceHistoryScreen = ({ navigation, route }) => {
   }, [sections.length]);
 
   const sectionCounts = Object.fromEntries(sections.map((s) => [s.key, s.data.length]));
+  const sectionTotals = Object.fromEntries(
+    sections.map((s) => [
+      s.key,
+      s.data.reduce((sum, inv) => sum + Number(inv.grandTotal || 0), 0),
+    ])
+  );
   const displaySections = sections.map((s) => ({
     ...s,
     data: collapsedMap[s.key] ? [] : s.data,
@@ -664,7 +670,9 @@ const InvoiceHistoryScreen = ({ navigation, route }) => {
             renderSectionHeader={({ section }) => (
               <TouchableOpacity style={styles.sectionHeader} onPress={() => setCollapsedMap((prev) => ({ ...prev, [section.key]: !prev[section.key] }))}>
                 <View style={styles.sectionHeaderRow}>
-                  <Text style={styles.sectionHeaderText}>{section.title} ({sectionCounts[section.key] || 0})</Text>
+                  <Text style={styles.sectionHeaderText}>
+                    {section.title} ({sectionCounts[section.key] || 0}) — {String(company?.currencySymbol || '$')} {Number(sectionTotals[section.key] || 0).toLocaleString()}
+                  </Text>
                   <Text style={styles.sectionHeaderIcon}>{collapsedMap[section.key] ? '▶' : '▼'}</Text>
                 </View>
               </TouchableOpacity>
