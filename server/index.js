@@ -612,8 +612,8 @@ function drawInvoiceByTemplate(doc, company, invNo, invoiceDate, dueDate, custom
   // Header layout — match client Classic preview
   if (template === 'classic') {
     // Header row: company name left, INVOICE right
-    doc.fontSize(20).fillColor('#000').text((company.name || company.companyName || 'Company'), pageLeft, doc.page.margins.top);
-    doc.fontSize(26).fillColor(theme.primary).text('INVOICE', pageLeft, doc.page.margins.top, { align: 'right', width: pageWidth });
+    doc.fontSize(24).fillColor('#000').text((company.name || company.companyName || 'Company'), pageLeft, doc.page.margins.top);
+    doc.fontSize(32).fillColor(theme.primary).text('INVOICE', pageLeft, doc.page.margins.top, { align: 'right', width: pageWidth });
     // Accent bar
     doc.save();
     doc.rect(pageLeft, doc.page.margins.top + 24, pageWidth, 6).fill(theme.accent);
@@ -627,14 +627,14 @@ function drawInvoiceByTemplate(doc, company, invNo, invoiceDate, dueDate, custom
     let yTop = doc.page.margins.top + 42;
 
     // Left: Bill To + invoice meta
-    doc.fontSize(14).fillColor(theme.primary).text('BILL TO', pageLeft, yTop);
-    doc.fontSize(12).fillColor('#333');
+    doc.fontSize(16).fillColor(theme.primary).text('BILL TO', pageLeft, yTop);
+    doc.fontSize(14).fillColor('#333');
     if (customer.name) doc.text(customer.name, pageLeft, doc.y);
     if (customer.address) doc.text(customer.address, pageLeft, doc.y);
     if (customer.contact) doc.text(customer.contact, pageLeft, doc.y);
     doc.moveDown(0.5);
-    doc.fontSize(14).fillColor(theme.primary).text('Invoice', pageLeft, doc.y);
-    doc.fontSize(12).fillColor('#333');
+    doc.fontSize(16).fillColor(theme.primary).text('Invoice', pageLeft, doc.y);
+    doc.fontSize(14).fillColor('#333');
     doc.text(`Issuance: ${dayjs(invoiceDate || undefined).isValid() ? dayjs(invoiceDate).format('YYYY-MM-DD') : dayjs().format('YYYY-MM-DD')}`, pageLeft, doc.y);
     if (dueDate) doc.text(`Due: ${dueDate}`, pageLeft, doc.y);
 
@@ -653,14 +653,14 @@ function drawInvoiceByTemplate(doc, company, invNo, invoiceDate, dueDate, custom
     } catch (_) {}
     let infoY = boxY + 10;
     infoY += 74; // space under logo
-    doc.fontSize(12).fillColor('#333');
+    doc.fontSize(14).fillColor('#333');
     if (company.address) doc.text(company.address, rightX + 10, infoY, { width: colWidth - 20 });
     if (company.email) doc.text(`Email: ${company.email}`, { width: colWidth - 20 });
     if (company.phone) doc.text(`Phone: ${company.phone}`, { width: colWidth - 20 });
     if (company.bankName || company.accountName || company.accountNumber) {
       doc.moveDown(0.2);
-      doc.fontSize(13).fillColor('#000').text('Bank Details', { width: colWidth - 20 });
-      doc.fontSize(12).fillColor('#333');
+    doc.fontSize(15).fillColor('#000').text('Bank Details', { width: colWidth - 20 });
+    doc.fontSize(14).fillColor('#333');
       if (company.bankName) doc.text(`Bank: ${company.bankName}`, { width: colWidth - 20 });
       if (company.accountName) doc.text(`Account Name: ${company.accountName}`, { width: colWidth - 20 });
       if (company.accountNumber) doc.text(`Account Number: ${company.accountNumber}`, { width: colWidth - 20 });
@@ -673,12 +673,12 @@ function drawInvoiceByTemplate(doc, company, invNo, invoiceDate, dueDate, custom
     doc.save();
     doc.rect(doc.page.margins.left, doc.page.margins.top, doc.page.width - doc.page.margins.left - doc.page.margins.right, 18).fill(theme.primary);
     doc.restore();
-    doc.fillColor('#ffffff').fontSize(14).text((company.name || 'Company'), doc.page.margins.left + 6, doc.page.margins.top + 2, { continued: true });
+    doc.fillColor('#ffffff').fontSize(22).text((company.name || 'Company'), doc.page.margins.left + 6, doc.page.margins.top + 2, { continued: true });
     if (company.companyId) {
       doc.fillColor('#ffffff').text(` • ${company.companyId}`);
     }
-    doc.fillColor(theme.accent).fontSize(26).text('Invoice', { align: 'right' });
-    doc.fontSize(12).fillColor('#000').text(`Invoice No: ${invNo}`, { align: 'right' });
+    doc.fillColor(theme.accent).fontSize(32).text('Invoice', { align: 'right' });
+    doc.fontSize(14).fillColor('#000').text(`Invoice No: ${invNo}`, { align: 'right' });
     doc.text(`Invoice Date: ${dayjs(invoiceDate || undefined).isValid() ? dayjs(invoiceDate).format('YYYY-MM-DD') : dayjs().format('YYYY-MM-DD')}`, { align: 'right' });
     if (dueDate) doc.text(`Due Date: ${dueDate}`, { align: 'right' });
     try {
@@ -691,7 +691,7 @@ function drawInvoiceByTemplate(doc, company, invNo, invoiceDate, dueDate, custom
       }
     } catch (_) {}
     doc.moveDown(0.5);
-    doc.fillColor('#333').fontSize(13);
+    doc.fillColor('#333').fontSize(14);
     if (company.address) doc.text(company.address);
     if (company.email) doc.text(company.email);
     if (company.phone) doc.text(company.phone);
@@ -702,8 +702,8 @@ function drawInvoiceByTemplate(doc, company, invNo, invoiceDate, dueDate, custom
       doc.text(`Account Number: ${company.accountNumber || ''}`);
     }
     doc.moveDown(1);
-    doc.fontSize(template === 'bold' ? 15 : 14).fillColor(theme.primary).text('Bill To:', { underline: template === 'classic' });
-    doc.fontSize(13).fillColor('#333');
+    doc.fontSize(template === 'bold' ? 17 : 16).fillColor(theme.primary).text('Bill To:', { underline: template === 'classic' });
+    doc.fontSize(15).fillColor('#333');
     if (customer.name) doc.text(customer.name);
     if (customer.address) doc.text(customer.address);
     if (customer.contact) doc.text(`Contact: ${customer.contact}`);
@@ -712,8 +712,8 @@ function drawInvoiceByTemplate(doc, company, invNo, invoiceDate, dueDate, custom
   // Contact block
   doc.moveDown(0.5);
   // Highlight contact block for quick scanning
-  doc.fontSize(16).fillColor(theme.primary).text('WRITE US');
-  doc.fillColor('#333').fontSize(13);
+    doc.fontSize(18).fillColor(theme.primary).text('WRITE US');
+    doc.fillColor('#333').fontSize(14);
   if (company.address) doc.text(company.address);
   if (company.email) doc.text(company.email);
   if (company.phone) doc.text(company.phone);
@@ -726,8 +726,8 @@ function drawInvoiceByTemplate(doc, company, invNo, invoiceDate, dueDate, custom
 
   // Customer section
   doc.moveDown(1);
-  doc.fontSize(template === 'bold' ? 13 : 12).fillColor(theme.primary).text('Bill To:', { underline: template === 'classic' });
-  doc.fontSize(12).fillColor('#333');
+    doc.fontSize(template === 'bold' ? 16 : 14).fillColor(theme.primary).text('Bill To:', { underline: template === 'classic' });
+    doc.fontSize(14).fillColor('#333');
   if (customer.name) doc.text(customer.name);
   if (customer.address) doc.text(customer.address);
   if (customer.contact) doc.text(`Contact: ${customer.contact}`);
@@ -740,13 +740,13 @@ function drawInvoiceByTemplate(doc, company, invNo, invoiceDate, dueDate, custom
   const colQty = 60;
   const colUnit = 100;
   const colTotal = 100;
-  const rowHeight = 24;
+    const rowHeight = 28;
 
   // Header row background
   doc.save();
   doc.rect(startX, tableTop, doc.page.width - startX - doc.page.margins.right, rowHeight).fill(theme.tableHeader);
   doc.restore();
-  doc.fillColor('#000').fontSize(14).text('Description', startX + 8, tableTop + 6, { width: colDesc });
+    doc.fillColor('#000').fontSize(16).text('Description', startX + 8, tableTop + 6, { width: colDesc });
   doc.text('Qty', startX + 8 + colDesc, tableTop + 6, { width: colQty, align: 'center' });
   doc.text('Price', startX + 8 + colDesc + colQty, tableTop + 6, { width: colUnit, align: 'right' });
   doc.text('Total', startX + 8 + colDesc + colQty + colUnit, tableTop + 6, { width: colTotal, align: 'right' });
@@ -758,7 +758,7 @@ function drawInvoiceByTemplate(doc, company, invNo, invoiceDate, dueDate, custom
       doc.rect(startX, y, doc.page.width - startX - doc.page.margins.right, rowHeight).fill('#fafafa');
       doc.restore();
     }
-    doc.fillColor('#333').fontSize(13).text(String(it.description || ''), startX + 8, y + 6, { width: colDesc });
+    doc.fillColor('#333').fontSize(14).text(String(it.description || ''), startX + 8, y + 6, { width: colDesc });
     doc.text(String(Number(it.qty || 0)), startX + 8 + colDesc, y + 6, { width: colQty, align: 'center' });
     doc.text(`${curr}${(Number(it.price || 0)).toFixed(2)}`, startX + 8 + colDesc + colQty, y + 6, { width: colUnit, align: 'right' });
     doc.text(`${curr}${(Number(it.total || (Number(it.qty || 0) * Number(it.price || 0)))).toFixed(2)}`, startX + 8 + colDesc + colQty + colUnit, y + 6, { width: colTotal, align: 'right' });
@@ -772,18 +772,18 @@ function drawInvoiceByTemplate(doc, company, invNo, invoiceDate, dueDate, custom
   // Totals
   const grandTotal = items.reduce((sum, it) => sum + (Number(it.qty || 0) * Number(it.price || 0)), 0);
   doc.moveTo(startX, y + 8).lineTo(doc.page.width - doc.page.margins.right, y + 8).stroke(theme.accent);
-  doc.fontSize(template === 'minimal' ? 14 : 16).fillColor(theme.primary);
+    doc.fontSize(template === 'minimal' ? 16 : 18).fillColor(theme.primary);
   doc.text('Total:', startX + colDesc + colQty + 8, y + 20, { width: colUnit, align: 'right' });
   doc.text(`${curr}${grandTotal.toFixed(2)}`, startX + colDesc + colQty + colUnit + 8, y + 20, { width: colTotal, align: 'right' });
 
   // Amount in words (currency-aware)
   doc.moveDown(0.5);
-  doc.fontSize(14).fillColor('#333').text(`Amount in words: ${amountInWordsWithCurrency(grandTotal, curr)}`);
+    doc.fontSize(15).fillColor('#333').text(`Amount in words: ${amountInWordsWithCurrency(grandTotal, curr)}`);
 
   // Footer
   // Electronic generation notice with printed date
   doc.moveDown(0.5);
-  doc.fontSize(11).fillColor('#555').text(
+    doc.fontSize(12).fillColor('#555').text(
     `This invoice is generated electronically by ${company.name || company.companyName || 'Company'} and any alteration renders it invalid — Printed on ${dayjs().format('YYYY-MM-DD')}`
   );
   // Signature block
@@ -791,7 +791,7 @@ function drawInvoiceByTemplate(doc, company, invNo, invoiceDate, dueDate, custom
     const sigBuf = dataUrlToBuffer(company.signature);
     if (sigBuf) {
       doc.moveDown(1);
-      doc.fontSize(12).fillColor('#333').text('Authorized Signature');
+    doc.fontSize(14).fillColor('#333').text('Authorized Signature');
       doc.image(sigBuf, doc.page.margins.left, doc.y + 4, { width: 120 });
     }
   } catch (_) {}
@@ -799,16 +799,16 @@ function drawInvoiceByTemplate(doc, company, invNo, invoiceDate, dueDate, custom
   // Optional Terms and Conditions section, shown only if provided
   if (company.termsAndConditions && String(company.termsAndConditions).trim()) {
     doc.moveDown(1);
-    doc.fontSize(14).fillColor(theme.primary).text('Terms and Conditions');
+    doc.fontSize(16).fillColor(theme.primary).text('Terms and Conditions');
     doc.moveDown(0.2);
-    doc.fontSize(13).fillColor('#333').text(String(company.termsAndConditions), {
+    doc.fontSize(14).fillColor('#333').text(String(company.termsAndConditions), {
       width: doc.page.width - doc.page.margins.left - doc.page.margins.right,
       align: 'left',
     });
   }
 
   doc.moveDown(1);
-  doc.fontSize(11).fillColor('#777').text('Powered by YMOBooks', { align: 'right' });
+    doc.fontSize(12).fillColor('#777').text('Powered by YMOBooks', { align: 'right' });
 }
 
 // Helper: draw receipt by template style
@@ -836,14 +836,14 @@ function drawReceiptByTemplate(doc, company, rctNo, receiptDate, invoiceNumber, 
   doc.rect(doc.page.margins.left, doc.page.margins.top, doc.page.width - doc.page.margins.left - doc.page.margins.right, 18).fill(theme.primary);
   doc.restore();
 
-  doc.fillColor('#ffffff').fontSize(12).text((company.name || 'Company'), doc.page.margins.left + 6, doc.page.margins.top + 2, { continued: true });
+    doc.fillColor('#ffffff').fontSize(20).text((company.name || 'Company'), doc.page.margins.left + 6, doc.page.margins.top + 2, { continued: true });
   if (company.companyId) {
     doc.fillColor('#ffffff').text(` • ${company.companyId}`);
   }
 
   // Right-side Receipt meta
-  doc.fillColor(theme.accent).fontSize(20).text('Receipt', { align: 'right' });
-  doc.fontSize(12).fillColor('#000').text(`Receipt No: ${rctNo}`, { align: 'right' });
+    doc.fillColor(theme.accent).fontSize(28).text('Receipt', { align: 'right' });
+    doc.fontSize(14).fillColor('#000').text(`Receipt No: ${rctNo}`, { align: 'right' });
   doc.text(`Receipt Date: ${dayjs(receiptDate || undefined).isValid() ? dayjs(receiptDate).format('YYYY-MM-DD') : dayjs().format('YYYY-MM-DD')}`, { align: 'right' });
   if (invoiceNumber) doc.text(`For Invoice: ${invoiceNumber}`, { align: 'right' });
 
@@ -860,16 +860,16 @@ function drawReceiptByTemplate(doc, company, rctNo, receiptDate, invoiceNumber, 
 
   // Contact block
   doc.moveDown(0.5);
-  doc.fontSize(16).fillColor(theme.primary).text('WRITE US');
-  doc.fillColor('#333').fontSize(13);
+    doc.fontSize(18).fillColor(theme.primary).text('WRITE US');
+    doc.fillColor('#333').fontSize(14);
   if (company.address) doc.text(company.address);
   if (company.email) doc.text(company.email);
   if (company.phone) doc.text(company.phone);
 
   // Customer section
   doc.moveDown(1);
-  doc.fontSize(template === 'bold' ? 15 : 14).fillColor(theme.primary).text('Received From:', { underline: template === 'classic' });
-  doc.fontSize(12).fillColor('#333');
+    doc.fontSize(template === 'bold' ? 17 : 16).fillColor(theme.primary).text('Received From:', { underline: template === 'classic' });
+    doc.fontSize(14).fillColor('#333');
   if (customer?.name) doc.text(customer.name);
   if (customer?.address) doc.text(customer.address);
   if (customer?.contact) doc.text(`Contact: ${customer.contact}`);
@@ -880,39 +880,39 @@ function drawReceiptByTemplate(doc, company, rctNo, receiptDate, invoiceNumber, 
   const tableTop = doc.y;
   const colDesc = 300;
   const colAmt = 120;
-  const rowHeight = 22;
+    const rowHeight = 26;
 
   doc.save();
   doc.rect(startX, tableTop, doc.page.width - startX - doc.page.margins.right, rowHeight).fill(theme.tableHeader);
   doc.restore();
-  doc.fillColor('#000').fontSize(10).text('Description', startX + 8, tableTop + 6, { width: colDesc });
+    doc.fillColor('#000').fontSize(14).text('Description', startX + 8, tableTop + 6, { width: colDesc });
   doc.text('Amount', startX + 8 + colDesc, tableTop + 6, { width: colAmt, align: 'right' });
 
   let y = tableTop + rowHeight;
   const desc = invoiceNumber ? `Payment for ${invoiceNumber}` : 'Payment received';
-  doc.fillColor('#333').fontSize(10).text(desc, startX + 8, y + 6, { width: colDesc });
+    doc.fillColor('#333').fontSize(13).text(desc, startX + 8, y + 6, { width: colDesc });
   doc.text(`${curr}${Number(amountPaid || 0).toFixed(2)}`, startX + 8 + colDesc, y + 6, { width: colAmt, align: 'right' });
   y += rowHeight;
 
   // Amount in words
   doc.moveDown(0.5);
-  doc.fontSize(13).fillColor('#333').text(`Amount in words: ${numberToWords(Number(amountPaid || 0))}`);
+    doc.fontSize(14).fillColor('#333').text(`Amount in words: ${numberToWords(Number(amountPaid || 0))}`);
 
   // Footer
   doc.moveDown(0.5);
-  doc.fontSize(11).fillColor('#555').text(
+    doc.fontSize(12).fillColor('#555').text(
     `This receipt acknowledges payment to ${company.name || company.companyName || 'Company'} — Printed on ${dayjs().format('YYYY-MM-DD')}`
   );
   try {
     const sigBuf = dataUrlToBuffer(company.signature);
     if (sigBuf) {
       doc.moveDown(1);
-      doc.fontSize(12).fillColor('#333').text('Authorized Signature');
+    doc.fontSize(14).fillColor('#333').text('Authorized Signature');
       doc.image(sigBuf, doc.page.margins.left, doc.y + 4, { width: 120 });
     }
   } catch (_) {}
   doc.moveDown(1);
-  doc.fontSize(11).fillColor('#777').text('Powered by YMOBooks', { align: 'right' });
+    doc.fontSize(12).fillColor('#777').text('Powered by YMOBooks', { align: 'right' });
 }
 
 // Create invoice PDF (A4, multi-page if needed)
