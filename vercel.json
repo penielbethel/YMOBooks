@@ -1,12 +1,13 @@
 {
+  "version": 2,
   "builds": [
     { "src": "server/index.js", "use": "@vercel/node" }
   ],
-  "rewrites": [
-    { "source": "/api/:path*", "destination": "/server/index.js" },
-    { "source": "/files/:path*", "destination": "/server/index.js" },
-    { "source": "/(terms|privacy|contact|account-deletion)", "destination": "/server/public/$1.html" },
-    { "source": "/", "destination": "/server/public/index.html" },
-    { "source": "/:path*", "destination": "/server/public/index.html" }
+  "routes": [
+    { "src": "^/api/(.*)$", "dest": "server/index.js" },
+    { "src": "^/files/(.*)$", "dest": "server/index.js" },
+    { "src": "^/(terms|privacy|contact|account-deletion)$", "dest": "server/public/$1.html" },
+    { "src": "^/$", "dest": "server/public/index.html" },
+    { "src": "^(?!/api/|/files/)(.*)$", "dest": "server/public/index.html" }
   ]
 }
