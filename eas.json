@@ -13,6 +13,9 @@
       "android": {
         "buildType": "apk",
         "credentialsSource": "local"
+      },
+      "ios": {
+        "credentialsSource": "remote"
       }
     },
     "production": {
@@ -20,6 +23,9 @@
       "android": {
         "buildType": "app-bundle",
         "credentialsSource": "local"
+      },
+      "ios": {
+        "credentialsSource": "remote"
       }
     }
   },

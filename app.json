@@ -14,7 +14,9 @@
       "backgroundColor": "#CC5500"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.penielbethel.ymobooks",
+      "buildNumber": "5"
     },
   "android": {
     "adaptiveIcon": {
