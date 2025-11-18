@@ -43,6 +43,9 @@ const CompanyRegistrationScreen = ({ navigation, route }) => {
   const [successModalVisible, setSuccessModalVisible] = useState(false);
   const [generatedCompanyId, setGeneratedCompanyId] = useState('');
   const [signatureModalVisible, setSignatureModalVisible] = useState(false);
+  const [progressVisible, setProgressVisible] = useState(false);
+  const [progressPercent, setProgressPercent] = useState(0);
+  const progressTimerRef = React.useRef(null);
 
   // Prefill form when editing - prefer backend values to ensure latest DB state
   useEffect(() => {
@@ -224,6 +227,20 @@ const CompanyRegistrationScreen = ({ navigation, route }) => {
     if (!validateForm()) return;
 
     setLoading(true);
+    // Show progress overlay for registration to reassure users
+    if (mode !== 'edit') {
+      setProgressVisible(true);
+      setProgressPercent(5);
+      if (progressTimerRef.current) clearInterval(progressTimerRef.current);
+      // Smoothly increase progress while awaiting network operations
+      progressTimerRef.current = setInterval(() => {
+        setProgressPercent((p) => {
+          const cap = 90; // cap auto-progress; we'll set to 100% on success
+          const next = p + (Math.random() * 6 + 2); // 2–8%
+          return next >= cap ? cap : next;
+        });
+      }, 500);
+    }
     try {
       // Convert and compress images to compact base64 (if present)
       const toCompressedData = async (val, kind) => {
@@ -234,6 +251,7 @@ const CompanyRegistrationScreen = ({ navigation, route }) => {
         }
         return await compressToDataUrl(val, kind);
       };
+      if (mode !== 'edit') setProgressPercent((p) => Math.max(p, 15));
 
       const payload = {
         name: formData.companyName,
@@ -287,7 +305,9 @@ const CompanyRegistrationScreen = ({ navigation, route }) => {
           }
         }
       } else {
+        setProgressPercent((p) => Math.max(p, 30));
         const result = await registerCompany(payload);
+        setProgressPercent((p) => Math.max(p, 60));
         if (result?.success) {
           setGeneratedCompanyId(result.companyId);
           try {
@@ -314,7 +334,12 @@ const CompanyRegistrationScreen = ({ navigation, route }) => {
             const storedFallback = { ...formData, companyId: result.companyId };
             await AsyncStorage.setItem('companyData', JSON.stringify(storedFallback));
           }
-          setSuccessModalVisible(true);
+          setProgressPercent(100);
+          // Short UX delay to let the bar reach 100%
+          setTimeout(() => {
+            setProgressVisible(false);
+            setSuccessModalVisible(true);
+          }, 400);
         } else {
           if (Array.isArray(result?.conflicts) && result.conflicts.length > 0) {
             Alert.alert('Duplicate Details', `Please use unique values for: ${result.conflicts.join(', ')}`);
@@ -326,6 +351,11 @@ const CompanyRegistrationScreen = ({ navigation, route }) => {
     } catch (error) {
       Alert.alert('Error', 'Failed to save company data');
     } finally {
+      if (progressTimerRef.current) {
+        clearInterval(progressTimerRef.current);
+        progressTimerRef.current = null;
+      }
+      if (mode !== 'edit') setProgressVisible(false);
       setLoading(false);
     }
   };
@@ -557,6 +587,24 @@ const CompanyRegistrationScreen = ({ navigation, route }) => {
     </Modal>
     {mode !== 'edit' && (
     <Modal
+      visible={progressVisible}
+      animationType="fade"
+      transparent
+      onRequestClose={() => {}}
+    >
+      <View style={styles.modalOverlay}>
+        <View style={styles.progressCard}>
+          <Text style={styles.progressTitle}>Kindly wait, while we onboard your Company's Details</Text>
+          <View style={styles.progressBarOuter}>
+            <View style={[styles.progressBarInner, { width: `${Math.round(progressPercent)}%` }]} />
+          </View>
+          <Text style={styles.progressPercent}>{Math.round(progressPercent)}%</Text>
+        </View>
+      </View>
+    </Modal>
+    )}
+    {mode !== 'edit' && (
+    <Modal
       visible={successModalVisible}
       animationType="slide"
       transparent
@@ -776,6 +824,38 @@ const styles = StyleSheet.create({
     color: Colors.white,
     fontSize: Fonts.sizes.md,
     fontWeight: Fonts.weights.bold,
+  },
+  progressCard: {
+    backgroundColor: Colors.surface,
+    padding: Spacing.xl,
+    borderRadius: 12,
+    width: '85%',
+    alignItems: 'center',
+  },
+  progressTitle: {
+    fontSize: Fonts.sizes.md,
+    color: Colors.text,
+    textAlign: 'center',
+    marginBottom: Spacing.md,
+    fontWeight: Fonts.weights.semiBold,
+  },
+  progressBarOuter: {
+    width: '100%',
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: Colors.gray?.[100] || '#eee',
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  progressBarInner: {
+    height: '100%',
+    backgroundColor: Colors.primary,
+  },
+  progressPercent: {
+    marginTop: Spacing.sm,
+    fontSize: Fonts.sizes.sm,
+    color: Colors.textSecondary,
   },
 });
 
