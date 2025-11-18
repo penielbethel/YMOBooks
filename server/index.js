@@ -440,6 +440,11 @@ function amountInWordsWithCurrency(amount, symbol) {
   app.post('/api/register-company', async (req, res) => {
   try {
     const { name, address, email, phone, brandColor, currencySymbol, bankName, accountName, accountNumber, bankAccountName, bankAccountNumber, invoiceTemplate, receiptTemplate, termsAndConditions } = req.body;
+    // Ensure currencyCode is defined; fall back from symbol when not provided
+    const currencyCodeInput = req.body.currencyCode;
+    const currencyCode = (typeof currencyCodeInput === 'string' && currencyCodeInput.trim())
+      ? currencyCodeInput.trim()
+      : mapSymbolToCode(currencySymbol);
     let { logo, signature } = req.body;
     if (!name) return res.status(400).json({ success: false, message: 'Company name is required' });
 
