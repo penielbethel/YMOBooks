@@ -91,7 +91,13 @@ const SettingsScreen = ({ navigation }) => {
         }
 
         const updated = serverCompany
-          ? { ...(company || {}), ...serverCompany }
+          ? {
+              ...(company || {}),
+              ...serverCompany,
+              // Maintain legacy keys so existing UI reflects changes immediately
+              companyName: serverCompany.name ?? (company?.companyName || ''),
+              phoneNumber: serverCompany.phone ?? (company?.phoneNumber || ''),
+            }
           : {
               ...(company || {}),
               country: payload.country || '',

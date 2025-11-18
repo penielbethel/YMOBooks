@@ -16,14 +16,12 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors } from '../constants/Colors';
 import { Fonts } from '../constants/Fonts';
 import { Spacing } from '../constants/Spacing';
+import { Ionicons } from '@expo/vector-icons';
 
 const MenuItem = memo(({ item, onPress }) => (
-  <TouchableOpacity
-    style={styles.menuItem}
-    onPress={() => onPress(item.id)}
-  >
-    <View style={[styles.menuIcon, { backgroundColor: item.color }]}>
-      <Text style={styles.menuIconText}>{item.icon}</Text>
+  <TouchableOpacity style={styles.menuItem} onPress={() => onPress(item.id)}>
+    <View style={[styles.menuIcon, { backgroundColor: item.tint }]}>
+      <Ionicons name={item.icon} size={26} color={Colors.white} />
     </View>
     <Text style={styles.menuTitle}>{item.title}</Text>
     <Text style={styles.menuDescription}>{item.description}</Text>
@@ -68,22 +66,22 @@ const DashboardScreen = ({ navigation }) => {
       id: 'invoice',
       title: 'Create Invoice',
       description: 'Generate professional invoices',
-      icon: '📄',
-      color: Colors.primary
+      icon: 'document-text-outline',
+      tint: Colors.primary,
     },
     {
       id: 'history',
       title: 'Invoice History',
       description: 'View invoices from the last 6 months',
-      icon: '🗂️',
-      color: Colors.success
+      icon: 'albums-outline',
+      tint: Colors.success,
     },
     {
       id: 'calculator',
       title: 'Financial Calculator',
       description: 'Perform financial calculations',
-      icon: '🧮',
-      color: Colors.success
+      icon: 'calculator-outline',
+      tint: Colors.success,
     }
   ]), []);
 
@@ -131,7 +129,7 @@ const DashboardScreen = ({ navigation }) => {
               />
             )}
             <View style={styles.companyInfo}>
-              <Text style={styles.companyName}>{companyData.companyName}</Text>
+              <Text style={styles.companyName}>{companyData.name || companyData.companyName}</Text>
               <Text style={styles.welcomeText}>Welcome to YMOBooks</Text>
               <Text style={[styles.welcomeText, { fontWeight: '700', color: Colors.text }]}>ID: {companyData.companyId}</Text>
             </View>
@@ -163,7 +161,7 @@ const DashboardScreen = ({ navigation }) => {
           </View>
           <View style={styles.infoRow}>
             <Text style={styles.infoLabel}>📞 Phone</Text>
-            <Text style={styles.infoValue}>{companyData.phoneNumber || '—'}</Text>
+            <Text style={styles.infoValue}>{companyData.phone || companyData.phoneNumber || '—'}</Text>
           </View>
           {companyData.signature && (
             <View style={[styles.infoRow, { alignItems: 'center' }]}> 
@@ -352,16 +350,14 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   menuIcon: {
-    width: 64,
-    height: 64,
-    borderRadius: 14,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: Spacing.sm,
   },
-  menuIconText: {
-    fontSize: 32,
-  },
+  // menuIconText removed in favor of vector icons
   menuTitle: {
     fontSize: Fonts.sizes.md,
     fontWeight: Fonts.weights.semiBold,
