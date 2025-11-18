@@ -1,4 +1,4 @@
-Render deployment (backend)
+Render deployment (backend) — Deprecated
 
 Overview
 - This repo contains a frontend (React Native) and a backend (Node/Express) under `server/`.
@@ -24,15 +24,13 @@ Steps
    - `GENERATED_ROOT=/opt/render/project/src/server`
    - `COMPANIES_FILE=/opt/render/project/src/server/companies.json`
 
-After deployment
-- Render will assign a public URL like `https://ymobooks.onrender.com`.
-- Update the mobile app base URL to point to this domain.
-  Options:
-  - For permanent config: update `app.json` -> `expo.extra.apiBaseUrl`.
-  - For build-time override: set `EXPO_PUBLIC_API_BASE_URL` in your build environment.
+Current production backend: Vercel
+- The project now uses Vercel for production backend.
+- Mobile app base URL: `https://ymobooks.vercel.app` (set in `app.json` -> `expo.extra.apiBaseUrl`).
+  - You can still override at build time with `EXPO_PUBLIC_API_BASE_URL`.
 
 Building the APK for production
-1) Update `app.json` -> `expo.extra.apiBaseUrl` to your final Render URL.
+1) Ensure `app.json` -> `expo.extra.apiBaseUrl` points to `https://ymobooks.vercel.app`.
 2) Build a release APK: `cd android && ./gradlew.bat assembleRelease`.
 3) The APK appears at `android/app/build/outputs/apk/release/app-release.apk`.
 4) Copy it into `release/YmoBooks-release.apk`.
