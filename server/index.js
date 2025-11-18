@@ -16,16 +16,30 @@ app.use(cors());
 app.use(express.json({ limit: '8mb' }));
 // Serve static public assets (landing page)
 app.use(express.static(PUBLIC_DIR));
-// Serve generated files (PDFs)
-const GENERATED_DIR = path.join(process.env.GENERATED_ROOT || __dirname, 'generated');
-const INVOICES_DIR = path.join(GENERATED_DIR, 'invoices');
-const RECEIPTS_DIR = path.join(GENERATED_DIR, 'receipts');
-fs.mkdirSync(INVOICES_DIR, { recursive: true });
-fs.mkdirSync(RECEIPTS_DIR, { recursive: true });
+// Serve generated files (PDFs) — default to a writable location on Vercel
+const WRITABLE_ROOT = process.env.GENERATED_ROOT || (process.env.VERCEL ? '/tmp' : __dirname);
+let GENERATED_DIR = path.join(WRITABLE_ROOT, 'generated');
+let INVOICES_DIR = path.join(GENERATED_DIR, 'invoices');
+let RECEIPTS_DIR = path.join(GENERATED_DIR, 'receipts');
+try {
+  fs.mkdirSync(INVOICES_DIR, { recursive: true });
+  fs.mkdirSync(RECEIPTS_DIR, { recursive: true });
+} catch (e) {
+  console.warn('Failed to create generated directories at', GENERATED_DIR, '→ falling back to /tmp:', e.message);
+  GENERATED_DIR = path.join('/tmp', 'generated');
+  INVOICES_DIR = path.join(GENERATED_DIR, 'invoices');
+  RECEIPTS_DIR = path.join(GENERATED_DIR, 'receipts');
+  try {
+    fs.mkdirSync(INVOICES_DIR, { recursive: true });
+    fs.mkdirSync(RECEIPTS_DIR, { recursive: true });
+  } catch (e2) {
+    console.error('Failed to initialize writable generated directories:', e2.message);
+  }
+}
 app.use('/files', express.static(GENERATED_DIR));
 
 // Local file fallback store for companies when Mongo is unavailable
-const COMPANIES_FILE = process.env.COMPANIES_FILE || path.join(__dirname, 'companies.json');
+const COMPANIES_FILE = process.env.COMPANIES_FILE || path.join(WRITABLE_ROOT, 'companies.json');
 function readCompaniesFile() {
   try {
     if (!fs.existsSync(COMPANIES_FILE)) return [];
