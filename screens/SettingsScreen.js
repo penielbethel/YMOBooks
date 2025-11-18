@@ -4,7 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors } from '../constants/Colors';
 import { Fonts } from '../constants/Fonts';
 import { Spacing } from '../constants/Spacing';
-import { updateCompany } from '../utils/api';
+import { updateCompany, fetchCompany } from '../utils/api';
 
 const SettingsScreen = ({ navigation }) => {
   const [company, setCompany] = useState(null);
@@ -81,15 +81,29 @@ const SettingsScreen = ({ navigation }) => {
       };
       const res = await updateCompany(payload);
       if (res?.success) {
-        const updated = {
-          ...(company || {}),
-          country: payload.country || '',
-          currencySymbol: payload.currencySymbol,
-          currencyCode: payload.currencyCode,
-        };
+        // Prefer authoritative data from server immediately after update
+        let serverCompany = res?.company;
+        if (!serverCompany) {
+          try {
+            const refetch = await fetchCompany(company.companyId);
+            serverCompany = refetch?.company || null;
+          } catch (_) {}
+        }
+
+        const updated = serverCompany
+          ? { ...(company || {}), ...serverCompany }
+          : {
+              ...(company || {}),
+              country: payload.country || '',
+              currencySymbol: payload.currencySymbol,
+              currencyCode: payload.currencyCode,
+            };
+
         await AsyncStorage.setItem('companyData', JSON.stringify(updated));
         setCompany(updated);
-        Alert.alert('Saved', 'Company settings updated.');
+        setCountry(updated.country || '');
+        setCurrencySymbol(updated.currencySymbol || currencySymbol);
+        Alert.alert('Saved', 'Company settings updated and synced.');
       } else {
         Alert.alert('Failed', res?.message || 'Could not update company');
       }
