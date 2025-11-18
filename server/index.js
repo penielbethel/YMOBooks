@@ -1747,6 +1747,11 @@ app.get('/api/admin/stats', async (req, res) => {
   }
 });
 
-app.listen(PORT, () => {
-  console.log(`YMOBooks backend listening on http://localhost:${PORT}`);
-});
+// Vercel serverless: export the Express app instead of listening
+if (process.env.VERCEL) {
+  module.exports = app;
+} else {
+  app.listen(PORT, () => {
+    console.log(`YMOBooks backend listening on http://localhost:${PORT}`);
+  });
+}
