@@ -16,14 +16,15 @@
     "ios": {
       "supportsTablet": true
     },
-    "android": {
-      "adaptiveIcon": {
-        "foregroundImage": "./logo.png",
-        "backgroundColor": "#CC5500"
-      },
-      "edgeToEdgeEnabled": true,
-      "package": "com.penielbethel.ymobooks"
+  "android": {
+    "adaptiveIcon": {
+      "foregroundImage": "./logo.png",
+      "backgroundColor": "#CC5500"
     },
+    "edgeToEdgeEnabled": true,
+    "versionCode": 5,
+    "package": "com.penielbethel.ymobooks"
+  },
     "web": {
       "favicon": "./logo.png"
     },
