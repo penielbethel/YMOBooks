@@ -12,11 +12,23 @@
     "name": "Big Fonts Co 20251118051738",
     "address": "1 Font Way",
     "email": "test@bigfonts.local",
-    "phone": "000-000",
+    "phone": "999-123",
     "currencySymbol": "$",
     "currencyCode": "USD",
     "invoiceTemplate": "classic",
     "receiptTemplate": "classic",
     "brandColor": "#ff2d55"
+  },
+  {
+    "companyId": "MAI-45988",
+    "currencySymbol": "€",
+    "currencyCode": "EUR"
+  },
+  {
+    "companyId": "ANO-68243",
+    "phone": "08169114904",
+    "currencySymbol": "",
+    "currencyCode": "NGN",
+    "address": "123 Test Street, Lagos"
   }
 ]

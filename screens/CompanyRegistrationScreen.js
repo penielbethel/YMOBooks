@@ -276,9 +276,15 @@ const CompanyRegistrationScreen = ({ navigation, route }) => {
         } else {
           const result = await updateCompany(existing.companyId, payload);
           if (result?.success) {
-            const server = result.company || {};
+            // Refetch authoritative server state to ensure immediate UI reflection
+            let server = result.company || {};
+            try {
+              const refetch = await fetchCompany(existing.companyId);
+              if (refetch?.company) server = refetch.company;
+            } catch (_) {}
+
             const normalized = {
-              companyName: server.name || formData.companyName,
+              companyName: server.name ?? formData.companyName,
               address: server.address ?? formData.address,
               email: server.email ?? formData.email,
               phoneNumber: server.phone ?? formData.phoneNumber,
@@ -292,6 +298,9 @@ const CompanyRegistrationScreen = ({ navigation, route }) => {
               bankAccountNumber: server.accountNumber || server.bankAccountNumber || formData.bankAccountNumber || '',
               brandColor: server.brandColor || existing.brandColor || null,
               currencySymbol: server.currencySymbol || existing.currencySymbol || '$',
+              // Preserve canonical keys alongside legacy ones for broader UI compatibility
+              name: server.name ?? existing.name ?? formData.companyName,
+              phone: server.phone ?? existing.phone ?? formData.phoneNumber,
             };
             await AsyncStorage.setItem('companyData', JSON.stringify(normalized));
             Alert.alert('Profile Updated Successfully', 'Your company profile has been updated.');
@@ -398,15 +407,15 @@ const CompanyRegistrationScreen = ({ navigation, route }) => {
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Company Name *</Text>
               <TextInput
-                style={[styles.input, mode === 'edit' && { backgroundColor: Colors.gray?.[100] || Colors.surface }]}
+                style={styles.input}
                 value={formData.companyName}
                 onChangeText={(text) => updateFormData('companyName', text)}
                 placeholder="Enter your company name"
                 placeholderTextColor={Colors.textSecondary}
-                editable={mode !== 'edit'}
+                editable={true}
               />
               {mode === 'edit' && (
-                <Text style={styles.helperText}>Company name cannot be changed.</Text>
+                <Text style={styles.helperText}>Ensure the new name is unique.</Text>
               )}
             </View>
 
