@@ -31,6 +31,14 @@
                         border: '#e4e4e7',
                         input: '#e4e4e7',
                         ring: '#18181b',
+                        teal: {
+                            500: '#14b8a6', // Tax Color match
+                            600: '#0d9488',
+                        },
+                        orange: {
+                            200: '#fed7aa', // Take Home Color match
+                            300: '#fdba74',
+                        }
                     },
                     fontFamily: {
                         sans: ['Inter', 'sans-serif'],
@@ -60,13 +68,6 @@
 
     <main class="container mx-auto px-4 py-8 sm:py-12 md:py-16 lg:px-8 max-w-7xl">
         
-        <!-- Logo Placeholder (Oduko style) -->
-        <div class="mb-8 flex justify-center sm:mb-10">
-             <!-- Using a placeholder or the actual Oduko logo if available, or just text matching style -->
-             <!-- Since I cannot load external assets not in repo, I will skip the image or use text representation if image fails -->
-             <!-- <img alt="Oduko" width="240" height="60" class="h-auto w-36 sm:w-48 md:w-56" src="/oduko-logo.png"> -->
-        </div>
-
         <!-- Title Section -->
         <div class="mb-12 text-center sm:mb-16">
             <h1 class="text-balance text-4xl font-bold tracking-tight text-foreground sm:text-5xl md:text-6xl lg:text-7xl">Nigeria Tax Calculator</h1>
@@ -257,13 +258,12 @@
                     <div class="lg:sticky lg:top-8">
                         <div class="bg-card text-card-foreground flex flex-col gap-6 rounded-xl border py-6 border-border/50 shadow-lg backdrop-blur-sm">
                             <div class="px-6 pb-6 border-b border-border/50 space-y-2">
-                                <div class="font-semibold flex items-center gap-2.5 text-2xl">
-                                    <div class="rounded-lg bg-primary/10 p-2">
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-5 w-5 text-primary"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"></polyline><polyline points="16 7 22 7 22 13"></polyline></svg>
+                                <div class="font-semibold flex items-center gap-2.5 text-xl">
+                                    <div class="rounded-lg bg-orange-200/50 p-1.5">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-orange-600"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
                                     </div>
-                                    Tax Summary
+                                    Your Tax Calculation (<span id="res-view-label">Annual</span>)
                                 </div>
-                                <div class="text-muted-foreground text-base">Your calculated tax breakdown (<span id="summary-view-label">annual</span> view)</div>
                             </div>
 
                             <div class="px-6">
@@ -276,53 +276,54 @@
                                 </div>
 
                                 <!-- Calculated Results State (Hidden by default) -->
-                                <div id="calculated-state" class="hidden space-y-4">
-                                    <!-- Gross Income Row -->
-                                    <div class="flex flex-col gap-2 rounded-xl bg-gradient-to-br from-muted/50 to-muted/30 p-3 sm:flex-row sm:items-center sm:justify-between sm:p-4">
-                                        <span class="text-xs font-semibold text-muted-foreground sm:text-sm">Gross Income</span>
-                                        <span id="res-gross" class="break-all text-sm font-bold text-foreground sm:text-base sm:break-normal sm:text-right">₦0.00</span>
+                                <div id="calculated-state" class="hidden space-y-6">
+                                    
+                                    <!-- Context Header -->
+                                    <div class="rounded-lg bg-gray-50 p-4 border border-gray-100">
+                                        <p class="text-sm text-gray-600 font-medium">Based on your <span id="ctx-view">annual</span> income of <span id="ctx-gross" class="font-bold text-gray-900">₦0</span>:</p>
                                     </div>
 
-                                    <!-- Total Deductions Row -->
-                                    <div class="flex flex-col gap-2 rounded-xl bg-gradient-to-br from-accent/20 to-accent/10 p-3 sm:flex-row sm:items-center sm:justify-between sm:p-4">
-                                        <span class="text-xs font-semibold text-accent-foreground sm:text-sm">Total Deductions</span>
-                                        <span id="res-deductions" class="break-all text-sm font-bold text-accent-foreground sm:text-base sm:break-normal sm:text-right">₦0.00</span>
-                                    </div>
-
-                                    <!-- Taxable Income Row -->
-                                    <div class="flex flex-col gap-2 rounded-xl bg-gradient-to-br from-secondary to-secondary/70 p-3 sm:flex-row sm:items-center sm:justify-between sm:p-4">
-                                        <span class="text-xs font-semibold text-secondary-foreground sm:text-sm">Taxable Income</span>
-                                        <span id="res-taxable" class="break-all text-sm font-bold text-secondary-foreground sm:text-base sm:break-normal sm:text-right">₦0.00</span>
-                                    </div>
-
-                                    <div class="h-px bg-border w-full my-4"></div>
-
-                                    <!-- Total Tax Highlight -->
-                                    <div class="flex flex-col gap-3 rounded-xl bg-gradient-to-br from-primary to-primary/80 p-4 shadow-lg sm:flex-row sm:items-center sm:justify-between sm:p-5">
-                                        <div class="flex items-center gap-3">
-                                            <div class="rounded-lg bg-primary-foreground/10 p-2">
-                                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4 text-primary-foreground sm:h-5 sm:w-5"><rect width="16" height="20" x="4" y="2" rx="2"></rect><line x1="8" x2="16" y1="6" y2="6"></line><line x1="16" x2="16" y1="14" y2="18"></line><path d="M16 10h.01"></path><path d="M12 10h.01"></path><path d="M8 10h.01"></path><path d="M12 14h.01"></path><path d="M8 14h.01"></path><path d="M12 18h.01"></path><path d="M8 18h.01"></path></svg>
-                                            </div>
-                                            <span class="text-base font-bold text-primary-foreground sm:text-lg">Total Tax</span>
+                                    <!-- Breakdown List -->
+                                    <div class="space-y-4 text-sm sm:text-base">
+                                        <!-- Gross Income -->
+                                        <div class="flex justify-between items-center py-2 border-b border-gray-100">
+                                            <span class="text-gray-500 font-medium">Gross Income:</span>
+                                            <span id="res-gross" class="font-bold text-gray-900">₦0</span>
                                         </div>
-                                        <span id="res-tax" class="break-all text-xl font-bold text-primary-foreground sm:text-2xl sm:break-normal sm:text-right">₦0.00</span>
-                                    </div>
 
-                                    <!-- Net Income Highlight -->
-                                    <div class="flex flex-col gap-3 rounded-xl bg-gradient-to-br from-accent to-accent/80 p-4 shadow-lg sm:flex-row sm:items-center sm:justify-between sm:p-5">
-                                        <div class="flex items-center gap-3">
-                                            <div class="rounded-lg bg-accent-foreground/10 p-2">
-                                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4 text-accent-foreground sm:h-5 sm:w-5"><rect width="20" height="12" x="2" y="6" rx="2"></rect><circle cx="12" cy="12" r="2"></circle><path d="M6 12h.01M18 12h.01"></path></svg>
+                                        <!-- Deductions List -->
+                                        <div class="space-y-2 py-2 border-b border-gray-100">
+                                            <span class="text-gray-500 font-medium block mb-1">Deductions:</span>
+                                            <div id="deductions-list" class="space-y-1 pl-4">
+                                                <!-- Dynamic Content -->
                                             </div>
-                                            <span class="text-base font-bold text-accent-foreground sm:text-lg">Net Income</span>
                                         </div>
-                                        <span id="res-net" class="break-all text-xl font-bold text-accent-foreground sm:text-2xl sm:break-normal sm:text-right">₦0.00</span>
+
+                                        <!-- Taxable Income -->
+                                        <div class="flex justify-between items-center py-2 bg-teal-50/50 -mx-2 px-2 rounded">
+                                            <span class="text-gray-900 font-bold">Taxable Income:</span>
+                                            <span id="res-taxable" class="font-bold text-gray-900">₦0</span>
+                                        </div>
+
+                                        <!-- Tax Calculation Breakdown -->
+                                        <div class="space-y-2 py-2">
+                                            <span class="text-xs text-gray-500 font-medium uppercase tracking-wide">Tax Calculation:</span>
+                                            <div id="tax-breakdown-list" class="space-y-1 pl-0 text-gray-600 text-sm">
+                                                <!-- Dynamic Content -->
+                                            </div>
+                                        </div>
                                     </div>
 
-                                    <!-- Effective Tax Rate -->
-                                    <div class="mt-4 flex items-center justify-between px-2">
-                                        <span class="text-xs font-medium text-muted-foreground">Effective Tax Rate</span>
-                                        <span id="res-rate" class="text-xs font-bold text-foreground">0.00%</span>
+                                    <!-- Total Tax -->
+                                    <div class="rounded-xl bg-[#2a9d8f] text-white p-4 flex justify-between items-center shadow-md">
+                                        <span class="font-bold">Total Tax:</span>
+                                        <span id="res-tax" class="font-bold text-xl">₦0</span>
+                                    </div>
+
+                                    <!-- Take Home -->
+                                    <div class="rounded-xl bg-[#f4a261] text-white p-4 flex justify-between items-center shadow-md">
+                                        <span class="font-bold">Take-Home Income:</span>
+                                        <span id="res-net" class="font-bold text-xl">₦0</span>
                                     </div>
 
                                 </div>
@@ -365,19 +366,16 @@
         let hasInteracted = false;
 
         function formatMoney(amount) {
-            return '₦' + amount.toFixed(2).replace(/\d(?=(\d{3})+\.)/g, '$&,');
+            return '₦' + amount.toFixed(0).replace(/\d(?=(\d{3})+$)/g, '$&,');
         }
 
         function formatInput(input) {
             let value = input.value.replace(/[^0-9.]/g, '');
             if (value) {
-                // Keep only the first decimal point
                 const parts = value.split('.');
                 if (parts.length > 2) {
                     value = parts[0] + '.' + parts.slice(1).join('');
                 }
-                
-                // Add commas to the integer part
                 const integerPart = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ",");
                 input.value = parts.length > 1 ? integerPart + '.' + parts[1] : integerPart;
             } else {
@@ -406,26 +404,23 @@
             const btnAnnual = document.getElementById('btn-annual');
             const btnMonthly = document.getElementById('btn-monthly');
             const labelGross = document.getElementById('label-gross');
-            const summaryLabel = document.getElementById('summary-view-label');
+            
+            // Labels updates
+            document.getElementById('res-view-label').textContent = annual ? 'Annual' : 'Monthly';
+            document.getElementById('ctx-view').textContent = annual ? 'annual' : 'monthly';
 
             if (annual) {
                 btnAnnual.classList.remove('bg-muted/50', 'text-muted-foreground');
                 btnAnnual.classList.add('bg-primary', 'text-primary-foreground', 'shadow-md');
-                
                 btnMonthly.classList.remove('bg-primary', 'text-primary-foreground', 'shadow-md');
                 btnMonthly.classList.add('text-muted-foreground', 'hover:text-foreground');
-                
                 labelGross.textContent = 'Annual Gross Income';
-                summaryLabel.textContent = 'annual';
             } else {
                 btnMonthly.classList.remove('bg-muted/50', 'text-muted-foreground');
                 btnMonthly.classList.add('bg-primary', 'text-primary-foreground', 'shadow-md');
-                
                 btnAnnual.classList.remove('bg-primary', 'text-primary-foreground', 'shadow-md');
                 btnAnnual.classList.add('text-muted-foreground', 'hover:text-foreground');
-                
                 labelGross.textContent = 'Monthly Gross Income';
-                summaryLabel.textContent = 'monthly';
             }
             calculate();
         }
@@ -449,122 +444,137 @@
             let rent = getVal('rent');
             let insurance = getVal('insurance');
 
-            // Convert to Annual for calculation if in Monthly mode
+            // If monthly, we convert to annual for tax calculation logic then convert back
+            // OR we can just use monthly bands. 
+            // The logic: 
+            // 1. Convert Input to Annual (if monthly)
+            // 2. Calculate Annual Tax
+            // 3. Divide by 12 for Monthly Result
+            
+            let annualGross = gross;
             if (!isAnnual) {
-                gross *= 12;
-                mortgage *= 12;
-                pension *= 12;
-                rent *= 12;
-                insurance *= 12;
+                annualGross = gross * 12;
             }
 
-            // --- Tax Logic (Annual) ---
+            // --- Deductions Display Only ---
+            // We calculate what they WOULD be (annualized or monthly as needed)
+            // But we DO NOT subtract them from Taxable.
             
-            // 1. Consolidated Relief Allowance (CRA)
-            // CRA = 200,000 or 1% of Gross (whichever is higher) + 20% of Gross
-            // Note: Oduko likely uses the standard Nigerian formula.
-            // Let's verify if Oduko simplifies this. The user said "Am also seeing consolidated Relief, which is not in the odukocalculator."
-            // This means I should calculate it but NOT show it as a separate line item.
-            // It is part of "Total Deductions".
+            // Populate Deductions List
+            const deductionsList = document.getElementById('deductions-list');
+            deductionsList.innerHTML = '';
             
-            // CRA Calculation
-            const higherOfFixedOrOnePercent = Math.max(200000, gross * 0.01);
-            const cra = higherOfFixedOrOnePercent + (gross * 0.20);
+            const addDedItem = (label, val) => {
+                if (val > 0) {
+                    const d = document.createElement('div');
+                    d.className = 'flex justify-between items-center text-sm text-gray-500';
+                    d.innerHTML = `<span>${label}:</span><span>- ${formatMoney(val)}</span>`;
+                    deductionsList.appendChild(d);
+                }
+            };
 
-            // 2. Pension (8% of Gross usually, but here user enters it)
-            // If user doesn't enter pension, Oduko might calculate default 8%.
-            // The placeholder says "8% default". Let's auto-fill if empty? 
-            // The user wants "exact parity". If I type in Oduko, does it auto-fill?
-            // In my puppeteer run, I saw values like "800,000" in pension when gross was "10,000,000". That is 8%.
-            // So if the input is empty, we should probably assume 0 for the calculation unless we implement auto-fill logic.
-            // However, the HTML I grabbed shows "value" attribute set in inputs.
-            // For now, I'll stick to using the input values.
+            addDedItem('Pension (8%)', pension);
+            addDedItem('Mortgage (10%)', mortgage);
+            addDedItem('Rent', rent);
+            addDedItem('Insurance', insurance);
             
-            const totalDeductions = mortgage + pension + rent + insurance + cra;
+            if (deductionsList.children.length === 0) {
+                 deductionsList.innerHTML = '<span class="text-xs text-gray-400 italic">No deductions entered</span>';
+            }
 
-            let taxable = gross - totalDeductions;
-            if (taxable < 0) taxable = 0;
 
-            // 3. Tax Bands
-            // First ₦800,000 @ 0% (It says "First ₦300k" in some old laws, but user specified:
-            // First 800k: 0%
-            // 800k - 3M: 15%
-            // 3M - 12M: 18%
-            // 12M - 25M: 21%
-            // 25M - 50M: 23%
-            // > 50M: 25%
+            // --- Tax Logic (Based on Control: Taxable = Gross) ---
+            let taxable = annualGross;
             
+            // Tax Bands (Annual)
             let tax = 0;
             let tempTaxable = taxable;
+            const breakdown = [];
 
             // Band 1: First 800k @ 0%
             const b1 = 800000;
-            if (tempTaxable > 0) {
-                tempTaxable -= Math.min(tempTaxable, b1);
+            let amt1 = Math.min(tempTaxable, b1);
+            if (amt1 > 0) {
+                breakdown.push({ limit: b1, rate: 0, tax: 0, amt: amt1 });
+                tempTaxable -= amt1;
             }
 
             // Band 2: Next 2.2M (up to 3M) @ 15%
-            const b2 = 3000000 - 800000; // 2,200,000
+            const b2 = 3000000 - 800000;
             if (tempTaxable > 0) {
-                const taxableAmount = Math.min(tempTaxable, b2);
-                tax += taxableAmount * 0.15;
-                tempTaxable -= taxableAmount;
+                let amt2 = Math.min(tempTaxable, b2);
+                let t2 = amt2 * 0.15;
+                tax += t2;
+                breakdown.push({ limit: b2, rate: 15, tax: t2, amt: amt2 });
+                tempTaxable -= amt2;
             }
 
             // Band 3: Next 9M (up to 12M) @ 18%
-            const b3 = 12000000 - 3000000; // 9,000,000
+            const b3 = 12000000 - 3000000;
             if (tempTaxable > 0) {
-                const taxableAmount = Math.min(tempTaxable, b3);
-                tax += taxableAmount * 0.18;
-                tempTaxable -= taxableAmount;
+                let amt3 = Math.min(tempTaxable, b3);
+                let t3 = amt3 * 0.18;
+                tax += t3;
+                breakdown.push({ limit: b3, rate: 18, tax: t3, amt: amt3 });
+                tempTaxable -= amt3;
             }
 
             // Band 4: Next 13M (up to 25M) @ 21%
-            const b4 = 25000000 - 12000000; // 13,000,000
+            const b4 = 25000000 - 12000000;
             if (tempTaxable > 0) {
-                const taxableAmount = Math.min(tempTaxable, b4);
-                tax += taxableAmount * 0.21;
-                tempTaxable -= taxableAmount;
+                let amt4 = Math.min(tempTaxable, b4);
+                let t4 = amt4 * 0.21;
+                tax += t4;
+                breakdown.push({ limit: b4, rate: 21, tax: t4, amt: amt4 });
+                tempTaxable -= amt4;
             }
 
             // Band 5: Next 25M (up to 50M) @ 23%
-            const b5 = 50000000 - 25000000; // 25,000,000
+            const b5 = 50000000 - 25000000;
             if (tempTaxable > 0) {
-                const taxableAmount = Math.min(tempTaxable, b5);
-                tax += taxableAmount * 0.23;
-                tempTaxable -= taxableAmount;
+                let amt5 = Math.min(tempTaxable, b5);
+                let t5 = amt5 * 0.23;
+                tax += t5;
+                breakdown.push({ limit: b5, rate: 23, tax: t5, amt: amt5 });
+                tempTaxable -= amt5;
             }
 
             // Band 6: Above 50M @ 25%
             if (tempTaxable > 0) {
-                tax += tempTaxable * 0.25;
+                let t6 = tempTaxable * 0.25;
+                tax += t6;
+                breakdown.push({ limit: -1, rate: 25, tax: t6, amt: tempTaxable });
             }
 
-            // 4. Minimum Tax Rule
-            // If calculated tax is less than Minimum Tax, pay Minimum Tax.
-            // Min Tax = 1% of Gross Income.
-            // Check if Oduko implements this. The user didn't explicitly ask for it, 
-            // but said "accurate Nigerian tax calculations". 
-            // Standard practice: if taxable income is very low, min tax applies.
-            // For 10M gross, tax is 1.122M. 1% is 100k. So tax is higher.
-            // I'll stick to the bands for now as requested.
+            const net = annualGross - tax;
 
-            const net = gross - tax;
-
-            // Display Results (convert back to monthly if needed)
+            // --- Display Results ---
             const divisor = isAnnual ? 1 : 12;
 
-            document.getElementById('res-gross').textContent = formatMoney(gross / divisor);
-            document.getElementById('res-deductions').textContent = formatMoney(totalDeductions / divisor);
+            document.getElementById('ctx-gross').textContent = formatMoney(gross);
+            document.getElementById('res-gross').textContent = formatMoney(annualGross / divisor);
             document.getElementById('res-taxable').textContent = formatMoney(taxable / divisor);
             document.getElementById('res-tax').textContent = formatMoney(tax / divisor);
             document.getElementById('res-net').textContent = formatMoney(net / divisor);
 
-            let rate = 0;
-            if (gross > 0) {
-                rate = (tax / gross) * 100;
-            }
-            document.getElementById('res-rate').textContent = rate.toFixed(2) + '%';
+            // Populate Tax Breakdown List
+            const taxList = document.getElementById('tax-breakdown-list');
+            taxList.innerHTML = '';
+            
+            // "First ₦800,000 at 0% = ₦0"
+            // "Next ₦133,333 at 15% = ₦20,000"
+            breakdown.forEach(b => {
+                const amt = b.amt / divisor;
+                const tx = b.tax / divisor;
+                const label = b.limit === -1 ? `Balance` : (b.rate === 0 ? `First` : `Next`);
+                
+                // If it's the First band (0%), logic is usually "First X at 0% = NO" or "₦0"
+                const taxStr = b.rate === 0 ? 'NO' : formatMoney(tx);
+                
+                const div = document.createElement('div');
+                div.textContent = `${label} ${formatMoney(amt)} at ${b.rate}% = ${taxStr}`;
+                taxList.appendChild(div);
+            });
         }
     </script>
 </body>
