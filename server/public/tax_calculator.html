@@ -87,12 +87,12 @@
                         <div class="space-y-5">
                             <!-- Mortgage -->
                             <div>
-                                <label class="block text-xs font-medium text-gray-500 mb-1.5 uppercase tracking-wider">National Housing Fund (NHF)</label>
+                                <label class="block text-xs font-medium text-gray-500 mb-1.5 uppercase tracking-wider">Mortgage</label>
                                 <div class="relative">
                                     <span class="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">₦</span>
                                     <input type="number" id="mortgage" placeholder="0" class="w-full pl-10 pr-4 py-3 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all" oninput="calculate()">
                                 </div>
-                                <p class="text-xs text-gray-400 mt-1">2.5% of Basic Salary (Optional)</p>
+                                <p class="text-xs text-gray-400 mt-1">10% default</p>
                             </div>
 
                             <!-- Pension -->
@@ -102,25 +102,27 @@
                                     <span class="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">₦</span>
                                     <input type="number" id="pension" placeholder="0" class="w-full pl-10 pr-4 py-3 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all" oninput="calculate()">
                                 </div>
-                                <p class="text-xs text-gray-400 mt-1">8% of Gross (Standard)</p>
+                                <p class="text-xs text-gray-400 mt-1">8% default</p>
                             </div>
 
-                            <!-- NHIS -->
+                            <!-- Rent -->
                             <div>
-                                <label class="block text-xs font-medium text-gray-500 mb-1.5 uppercase tracking-wider">National Health Insurance (NHIS)</label>
+                                <label class="block text-xs font-medium text-gray-500 mb-1.5 uppercase tracking-wider">Annual Rent</label>
                                 <div class="relative">
                                     <span class="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">₦</span>
-                                    <input type="number" id="nhis" placeholder="0" class="w-full pl-10 pr-4 py-3 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all" oninput="calculate()">
+                                    <input type="number" id="rent" placeholder="0" class="w-full pl-10 pr-4 py-3 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all" oninput="calculate()">
                                 </div>
+                                <p class="text-xs text-gray-400 mt-1">20% max (₦500k limit)</p>
                             </div>
 
-                            <!-- Life Assurance -->
+                            <!-- Life Insurance -->
                             <div>
-                                <label class="block text-xs font-medium text-gray-500 mb-1.5 uppercase tracking-wider">Life Assurance Premium</label>
+                                <label class="block text-xs font-medium text-gray-500 mb-1.5 uppercase tracking-wider">Life Insurance</label>
                                 <div class="relative">
                                     <span class="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">₦</span>
                                     <input type="number" id="insurance" placeholder="0" class="w-full pl-10 pr-4 py-3 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all" oninput="calculate()">
                                 </div>
+                                <p class="text-xs text-gray-400 mt-1">Default amount</p>
                             </div>
                         </div>
                     </div>
@@ -139,10 +141,6 @@
                         <div class="flex justify-between items-center text-sm">
                             <span class="text-gray-400">Gross Income</span>
                             <span class="font-mono font-medium" id="resGross">₦0.00</span>
-                        </div>
-                        <div class="flex justify-between items-center text-sm">
-                            <span class="text-gray-400">Consolidated Relief</span>
-                            <span class="font-mono font-medium text-emerald-400" id="resCRA">- ₦0.00</span>
                         </div>
                         <div class="flex justify-between items-center text-sm">
                             <span class="text-gray-400">Other Deductions</span>
@@ -219,80 +217,94 @@
             let gross = parseFloat(document.getElementById('grossIncome').value) || 0;
             let mortgage = parseFloat(document.getElementById('mortgage').value) || 0;
             let pension = parseFloat(document.getElementById('pension').value) || 0;
-            let nhis = parseFloat(document.getElementById('nhis').value) || 0;
+            let rent = parseFloat(document.getElementById('rent').value) || 0;
             let insurance = parseFloat(document.getElementById('insurance').value) || 0;
 
-            // 2. Calculate CRA (Consolidated Relief Allowance)
-            // CRA = Higher of (₦200,000 or 1% of Gross) + 20% of Gross
-            const fixedRelief = Math.max(200000, 0.01 * gross);
-            const variableRelief = 0.20 * gross;
-            const cra = fixedRelief + variableRelief;
-
-            // 3. Total Deductions
-            // Tax Exempt Items = CRA + Pension + NHF + NHIS + Life Assurance
-            const otherDeductions = mortgage + pension + nhis + insurance;
-            const totalExempt = cra + otherDeductions;
-
-            // 4. Taxable Income
-            let taxable = gross - totalExempt;
+            // Cap Rent: 20% max (₦500k limit) logic if needed, but user might enter final value.
+            // Oduko "Annual Rent 20% max ₦500k" suggests validation or auto-cap.
+            // We'll trust the user input but we could cap it. 
+            // For now, let's treat input as the claimable amount.
+            
+            // 2. Total Deductions
+            // Based on User Request: "0% on first 800k" implies this is the relief structure.
+            // Deductions reduce the gross to get Chargeable Income?
+            // Usually: Gross - Deductions = Chargeable.
+            // Then Chargeable applies to bands.
+            // "Rent" is typically a deduction in these calculators (acting as Housing Allowance exemption).
+            const otherDeductions = mortgage + pension + rent + insurance;
+            
+            // 3. Taxable Income
+            let taxable = gross - otherDeductions;
             if (taxable < 0) taxable = 0;
 
-            // 5. Calculate Tax (Annual Bands)
+            // 4. Calculate Tax (New Bands Provided by User)
+            // 0 - 800,000 : 0%
+            // 800,001 - 3,000,000 : 15%
+            // 3,000,001 - 12,000,000 : 18%
+            // 12,000,001 - 25,000,000 : 21%
+            // 25,000,001 - 50,000,000 : 23%
+            // Above 50,000,000 : 25%
+
             let tax = 0;
             let tempTaxable = taxable;
 
-            // Band 1: First 300k @ 7%
-            const b1 = 300000;
+            // Band 1: First 800k @ 0%
+            const b1 = 800000;
             if (tempTaxable > 0) {
                 const taxableAmount = Math.min(tempTaxable, b1);
-                tax += taxableAmount * 0.07;
+                // tax += taxableAmount * 0.00; // 0%
                 tempTaxable -= taxableAmount;
             }
 
-            // Band 2: Next 300k @ 11%
-            const b2 = 300000;
+            // Band 2: Next (3M - 800k) = 2.2M @ 15%
+            const b2 = 3000000 - 800000; // 2,200,000
             if (tempTaxable > 0) {
                 const taxableAmount = Math.min(tempTaxable, b2);
-                tax += taxableAmount * 0.11;
-                tempTaxable -= taxableAmount;
-            }
-
-            // Band 3: Next 500k @ 15%
-            const b3 = 500000;
-            if (tempTaxable > 0) {
-                const taxableAmount = Math.min(tempTaxable, b3);
                 tax += taxableAmount * 0.15;
                 tempTaxable -= taxableAmount;
             }
 
-            // Band 4: Next 500k @ 19%
-            const b4 = 500000;
+            // Band 3: Next (12M - 3M) = 9M @ 18%
+            const b3 = 12000000 - 3000000; // 9,000,000
             if (tempTaxable > 0) {
-                const taxableAmount = Math.min(tempTaxable, b4);
-                tax += taxableAmount * 0.19;
+                const taxableAmount = Math.min(tempTaxable, b3);
+                tax += taxableAmount * 0.18;
                 tempTaxable -= taxableAmount;
             }
 
-            // Band 5: Next 1.6M @ 21%
-            const b5 = 1600000;
+            // Band 4: Next (25M - 12M) = 13M @ 21%
+            const b4 = 25000000 - 12000000; // 13,000,000
             if (tempTaxable > 0) {
-                const taxableAmount = Math.min(tempTaxable, b5);
+                const taxableAmount = Math.min(tempTaxable, b4);
                 tax += taxableAmount * 0.21;
                 tempTaxable -= taxableAmount;
             }
 
-            // Band 6: Above 3.2M @ 24%
+            // Band 5: Next (50M - 25M) = 25M @ 23%
+            const b5 = 50000000 - 25000000; // 25,000,000
             if (tempTaxable > 0) {
-                tax += tempTaxable * 0.24;
+                const taxableAmount = Math.min(tempTaxable, b5);
+                tax += taxableAmount * 0.23;
+                tempTaxable -= taxableAmount;
             }
-            
-            // Minimum Tax: 1% of Gross if Taxable Income is too low
-            // (Optional rule, usually for low income with high relief)
-            // if (tax < 0.01 * gross && taxable > 0) tax = 0.01 * gross;
+
+            // Band 6: Above 50M @ 25%
+            if (tempTaxable > 0) {
+                tax += tempTaxable * 0.25;
+            }
 
             // 6. Net Salary
-            // Net = Gross - Tax - (Pension + Mortgage + NHIS + Insurance)
-            const payrollDeductions = mortgage + pension + nhis + insurance;
+            // Net = Gross - Tax - (Deductions that are payroll based)
+            // Assumption: Mortgage, Pension, Insurance are payroll deductions.
+            // Rent might be an allowance exemption (so it reduces tax but isn't subtracted from pay).
+            // BUT, usually in these calculators "Rent" input implies "Rent Subsidy/Allowance" or "Rent Paid".
+            // If it's "Rent Paid" (deduction), it comes out of pocket.
+            // If it's "Rent Allowance" (income), it's part of Gross.
+            // The Oduko calculator lists "Rent" under "Deductions (Editable)". 
+            // This strongly implies it SUBTRACTS from the Net Pay or Taxable Income.
+            // Standard Oduko behavior: Deducts from Taxable Income AND assumes it's an expense?
+            // Let's assume all inputs under "Deductions" are subtracted from Gross to get Net.
+            const payrollDeductions = mortgage + pension + rent + insurance;
             const finalNet = gross - tax - payrollDeductions;
 
             // 7. Update UI
@@ -300,7 +312,7 @@
             const div = isAnnual ? 1 : 12;
 
             document.getElementById('resGross').textContent = formatMoney(gross / div);
-            document.getElementById('resCRA').textContent = '- ' + formatMoney(cra / div);
+            // document.getElementById('resCRA').textContent = '- ' + formatMoney(cra / div); // Hidden
             document.getElementById('resDeductions').textContent = '- ' + formatMoney(otherDeductions / div);
             document.getElementById('resTaxable').textContent = formatMoney(taxable / div);
             document.getElementById('resTax').textContent = formatMoney(tax / div);
