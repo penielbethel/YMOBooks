@@ -8,7 +8,7 @@ const dayjs = require('dayjs');
 let sharp = null; // lazy-loaded to avoid boot issues if optional dep missing
 
 const app = express();
-const PORT = process.env.PORT || 4000;
+const PORT = process.env.PORT || 3000;
 const MONGO_URI = process.env.MONGO_URI; // Set in environment. If unset, server uses file fallback.
 const PUBLIC_DIR = path.join(__dirname, 'public');
 
