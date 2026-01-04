@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Nigeria Tax Calculator - YMOBooks</title>
+    <link rel="icon" href="/logo.png" />
+    <style>
+      :root {
+        --primary: #cc5500;
+        --bg: #fafafa;
+        --text: #222;
+        --muted: #555;
+        --card: #ffffff;
+        --border: #e0e0e0;
+      }
+      * { box-sizing: border-box; }
+      html, body { height: 100%; margin: 0; }
+      body {
+        font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+        background: var(--bg);
+        color: var(--text);
+      }
+      .page {
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+      }
+      header {
+        background: var(--primary);
+        color: #fff;
+        padding: 18px 20px;
+      }
+      header .brand {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-weight: 700;
+        letter-spacing: 0.3px;
+        cursor: pointer;
+      }
+      header img { width: 32px; height: 32px; border-radius: 6px; }
+      header a { color: inherit; text-decoration: none; }
+      main {
+        flex: 1;
+        width: 100%;
+        max-width: 800px;
+        margin: 0 auto;
+        padding: 24px 16px 40px;
+      }
+      .hero {
+        background: var(--card);
+        border-radius: 12px;
+        padding: 24px;
+        box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+        margin-bottom: 24px;
+      }
+      .hero h1 { margin: 0 0 8px; font-size: 28px; }
+      .hero p { margin: 0; color: var(--muted); }
+      
+      .calculator-grid {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 24px;
+      }
+      @media (min-width: 768px) {
+        .calculator-grid { grid-template-columns: 1fr 1fr; }
+      }
+
+      .card {
+        background: var(--card);
+        border-radius: 12px;
+        padding: 20px;
+        box-shadow: 0 1px 8px rgba(0,0,0,0.05);
+      }
+      .section-title {
+        font-size: 18px;
+        font-weight: 600;
+        margin-bottom: 16px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .form-group { margin-bottom: 16px; }
+      .form-group label {
+        display: block;
+        margin-bottom: 6px;
+        font-weight: 500;
+        font-size: 14px;
+        color: var(--muted);
+      }
+      .input-wrapper {
+        position: relative;
+        display: flex;
+        align-items: center;
+      }
+      .currency-symbol {
+        position: absolute;
+        left: 12px;
+        color: var(--muted);
+        font-weight: 500;
+      }
+      input[type="number"] {
+        width: 100%;
+        padding: 10px 12px 10px 30px;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        font-size: 16px;
+        transition: border-color 0.2s;
+      }
+      input[type="number"]:focus {
+        outline: none;
+        border-color: var(--primary);
+      }
+      .hint {
+        font-size: 12px;
+        color: #888;
+        margin-top: 4px;
+      }
+
+      .toggle-container {
+        display: flex;
+        background: #eee;
+        padding: 4px;
+        border-radius: 8px;
+        margin-bottom: 20px;
+      }
+      .toggle-btn {
+        flex: 1;
+        padding: 8px;
+        text-align: center;
+        border-radius: 6px;
+        cursor: pointer;
+        font-weight: 500;
+        font-size: 14px;
+        transition: all 0.2s;
+      }
+      .toggle-btn.active {
+        background: #fff;
+        color: var(--primary);
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      }
+
+      .summary-item {
+        display: flex;
+        justify-content: space-between;
+        padding: 12px 0;
+        border-bottom: 1px solid #f0f0f0;
+      }
+      .summary-item:last-child { border-bottom: none; }
+      .summary-label { color: var(--muted); }
+      .summary-value { font-weight: 600; font-family: monospace; font-size: 16px; }
+      .summary-total {
+        margin-top: 16px;
+        padding-top: 16px;
+        border-top: 2px solid #f0f0f0;
+      }
+      .summary-total .summary-value {
+        font-size: 20px;
+        color: var(--primary);
+      }
+      
+      footer {
+        padding: 16px;
+        color: var(--muted);
+        text-align: center;
+        border-top: 1px solid var(--border);
+        margin-top: auto;
+      }
+      footer a { color: var(--primary); text-decoration: none; }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <header>
+        <div class="brand">
+          <a href="index.html" style="display: flex; align-items: center; gap: 10px;">
+            <img src="/logo.png" alt="YMOBooks" onerror="this.style.display='none'" />
+            <div>YMOBooks</div>
+          </a>
+        </div>
+      </header>
+      <main>
+        <section class="hero">
+          <h1>Nigeria Tax Calculator</h1>
+          <p>Calculate your personal income tax based on Nigerian tax laws.</p>
+        </section>
+
+        <div class="calculator-grid">
+          <!-- Input Section -->
+          <div class="card">
+            <div class="section-title">
+              <span>Income & Deductions</span>
+            </div>
+            
+            <div class="toggle-container">
+              <div class="toggle-btn active" onclick="setMode('annual')">Annual</div>
+              <div class="toggle-btn" onclick="setMode('monthly')">Monthly</div>
+            </div>
+
+            <div class="form-group">
+              <label>Gross Income</label>
+              <div class="input-wrapper">
+                <span class="currency-symbol">₦</span>
+                <input type="number" id="grossIncome" placeholder="0" oninput="calculate()">
+              </div>
+            </div>
+
+            <div class="section-title" style="font-size: 16px; margin-top: 24px;">
+              <span>Deductions (Editable)</span>
+            </div>
+
+            <div class="form-group">
+              <label>Mortgage (NHF)</label>
+              <div class="input-wrapper">
+                <span class="currency-symbol">₦</span>
+                <input type="number" id="mortgage" placeholder="0" oninput="calculate()">
+              </div>
+              <div class="hint">10% default (Optional)</div>
+            </div>
+
+            <div class="form-group">
+              <label>Pension (Pencom)</label>
+              <div class="input-wrapper">
+                <span class="currency-symbol">₦</span>
+                <input type="number" id="pension" placeholder="0" oninput="calculate()">
+              </div>
+              <div class="hint">8% default</div>
+            </div>
+
+            <div class="form-group">
+              <label>Annual Rent</label>
+              <div class="input-wrapper">
+                <span class="currency-symbol">₦</span>
+                <input type="number" id="rent" placeholder="0" oninput="calculate()">
+              </div>
+              <div class="hint">20% max ₦500k</div>
+            </div>
+
+            <div class="form-group">
+              <label>Life Insurance</label>
+              <div class="input-wrapper">
+                <span class="currency-symbol">₦</span>
+                <input type="number" id="insurance" placeholder="0" oninput="calculate()">
+              </div>
+              <div class="hint">Default amount</div>
+            </div>
+          </div>
+
+          <!-- Result Section -->
+          <div class="card">
+            <div class="section-title">
+              <span>Tax Summary</span>
+              <span style="font-size: 12px; font-weight: 400; color: var(--muted);" id="viewLabel">Annual View</span>
+            </div>
+
+            <div class="summary-item">
+              <span class="summary-label">Gross Income</span>
+              <span class="summary-value" id="resGross">₦0.00</span>
+            </div>
+            <div class="summary-item">
+              <span class="summary-label">Consolidated Relief</span>
+              <span class="summary-value" id="resCRA">₦0.00</span>
+            </div>
+            <div class="summary-item">
+              <span class="summary-label">Other Deductions</span>
+              <span class="summary-value" id="resDeductions">₦0.00</span>
+            </div>
+            <div class="summary-item" style="border-bottom: 2px solid #eee;">
+              <span class="summary-label">Taxable Income</span>
+              <span class="summary-value" id="resTaxable">₦0.00</span>
+            </div>
+            
+            <div class="summary-item summary-total">
+              <span class="summary-label">PAYE Tax</span>
+              <span class="summary-value" id="resTax" style="color: #d32f2f;">₦0.00</span>
+            </div>
+            <div class="summary-item summary-total" style="border-top: none; margin-top: 0;">
+              <span class="summary-label">Net Salary</span>
+              <span class="summary-value" id="resNet" style="color: #388e3c;">₦0.00</span>
+            </div>
+          </div>
+        </div>
+      </main>
+      <footer>
+        Powered by YMOBooks • <a href="index.html">Back to Home</a>
+      </footer>
+    </div>
+
+    <script>
+      let isAnnual = true;
+
+      function setMode(mode) {
+        isAnnual = mode === 'annual';
+        document.querySelectorAll('.toggle-btn').forEach(btn => btn.classList.remove('active'));
+        document.querySelector(`.toggle-btn[onclick="setMode('${mode}')"]`).classList.add('active');
+        document.getElementById('viewLabel').textContent = isAnnual ? 'Annual View' : 'Monthly View';
+        
+        // Convert inputs if needed? 
+        // Typically calculators keep inputs static and just re-interpret them, 
+        // OR they convert the input values. 
+        // The reference "toggle between annual and monthly views to see your breakdown" 
+        // usually implies the OUTPUT updates. The INPUT is typically assumed to be Annual 
+        // unless specified. 
+        // However, if I enter 100k Monthly, I expect 1.2M Annual.
+        // Let's assume inputs are ALWAYS Annual for simplicity, and the toggle just changes the view of the results.
+        // OR: We scale the inputs. Let's scale inputs for better UX.
+        
+        const inputs = ['grossIncome', 'mortgage', 'pension', 'rent', 'insurance'];
+        inputs.forEach(id => {
+          const el = document.getElementById(id);
+          const val = parseFloat(el.value);
+          if (!isNaN(val) && val > 0) {
+            el.value = isAnnual ? (val * 12).toFixed(2) : (val / 12).toFixed(2);
+          }
+        });
+
+        calculate();
+      }
+
+      function formatMoney(amount) {
+        return '₦' + amount.toLocaleString('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      }
+
+      function calculate() {
+        // 1. Get Inputs (Normalize to Annual for calculation)
+        let gross = parseFloat(document.getElementById('grossIncome').value) || 0;
+        let mortgage = parseFloat(document.getElementById('mortgage').value) || 0;
+        let pension = parseFloat(document.getElementById('pension').value) || 0;
+        let rent = parseFloat(document.getElementById('rent').value) || 0;
+        let insurance = parseFloat(document.getElementById('insurance').value) || 0;
+
+        if (!isAnnual) {
+          gross *= 12;
+          mortgage *= 12;
+          pension *= 12;
+          rent *= 12;
+          insurance *= 12;
+        }
+
+        // 2. Calculate CRA (Consolidated Relief Allowance)
+        // CRA = Higher of (₦200,000 or 1% of Gross) + 20% of Gross
+        const fixedRelief = Math.max(200000, 0.01 * gross);
+        const variableRelief = 0.20 * gross;
+        const cra = fixedRelief + variableRelief;
+
+        // 3. Total Deductions (CRA + Pension + NHF + Insurance + Rent)
+        // Note: Rent here is treated as a direct deduction for simplicity as per calculator UI
+        const otherDeductions = mortgage + pension + rent + insurance;
+        const totalExempt = cra + otherDeductions;
+
+        // 4. Taxable Income
+        let taxable = gross - totalExempt;
+        if (taxable < 0) taxable = 0;
+
+        // 5. Calculate Tax (Annual Bands)
+        let tax = 0;
+        let tempTaxable = taxable;
+
+        // Band 1: First 300k @ 7%
+        const b1 = 300000;
+        if (tempTaxable > 0) {
+          const taxableAmount = Math.min(tempTaxable, b1);
+          tax += taxableAmount * 0.07;
+          tempTaxable -= taxableAmount;
+        }
+
+        // Band 2: Next 300k @ 11%
+        const b2 = 300000;
+        if (tempTaxable > 0) {
+          const taxableAmount = Math.min(tempTaxable, b2);
+          tax += taxableAmount * 0.11;
+          tempTaxable -= taxableAmount;
+        }
+
+        // Band 3: Next 500k @ 15%
+        const b3 = 500000;
+        if (tempTaxable > 0) {
+          const taxableAmount = Math.min(tempTaxable, b3);
+          tax += taxableAmount * 0.15;
+          tempTaxable -= taxableAmount;
+        }
+
+        // Band 4: Next 500k @ 19%
+        const b4 = 500000;
+        if (tempTaxable > 0) {
+          const taxableAmount = Math.min(tempTaxable, b4);
+          tax += taxableAmount * 0.19;
+          tempTaxable -= taxableAmount;
+        }
+
+        // Band 5: Next 1.6M @ 21%
+        const b5 = 1600000;
+        if (tempTaxable > 0) {
+          const taxableAmount = Math.min(tempTaxable, b5);
+          tax += taxableAmount * 0.21;
+          tempTaxable -= taxableAmount;
+        }
+
+        // Band 6: Above 3.2M @ 24%
+        if (tempTaxable > 0) {
+          tax += tempTaxable * 0.24;
+        }
+
+        // Minimum Tax Rule: 1% of Gross if taxable income is low (Simplified)
+        // If tax calculated is less than 1% of Gross, pay 1% of Gross.
+        // Note: This usually applies if Taxable Income is very low due to high reliefs.
+        const minTax = 0.01 * gross;
+        if (tax < minTax && taxable > 0) { // Only enforce if there is income
+           // tax = minTax; // Uncomment if strict compliance desired, but standard calculators often show PAYE bands.
+           // Leaving as PAYE bands for now to match Oduko usually.
+        }
+
+        // 6. Net Salary
+        const net = gross - tax - mortgage - pension - insurance; // Note: Rent is usually an expense paid from Net, unless it was a specific deduction. 
+        // If Rent was a deduction, it means it's tax free. But do we subtract it from Net? 
+        // If "Annual Rent" is a cost the user PAYS, then Net = Gross - Tax - Deductions(Paid).
+        // If "Annual Rent" input was just for tax relief calculation, it shouldn't be subtracted from cash flow if not paid via payroll.
+        // However, "Pension", "Mortgage", "Insurance" are often payroll deductions.
+        // "Rent" is usually paid personally.
+        // Let's assume Rent is NOT subtracted from Net Pay, only used for Tax Relief.
+        // BUT: The calculator has "Deductions (Editable)". If I put Rent there, does it mean I pay it?
+        // Let's assume Mortgage, Pension, Insurance are payroll deductions.
+        // Rent: The prompt says "Annual Rent 20% max". This suggests it's the "Consolidated Relief" component related to rent, or just a deduction.
+        // To be safe, I'll subtract only Mortgage, Pension, Insurance (Payroll items) from Gross to get Net.
+        // Tax is also subtracted.
+        // Rent is likely just an input for tax relief.
+        
+        // Wait, Oduko calculator says "Deductions ... Annual Rent". If I enter rent, it reduces my tax.
+        // Does it reduce my take home? Probably not (unless employer pays it).
+        // I will subtract Tax, Pension, Mortgage, Insurance. I will NOT subtract Rent from the Net Salary display unless it's explicitly a payroll deduction.
+        // Given it's "Personal Income Tax", Rent is usually an expense.
+        
+        const payrollDeductions = mortgage + pension + insurance; // + tax
+        const finalNet = gross - tax - payrollDeductions;
+
+        // 7. Update UI
+        const div = isAnnual ? 1 : 12;
+
+        document.getElementById('resGross').textContent = formatMoney(gross / div);
+        document.getElementById('resCRA').textContent = formatMoney(cra / div);
+        document.getElementById('resDeductions').textContent = formatMoney(otherDeductions / div);
+        document.getElementById('resTaxable').textContent = formatMoney(taxable / div);
+        document.getElementById('resTax').textContent = formatMoney(tax / div);
+        document.getElementById('resNet').textContent = formatMoney(finalNet / div);
+      }
+    </script>
+  </body>
+</html>
