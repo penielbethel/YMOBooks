@@ -258,7 +258,7 @@ h2.elementor-heading-title {
         color: #333;
         margin-top: 20px;
         margin-bottom: 10px;
-        border-bottom: 2px solid #4caf50;
+        border-bottom: 2px solid var(--primary);
         padding-bottom: 5px;
       }
       .input-container h3:first-child {
@@ -267,8 +267,8 @@ h2.elementor-heading-title {
       .input-container {
         background-color: #fff;
         padding: 20px;
-        border-radius: 5px;
-        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        border-radius: 12px;
+        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.08);
         margin-bottom: 20px;
       }
       .results-container {
@@ -279,23 +279,19 @@ h2.elementor-heading-title {
       .results {
         background-color: #fff;
         padding: 20px;
-        border-radius: 5px;
-        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        border-radius: 12px;
+        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.08);
         flex: 1;
       }
       .comparison {
         background-color: #fff;
         padding: 20px;
-        border-radius: 5px;
-        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        border-radius: 12px;
+        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.08);
         margin-top: 20px;
       }
-      .current-law {
-        border-top: 4px solid #4e73df;
-      }
-      .proposed-law {
-        border-top: 4px solid #1cc88a;
-      }
+      .current-law { border-top: 4px solid var(--primary); }
+      .proposed-law { border-top: 4px solid var(--primary); }
       .exemption-notice {
         background-color: #fff3cd;
         border: 2px solid #ffc107;
@@ -320,7 +316,7 @@ h2.elementor-heading-title {
         box-sizing: border-box;
       }
       button {
-        background-color: #4caf50;
+        background-color: var(--primary);
         color: white;
         padding: 10px 15px;
         border: none;
@@ -330,7 +326,7 @@ h2.elementor-heading-title {
         width: 100%;
       }
       button:hover {
-        background-color: #45a049;
+        background-color: #a64500;
       }
       table {
         width: 100%;
@@ -396,6 +392,25 @@ h2.elementor-heading-title {
         }
       }
     </style>
+      #ymo-tax label i { color: var(--primary); margin-right: 8px; }
+      #ymo-tax h1 i, #ymo-tax h2 i, #ymo-tax .input-container h3 i { color: var(--primary); margin-right: 8px; }
+      #ymo-tax .input-container h3 { display: flex; align-items: center; gap: 8px; }
+      .ymo-header { background: var(--primary); color:#fff; padding: 18px 20px; }
+      .ymo-header .brand { display:flex; align-items:center; gap:10px; font-weight:700; letter-spacing:0.3px; }
+      .ymo-header img { width:32px; height:32px; border-radius:6px; }
+      .hero-slider { margin:16px 0 24px; border-radius:12px; overflow:hidden; box-shadow: 0 6px 18px rgba(0,0,0,0.08); background: var(--card); }
+      .hero-slider .slides { position:relative; height: 180px; }
+      .hero-slider .slide { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:#fff; opacity:0; transition:opacity .6s ease; }
+      .hero-slider .slide .content { text-align:center; text-shadow: 0 2px 8px rgba(0,0,0,0.25); }
+      .hero-slider .slide h2 { margin:0 0 6px; font-size:24px; }
+      .hero-slider .slide p { margin:0; font-size:14px; }
+      .hero-slider .slide.s1 { background: linear-gradient(120deg, #cc5500, #ff8c3a); }
+      .hero-slider .slide.s2 { background: linear-gradient(120deg, #cc5500, #d66a00); }
+      .hero-slider .slide.s3 { background: linear-gradient(120deg, #cc5500, #a64500); }
+      .hero-slider .dots { display:flex; gap:6px; justify-content:center; padding:10px; }
+      .hero-slider .dot { width:8px; height:8px; border-radius:50%; background:#ddd; }
+      .hero-slider .dot.active { background: var(--primary); }
+  
   
 <style>
 :root {
@@ -420,27 +435,56 @@ h2.elementor-heading-title {
 }
 </style>
 </head>
-  <body>
-    <h1>PAYE Tax Calculator</h1>
-    <h2>Old Law vs New Law Comparison</h2>
+  <body id="ymo-tax">
+    <header class="ymo-header">
+      <div class="brand">
+        <img src="/logo.png" alt="YMOBooks" onerror="this.style.display='none'"/>
+        <div>YMOBooks</div>
+      </div>
+    </header>
+    <section class="hero-slider">
+      <div class="slides">
+        <div class="slide s1">
+          <div class="content">
+            <h2>Personal Income Tax</h2>
+            <p>Compare old vs new law instantly</p>
+          </div>
+        </div>
+        <div class="slide s2">
+          <div class="content">
+            <h2>Smart Reliefs</h2>
+            <p>Include pension, NHF, rent, insurance</p>
+          </div>
+        </div>
+        <div class="slide s3">
+          <div class="content">
+            <h2>Monthly Impact</h2>
+            <p>See take-home and effective rate</p>
+          </div>
+        </div>
+      </div>
+      <div class="dots"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>
+    </section>
+    <h1><i class="fa-solid fa-calculator"></i> PAYE Tax Calculator</h1>
+    <h2><i class="fa-solid fa-scale-balanced"></i> Old Law vs New Law Comparison</h2>
 
     <div class="input-container">
-      <h3>Basic Information</h3>
-      <label for="grossIncome">Gross Annual Income (₦):</label>
+      <h3><i class="fa-solid fa-id-card"></i> Basic Information</h3>
+      <label for="grossIncome"><i class="fa-solid fa-money-bill-wave"></i> Gross Annual Income (₦)</label>
       <input
         type="number"
         id="grossIncome"
         placeholder="Enter your gross annual income"
       />
 
-      <h3>Additional Deductions (Optional)</h3>
+      <h3><i class="fa-solid fa-list-check"></i> Additional Deductions (Optional)</h3>
       <div class="grid-container">
         <div>
-          <label for="nhfContribution">NHF Contribution (Annual) (₦):</label>
+          <label for="nhfContribution"><i class="fa-solid fa-piggy-bank"></i> NHF Contribution (Annual) (₦)</label>
           <input type="number" id="nhfContribution" placeholder="0" value="0" />
         </div>
         <div>
-          <label for="nhisContribution">NHIS Contribution (Annual) (₦):</label>
+          <label for="nhisContribution"><i class="fa-solid fa-notes-medical"></i> NHIS Contribution (Annual) (₦)</label>
           <input
             type="number"
             id="nhisContribution"
@@ -449,9 +493,7 @@ h2.elementor-heading-title {
           />
         </div>
         <div>
-          <label for="pensionContribution"
-            >Pension Contribution (Annual) (₦):</label
-          >
+          <label for="pensionContribution"><i class="fa-solid fa-shield-heart"></i> Pension Contribution (Annual) (₦)</label>
           <input
             type="number"
             id="pensionContribution"
@@ -460,19 +502,15 @@ h2.elementor-heading-title {
           />
         </div>
         <div>
-          <label for="loanInterest"
-            >Interest on Loan for Owner Occupied House (₦):</label
-          >
+          <label for="loanInterest"><i class="fa-solid fa-house"></i> Interest on Loan for Owner Occupied House (₦)</label>
           <input type="number" id="loanInterest" placeholder="0" value="0" />
         </div>
         <div>
-          <label for="lifeInsurance"
-            >Life Insurance Premium (You & Spouse) (₦):</label
-          >
+          <label for="lifeInsurance"><i class="fa-solid fa-heart-pulse"></i> Life Insurance Premium (You & Spouse) (₦)</label>
           <input type="number" id="lifeInsurance" placeholder="0" value="0" />
         </div>
         <div>
-          <label for="annualRent">Annual Rent (₦):</label>
+          <label for="annualRent"><i class="fa-solid fa-house-chimney"></i> Annual Rent (₦)</label>
           <input type="number" id="annualRent" placeholder="0" value="0" />
         </div>
       </div>
@@ -483,12 +521,12 @@ h2.elementor-heading-title {
     </div>
 
     <div id="exemptionNotice" class="exemption-notice hidden">
-      ⚠️ National Minimum Wage Earnersare EXEMPT from PAYE tax
+      ⚠️ National Minimum Wage earners are EXEMPT from PAYE tax
     </div>
 
     <div id="resultsContainer" class="results-container hidden">
       <div id="proposedLawResults" class="results proposed-law">
-        <h2>PAYE Calculation - New Law</h2>
+        <h2><i class="fa-solid fa-chart-line"></i> PAYE Calculation - New Law</h2>
 
         <table id="proposedIncomeTable">
           <tr>
@@ -590,7 +628,7 @@ h2.elementor-heading-title {
         </table>
       </div>
       <div id="currentLawResults" class="results current-law">
-        <h2>PAYE Calculation - Old Law</h2>
+        <h2><i class="fa-solid fa-chart-column"></i> PAYE Calculation - Old Law</h2>
 
         <table id="currentIncomeTable">
           <tr>
@@ -678,7 +716,7 @@ h2.elementor-heading-title {
     </div>
 
     <div id="comparisonResults" class="comparison hidden">
-      <h2>Tax Comparison</h2>
+      <h2><i class="fa-solid fa-scale-balanced"></i> Tax Comparison</h2>
       <table class="comparison-table">
         <tr>
           <th>Metric</th>
@@ -719,6 +757,20 @@ h2.elementor-heading-title {
     </div>
 
     <script>
+      (function(){
+        const root = document.getElementById('ymo-tax');
+        if(!root) return;
+        const slides = root.querySelectorAll('.hero-slider .slide');
+        const dots = root.querySelectorAll('.hero-slider .dot');
+        let idx=0;
+        function show(i){
+          slides.forEach((s,k)=> s.style.opacity = k===i ? '1':'0');
+          dots.forEach((d,k)=> d.classList.toggle('active', k===i));
+        }
+        show(0);
+        setInterval(()=>{ idx = (idx+1)%slides.length; show(idx); }, 4000);
+      })();
+
       const MINIMUM_WAGE_THRESHOLD = 840000;
 
       function formatCurrency(amount) {
@@ -1290,10 +1342,9 @@ h2.elementor-heading-title {
 <div id="qlwapp" class="qlwapp qlwapp-free qlwapp-bubble qlwapp-bottom-right qlwapp-all qlwapp-rounded">
 	<div class="qlwapp-container">
 		
-		<a class="qlwapp-toggle" data-action="open" data-phone="2348169114903" data-message="Hello, I would like to make an enquiry about YMOBooks Tax Calculator" role="button" tabindex="0" target="_blank">
+        <a class="qlwapp-toggle" data-action="open" data-phone="2348169114903" data-message="Hello, I would like to make an enquiry about YMOBooks Tax Calculator" role="button" tabindex="0" target="_blank">
 							<i class="qlwapp-icon qlwapp-whatsapp-icon"></i>
 						<i class="qlwapp-close" data-action="close">&times;</i>
-							<span class="qlwapp-text">YMO WhatsApp</span>
 					</a>
 	</div>
 </div>
