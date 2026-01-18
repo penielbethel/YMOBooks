@@ -30,6 +30,5 @@
   button { font-size: 15px; }
 }
 @media (min-width: 1025px) {
-  body { max-width: 1100px; margin: 0 auto; }
   .results-container { gap: 24px; }
 }
