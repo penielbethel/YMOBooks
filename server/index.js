@@ -72,6 +72,61 @@ function findCompanyFile(companyId) {
   return companies.find((c) => c.companyId === companyId);
 }
 
+// Local file fallback store for expenses when Mongo is unavailable
+const EXPENSES_FILE = process.env.EXPENSES_FILE || path.join(WRITABLE_ROOT, 'expenses.json');
+function readExpensesFile() {
+  try {
+    if (!fs.existsSync(EXPENSES_FILE)) return [];
+    const raw = fs.readFileSync(EXPENSES_FILE, 'utf-8');
+    const data = JSON.parse(raw || '[]');
+    if (Array.isArray(data)) return data;
+    return [];
+  } catch (e) {
+    console.warn('Failed to read expenses.json:', e.message);
+    return [];
+  }
+}
+function writeExpensesFile(expenses) {
+  try {
+    fs.writeFileSync(EXPENSES_FILE, JSON.stringify(expenses, null, 2), 'utf-8');
+  } catch (e) {
+    console.warn('Failed to write expenses.json:', e.message);
+  }
+}
+function addExpenseFile(expense) {
+  const list = readExpensesFile();
+  const entry = { ...expense, _id: expense._id || `EXP-${Date.now()}`, createdAt: expense.createdAt || new Date().toISOString() };
+  list.push(entry);
+  writeExpensesFile(list);
+  return entry;
+}
+function queryExpensesFile(query = {}) {
+  const list = readExpensesFile();
+  return list.filter((e) => {
+    if (query.companyId && e.companyId !== String(query.companyId)) return false;
+    if (query.month && e.month !== String(query.month)) return false;
+    if (query.category && e.category !== String(query.category)) return false;
+    if (query.day != null && e.day !== Number(query.day)) return false;
+    return true;
+  });
+}
+function deleteExpensesFile(query = {}) {
+  const list = readExpensesFile();
+  const keep = [];
+  const remove = [];
+  for (const e of list) {
+    const match =
+      (!query.companyId || e.companyId === String(query.companyId)) &&
+      (!query.month || e.month === String(query.month)) &&
+      (!query.category || e.category === String(query.category)) &&
+      (query.day == null || e.day === Number(query.day));
+    if (match) remove.push(e);
+    else keep.push(e);
+  }
+  writeExpensesFile(keep);
+  return remove.length;
+}
+
 // Image optimization helpers (logos/signatures)
 async function ensureSharp() {
   if (!sharp) {
@@ -1238,8 +1293,14 @@ app.post('/api/expenses/create', async (req, res) => {
     if (!company) company = findCompanyFile(companyId);
     const sym = company?.currencySymbol || '$';
     const code = company?.currencyCode || mapSymbolToCode(sym) || undefined;
-    const created = await Expense.create({ companyId, month, category, amount: amt, currencySymbol: sym, currencyCode: code, description });
-    return res.json({ success: true, expense: created });
+    try {
+      const created = await Expense.create({ companyId, month, category, amount: amt, currencySymbol: sym, currencyCode: code, description });
+      return res.json({ success: true, expense: created });
+    } catch (err) {
+      console.warn('Expense create DB failed, using file fallback:', err.message);
+      const created = addExpenseFile({ companyId, month, category, amount: amt, currencySymbol: sym, currencyCode: code, description });
+      return res.json({ success: true, expense: created, fallback: 'file' });
+    }
   } catch (err) {
     console.error('Expense create error:', err);
     return res.status(500).json({ success: false, message: 'Server error creating expense' });
@@ -1253,7 +1314,13 @@ app.get('/api/expenses', async (req, res) => {
     if (!companyId) return res.status(400).json({ success: false, message: 'Missing companyId' });
     const query = { companyId };
     if (month) query.month = String(month);
-    const expenses = await Expense.find(query).sort({ createdAt: -1 }).lean();
+    let expenses = [];
+    try {
+      expenses = await Expense.find(query).sort({ createdAt: -1 }).lean();
+    } catch (err) {
+      console.warn('Fetch expenses DB failed, using file fallback:', err.message);
+      expenses = queryExpensesFile(query).sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+    }
     return res.json({ success: true, expenses });
   } catch (err) {
     console.error('Fetch expenses error:', err);
@@ -1269,8 +1336,15 @@ app.delete('/api/expenses', async (req, res) => {
     const query = { companyId };
     if (month) query.month = String(month);
     if (category) query.category = String(category);
-    const result = await Expense.deleteMany(query);
-    return res.json({ success: true, deletedCount: result?.deletedCount || 0 });
+    let deletedCount = 0;
+    try {
+      const result = await Expense.deleteMany(query);
+      deletedCount = result?.deletedCount || 0;
+    } catch (err) {
+      console.warn('Delete expenses DB failed, using file fallback:', err.message);
+      deletedCount = deleteExpensesFile(query);
+    }
+    return res.json({ success: true, deletedCount });
   } catch (err) {
     console.error('Delete expenses error:', err);
     return res.status(500).json({ success: false, message: 'Server error deleting expenses' });
