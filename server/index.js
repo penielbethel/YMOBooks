@@ -16,6 +16,8 @@ app.use(cors());
 app.use(express.json({ limit: '8mb' }));
 // Serve static public assets (landing page)
 app.use(express.static(PUBLIC_DIR));
+// Serve shared assets (images) from project root /assets so public pages can reference /assets/*
+app.use('/assets', express.static(path.join(__dirname, '..', 'assets')));
 // Serve generated files (PDFs) — default to a writable location on Vercel
 const WRITABLE_ROOT = process.env.GENERATED_ROOT || (process.env.VERCEL ? '/tmp' : __dirname);
 let GENERATED_DIR = path.join(WRITABLE_ROOT, 'generated');

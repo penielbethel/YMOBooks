@@ -1,0 +1,35 @@
+/* YMO Tax page custom styles */
+:root { --primary:#cc5500; --bg:#fafafa; --text:#222; --muted:#555; --card:#ffffff; }
+#ymo-tax label i { color: var(--primary); margin-right: 8px; }
+#ymo-tax h1 i, #ymo-tax h2 i, #ymo-tax .input-container h3 i { color: var(--primary); margin-right: 8px; }
+#ymo-tax .input-container h3 { display: flex; align-items: center; gap: 8px; }
+.ymo-header { background: var(--primary); color:#fff; padding: 18px 20px; }
+.ymo-header .brand { display:flex; align-items:center; gap:10px; font-weight:700; letter-spacing:0.3px; }
+.ymo-header img { width:32px; height:32px; border-radius:6px; }
+.hero-slider { margin:16px 0 24px; border-radius:12px; overflow:hidden; box-shadow: 0 6px 18px rgba(0,0,0,0.08); background: var(--card); }
+.hero-slider .slides { position:relative; height: 220px; }
+.hero-slider .slide { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:#fff; opacity:0; transition:opacity .6s ease; background-size: cover; background-position: center; }
+.hero-slider .slide .content { text-align:center; text-shadow: 0 2px 8px rgba(0,0,0,0.25); }
+.hero-slider .slide h2 { margin:0 0 6px; font-size:26px; }
+.hero-slider .slide p { margin:0; font-size:15px; }
+.hero-slider .dots { display:flex; gap:6px; justify-content:center; padding:10px; }
+.hero-slider .dot { width:8px; height:8px; border-radius:50%; background:#ddd; }
+.hero-slider .dot.active { background: var(--primary); }
+/* Slide backgrounds */
+.hero-slider .slide.s1 { background-image: linear-gradient(rgba(0,0,0,0.35), rgba(0,0,0,0.35)), url('/assets/tin1.jpg'); }
+.hero-slider .slide.s2 { background-image: linear-gradient(rgba(0,0,0,0.35), rgba(0,0,0,0.35)), url('/assets/tin2.jpg'); }
+.hero-slider .slide.s3 { background-image: linear-gradient(rgba(0,0,0,0.35), rgba(0,0,0,0.35)), url('/assets/tin3.jpg'); }
+/* Responsive */
+@media (max-width: 768px) {
+  .hero-slider .slides { height: 160px; }
+  .hero-slider .slide h2 { font-size:20px; }
+  .hero-slider .slide p { font-size:13px; }
+  .input-container { padding: 16px; }
+  h1 { font-size: 22px; }
+  h2 { font-size: 18px; }
+  button { font-size: 15px; }
+}
+@media (min-width: 1025px) {
+  body { max-width: 1100px; margin: 0 auto; }
+  .results-container { gap: 24px; }
+}
