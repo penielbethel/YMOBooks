@@ -43,9 +43,30 @@ const DashboardScreen = ({ navigation }) => {
 
   const loadCompanyData = async () => {
     try {
-      const data = await AsyncStorage.getItem('companyData');
-      if (data) {
-        setCompanyData(JSON.parse(data));
+      const stored = await AsyncStorage.getItem('companyData');
+      if (!stored) return;
+      let parsed = JSON.parse(stored);
+      setCompanyData(parsed);
+
+      // On-demand fetch for missing logo/signature to ensure dashboard looks complete
+      if ((!parsed.logo || !parsed.signature) && parsed.companyId) {
+        if (parsed.hasLogo || parsed.hasSignature) {
+          try {
+            const { getApiBaseUrl } = await import('../utils/api');
+            const resp = await fetch(`${getApiBaseUrl()}/api/company/${parsed.companyId}`);
+            const json = await resp.json();
+            const c = json?.company || json?.data;
+            if (c) {
+              const updated = { ...parsed, ...c };
+              setCompanyData(updated);
+              // We don't necessarily persist back to AsyncStorage to avoid size limits, 
+              // but we cache logo separately
+              if (c.logo) await AsyncStorage.setItem('companyLogoCache', c.logo).catch(() => { });
+            }
+          } catch (e) {
+            console.warn('[Dashboard] On-demand fetch failed:', e);
+          }
+        }
       }
     } catch (error) {
       Alert.alert('Error', 'Failed to load company data');
@@ -114,7 +135,7 @@ const DashboardScreen = ({ navigation }) => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView 
+      <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
@@ -123,8 +144,8 @@ const DashboardScreen = ({ navigation }) => {
         <View style={styles.header}>
           <View style={styles.headerContent}>
             {companyData.logo && (
-              <Image 
-                source={{ uri: companyData.logo }} 
+              <Image
+                source={{ uri: companyData.logo }}
                 style={styles.companyLogo}
               />
             )}
@@ -164,10 +185,10 @@ const DashboardScreen = ({ navigation }) => {
             <Text style={styles.infoValue}>{companyData.phone || companyData.phoneNumber || '—'}</Text>
           </View>
           {companyData.signature && (
-            <View style={[styles.infoRow, { alignItems: 'center' }]}> 
+            <View style={[styles.infoRow, { alignItems: 'center' }]}>
               <Text style={styles.infoLabel}>🖋️ Signature</Text>
-              <Image 
-                source={{ uri: companyData.signature }} 
+              <Image
+                source={{ uri: companyData.signature }}
                 style={styles.signatureImage}
               />
             </View>
@@ -370,8 +391,8 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
     textAlign: 'center',
   },
-  
-  
+
+
 });
 
 export default DashboardScreen;

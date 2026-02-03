@@ -93,6 +93,8 @@ export default function App() {
                 brandColor: c.brandColor || null,
                 currencySymbol: c.currencySymbol || '$',
                 businessType: 'general_merchandise',
+                hasLogo: !!c.logo,
+                hasSignature: !!c.signature,
               };
               await AsyncStorage.setItem('companyData', JSON.stringify(stored));
               setHasCompanyData(true);

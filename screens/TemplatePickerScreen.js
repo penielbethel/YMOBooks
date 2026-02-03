@@ -1,17 +1,18 @@
 import React, { useEffect, useState, useMemo } from 'react';
-  import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, ScrollView, Alert, Modal, TextInput, Image, Platform, Linking, KeyboardAvoidingView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, ScrollView, Alert, Modal, TextInput, Image, Platform, Linking, KeyboardAvoidingView } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import * as FileSystem from 'expo-file-system';
 import * as FileSystemLegacy from 'expo-file-system/legacy';
-  import * as Print from 'expo-print';
-  import * as Sharing from 'expo-sharing';
-  import * as ImagePicker from 'expo-image-picker';
+import * as Print from 'expo-print';
+import * as Sharing from 'expo-sharing';
+import * as ImagePicker from 'expo-image-picker';
 import { createInvoice, getApiBaseUrl } from '../utils/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors } from '../constants/Colors';
 import { Fonts } from '../constants/Fonts';
 import { Spacing } from '../constants/Spacing';
 import { buildInvoiceHtml } from '../utils/invoiceHtml';
+import { WebView } from 'react-native-webview';
 // removed updateCompany; preferences are not saved here anymore
 
 const TEMPLATES = [
@@ -57,8 +58,8 @@ const getThemeFor = (tpl, brandColor) => {
 const TemplatePreview = ({ companyName, template, brandColor }) => {
   const theme = useMemo(() => getThemeFor(template, brandColor), [template, brandColor]);
   return (
-    <View style={[styles.previewCard, { borderColor: theme.border }]}> 
-      <View style={[styles.previewHeader, { backgroundColor: theme.primary }]}> 
+    <View style={[styles.previewCard, { borderColor: theme.border }]}>
+      <View style={[styles.previewHeader, { backgroundColor: theme.primary }]}>
         <Text style={styles.previewTitle} numberOfLines={1}>{companyName || 'Your Company'}</Text>
         <Text style={styles.previewType}>INVOICE</Text>
       </View>
@@ -102,16 +103,16 @@ function renderFullInvoicePreview(company, template, brandColor, liveInvoice) {
   // Rows from live invoice (fallback to samples)
   const rows = (liveInvoice?.items && liveInvoice.items.length > 0)
     ? liveInvoice.items.map((it) => ({
-        desc: it.description || it.desc || '-',
-        qty: Number(it.qty || 0),
-        price: Number(it.price || 0),
-        total: Number(it.qty || 0) * Number(it.price || 0),
-      }))
+      desc: it.description || it.desc || '-',
+      qty: Number(it.qty || 0),
+      price: Number(it.price || 0),
+      total: Number(it.qty || 0) * Number(it.price || 0),
+    }))
     : [
-        { desc: 'Consulting Services', qty: 8, price: 120, total: 960 },
-        { desc: 'Design & Branding', qty: 1, price: 450, total: 450 },
-        { desc: 'Hosting (12 months)', qty: 1, price: 199, total: 199 },
-      ];
+      { desc: 'Consulting Services', qty: 8, price: 120, total: 960 },
+      { desc: 'Design & Branding', qty: 1, price: 450, total: 450 },
+      { desc: 'Hosting (12 months)', qty: 1, price: 199, total: 199 },
+    ];
 
   const taxRate = typeof liveInvoice?.taxPercent === 'number' ? (liveInvoice.taxPercent / 100) : 0.0;
   const subtotal = rows.reduce((s, r) => s + r.total, 0);
@@ -119,14 +120,14 @@ function renderFullInvoicePreview(company, template, brandColor, liveInvoice) {
   const grand = Math.round((subtotal + tax) * 100) / 100;
 
   const amountInWords = (() => {
-    const ones = ['Zero','One','Two','Three','Four','Five','Six','Seven','Eight','Nine'];
-    const teens = ['Ten','Eleven','Twelve','Thirteen','Fourteen','Fifteen','Sixteen','Seventeen','Eighteen','Nineteen'];
-    const tens = ['','','Twenty','Thirty','Forty','Fifty','Sixty','Seventy','Eighty','Ninety'];
+    const ones = ['Zero', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine'];
+    const teens = ['Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'];
+    const tens = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
     const chunk = (n) => {
       let s = '';
-      if (n >= 100) { s += `${ones[Math.floor(n/100)]} Hundred`; n %= 100; if (n) s += ' '; }
-      if (n >= 20) { s += tens[Math.floor(n/10)]; n %= 10; if (n) s += `-${ones[n]}`; }
-      else if (n >= 10) { s += teens[n-10]; }
+      if (n >= 100) { s += `${ones[Math.floor(n / 100)]} Hundred`; n %= 100; if (n) s += ' '; }
+      if (n >= 20) { s += tens[Math.floor(n / 10)]; n %= 10; if (n) s += `-${ones[n]}`; }
+      else if (n >= 10) { s += teens[n - 10]; }
       else if (n > 0) { s += ones[n]; }
       else if (!s) { s = 'Zero'; }
       return s;
@@ -158,26 +159,26 @@ function renderFullInvoicePreview(company, template, brandColor, liveInvoice) {
   switch (template) {
     case 'modern':
       return (
-        <View style={[styles.fullCard, { borderColor: theme.border }]}> 
-          <View style={[styles.fullHeader, { backgroundColor: theme.primary, justifyContent: 'space-between' }]}> 
+        <View style={[styles.fullCard, { borderColor: theme.border }]}>
+          <View style={[styles.fullHeader, { backgroundColor: theme.primary, justifyContent: 'space-between' }]}>
             <Text style={[styles.fullCompany, { color: Colors.white }]} numberOfLines={1}>{name}</Text>
             <Text style={[styles.fullTitle, { color: Colors.white }]}>INVOICE</Text>
           </View>
           <View style={[styles.fullAccent, { backgroundColor: theme.accent }]} />
-          <View style={styles.fullRow}> 
-            <View style={[styles.fullInfoBox, { flex: 1, borderColor: theme.border, marginRight: 8 }]}> 
+          <View style={styles.fullRow}>
+            <View style={[styles.fullInfoBox, { flex: 1, borderColor: theme.border, marginRight: 8 }]}>
               <Text style={[styles.fullSection, { color: theme.primary }]}>BILL TO</Text>
               <Text style={styles.fullText}>{liveInvoice?.customerName || 'Sample Client LLC'}</Text>
               <Text style={styles.fullText}>{liveInvoice?.customerAddress || '123 Client Street'}</Text>
               <Text style={styles.fullText}>{liveInvoice?.customerContact || 'client@email.com / +1 (555) 555-5555'}</Text>
             </View>
-            <View style={[styles.fullInfoBox, { flex: 1, borderColor: theme.border, marginLeft: 8 }]}> 
+            <View style={[styles.fullInfoBox, { flex: 1, borderColor: theme.border, marginLeft: 8 }]}>
               <Text style={[styles.fullSection, { color: theme.primary }]}>Invoice</Text>
-              <Text style={styles.fullMeta}>Issuance: {issuanceDate.toISOString().slice(0,10)}</Text>
-              <Text style={styles.fullMeta}>Due: {dueDate.toISOString().slice(0,10)}</Text>
+              <Text style={styles.fullMeta}>Issuance: {issuanceDate.toISOString().slice(0, 10)}</Text>
+              <Text style={styles.fullMeta}>Due: {dueDate.toISOString().slice(0, 10)}</Text>
             </View>
           </View>
-          <View style={[styles.fullInfoBox, { borderColor: theme.border, marginHorizontal: Spacing.lg }]}> 
+          <View style={[styles.fullInfoBox, { borderColor: theme.border, marginHorizontal: Spacing.lg }]}>
             {!!company?.logo && (
               <Image source={{ uri: company.logo }} style={{ width: 64, height: 64, borderRadius: 8, marginBottom: 6 }} />
             )}
@@ -193,21 +194,21 @@ function renderFullInvoicePreview(company, template, brandColor, liveInvoice) {
               </View>
             )}
           </View>
-          <View style={styles.fullTableHeader}> 
+          <View style={styles.fullTableHeader}>
             <Text style={[styles.fullTh, { flex: 2 }]}>Description</Text>
             <Text style={[styles.fullTh, { flex: 0.7, textAlign: 'center' }]}>Qty</Text>
             <Text style={[styles.fullTh, { flex: 1, textAlign: 'right' }]}>Price</Text>
             <Text style={[styles.fullTh, { flex: 1, textAlign: 'right' }]}>Total</Text>
           </View>
           {rows.map((r, i) => (
-            <View key={i} style={[styles.fullRowCard, { borderColor: theme.border }]}> 
+            <View key={i} style={[styles.fullRowCard, { borderColor: theme.border }]}>
               <Text style={[styles.fullTd, { flex: 2 }]}>{r.desc}</Text>
               <Text style={[styles.fullTd, { flex: 0.7, textAlign: 'center' }]}>{r.qty}</Text>
               <Text style={[styles.fullTd, { flex: 1, textAlign: 'right' }]}>{`${curr}${r.price.toFixed(2)}`}</Text>
               <Text style={[styles.fullTd, { flex: 1, textAlign: 'right' }]}>{`${curr}${r.total.toFixed(2)}`}</Text>
             </View>
           ))}
-          <View style={styles.fullTotalsRight}> 
+          <View style={styles.fullTotalsRight}>
             <View style={styles.fullTotalRow}><Text style={styles.fullMeta}>Subtotal</Text><Text style={styles.fullMeta}>{`${curr}${subtotal.toFixed(2)}`}</Text></View>
             {tax > 0 && (
               <View style={styles.fullTotalRow}><Text style={styles.fullMeta}>Tax</Text><Text style={styles.fullMeta}>{`${curr}${tax.toFixed(2)}`}</Text></View>
@@ -226,8 +227,8 @@ function renderFullInvoicePreview(company, template, brandColor, liveInvoice) {
       );
     case 'minimal':
       return (
-        <View style={[styles.fullCard, { borderColor: theme.border }]}> 
-          <View style={styles.fullRow}> 
+        <View style={[styles.fullCard, { borderColor: theme.border }]}>
+          <View style={styles.fullRow}>
             <View style={{ flex: 1 }}>
               {!!company?.logo && (
                 <Image source={{ uri: company.logo }} style={{ width: 64, height: 64, borderRadius: 8, marginBottom: 6 }} />
@@ -247,27 +248,27 @@ function renderFullInvoicePreview(company, template, brandColor, liveInvoice) {
             <Text style={[styles.fullTitle, { color: theme.primary }]}>INVOICE</Text>
           </View>
           <View style={styles.fullSeparator} />
-          <View style={styles.fullRow}> 
-             <View style={{ flex: 1 }}>
-               <Text style={[styles.fullSection, { color: theme.primary }]}>BILL TO</Text>
-               <Text style={styles.fullText}>{liveInvoice?.customerName || 'Sample Client LLC'}</Text>
-               <Text style={styles.fullText}>{liveInvoice?.customerAddress || '123 Client Street'}</Text>
-               <Text style={styles.fullText}>{liveInvoice?.customerContact || 'client@email.com / +1 (555) 555-5555'}</Text>
-             </View>
-             <View style={{ alignItems: 'flex-end', flex: 1 }}>
-               <Text style={[styles.fullSection, { color: theme.primary }]}>Invoice</Text>
-               <Text style={styles.fullMeta}>Issuance: {issuanceDate.toISOString().slice(0,10)}</Text>
-               <Text style={styles.fullMeta}>Due: {dueDate.toISOString().slice(0,10)}</Text>
-             </View>
-           </View>
-          <View style={styles.fullTableHeader}> 
+          <View style={styles.fullRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.fullSection, { color: theme.primary }]}>BILL TO</Text>
+              <Text style={styles.fullText}>{liveInvoice?.customerName || 'Sample Client LLC'}</Text>
+              <Text style={styles.fullText}>{liveInvoice?.customerAddress || '123 Client Street'}</Text>
+              <Text style={styles.fullText}>{liveInvoice?.customerContact || 'client@email.com / +1 (555) 555-5555'}</Text>
+            </View>
+            <View style={{ alignItems: 'flex-end', flex: 1 }}>
+              <Text style={[styles.fullSection, { color: theme.primary }]}>Invoice</Text>
+              <Text style={styles.fullMeta}>Issuance: {issuanceDate.toISOString().slice(0, 10)}</Text>
+              <Text style={styles.fullMeta}>Due: {dueDate.toISOString().slice(0, 10)}</Text>
+            </View>
+          </View>
+          <View style={styles.fullTableHeader}>
             <Text style={[styles.fullTh, { flex: 2 }]}>Description</Text>
             <Text style={[styles.fullTh, { flex: 0.7, textAlign: 'center' }]}>Qty</Text>
             <Text style={[styles.fullTh, { flex: 1, textAlign: 'right' }]}>Price</Text>
             <Text style={[styles.fullTh, { flex: 1, textAlign: 'right' }]}>Total</Text>
           </View>
           {rows.map((r, i) => (
-            <View key={i} style={styles.fullTableRow}> 
+            <View key={i} style={styles.fullTableRow}>
               <Text style={[styles.fullTd, { flex: 2 }]}>{r.desc}</Text>
               <Text style={[styles.fullTd, { flex: 0.7, textAlign: 'center' }]}>{r.qty}</Text>
               <Text style={[styles.fullTd, { flex: 1, textAlign: 'right' }]}>{`${curr}${r.price.toFixed(2)}`}</Text>
@@ -275,7 +276,7 @@ function renderFullInvoicePreview(company, template, brandColor, liveInvoice) {
             </View>
           ))}
           <View style={styles.fullSeparator} />
-          <View style={styles.fullTotalsLeft}> 
+          <View style={styles.fullTotalsLeft}>
             <View style={styles.fullTotalRow}><Text style={styles.fullMeta}>Subtotal</Text><Text style={styles.fullMeta}>{`${curr}${subtotal.toFixed(2)}`}</Text></View>
             {tax > 0 && (
               <View style={styles.fullTotalRow}><Text style={styles.fullMeta}>Tax</Text><Text style={styles.fullMeta}>{`${curr}${tax.toFixed(2)}`}</Text></View>
@@ -294,10 +295,10 @@ function renderFullInvoicePreview(company, template, brandColor, liveInvoice) {
       );
     case 'bold':
       return (
-        <View style={[styles.fullCard, { borderColor: theme.border }]}> 
+        <View style={[styles.fullCard, { borderColor: theme.border }]}>
           <Text style={[styles.fullTitle, { color: theme.primary }]}>INVOICE</Text>
           <View style={[styles.fullAccent, { backgroundColor: theme.accent, height: 8 }]} />
-          <View style={styles.fullRow}> 
+          <View style={styles.fullRow}>
             <View style={{ flex: 1 }}>
               {!!company?.logo && (
                 <Image source={{ uri: company.logo }} style={{ width: 64, height: 64, borderRadius: 8, marginBottom: 6 }} />
@@ -306,11 +307,11 @@ function renderFullInvoicePreview(company, template, brandColor, liveInvoice) {
               <Text style={styles.fullText}>{address}</Text>
             </View>
             <View style={{ alignItems: 'flex-end' }}>
-              <Text style={styles.fullMeta}>Issuance: {issuanceDate.toISOString().slice(0,10)}</Text>
-              <Text style={styles.fullMeta}>Due: {dueDate.toISOString().slice(0,10)}</Text>
+              <Text style={styles.fullMeta}>Issuance: {issuanceDate.toISOString().slice(0, 10)}</Text>
+              <Text style={styles.fullMeta}>Due: {dueDate.toISOString().slice(0, 10)}</Text>
             </View>
           </View>
-          <View style={styles.fullRow}> 
+          <View style={styles.fullRow}>
             <View style={{ flex: 1 }}>
               <Text style={[styles.fullSection, { color: theme.primary }]}>BILL TO</Text>
               <Text style={styles.fullText}>{liveInvoice?.customerName || 'Sample Client LLC'}</Text>
@@ -318,21 +319,21 @@ function renderFullInvoicePreview(company, template, brandColor, liveInvoice) {
               <Text style={styles.fullText}>{liveInvoice?.customerContact || 'client@email.com / +1 (555) 555-5555'}</Text>
             </View>
           </View>
-          <View style={[styles.fullTableHeader, { backgroundColor: Colors.gray[100] }]}> 
+          <View style={[styles.fullTableHeader, { backgroundColor: Colors.gray[100] }]}>
             <Text style={[styles.fullTh, { flex: 2 }]}>Description</Text>
             <Text style={[styles.fullTh, { flex: 0.7, textAlign: 'center' }]}>Qty</Text>
             <Text style={[styles.fullTh, { flex: 1, textAlign: 'right' }]}>Price</Text>
             <Text style={[styles.fullTh, { flex: 1, textAlign: 'right' }]}>Total</Text>
           </View>
           {rows.map((r, i) => (
-            <View key={i} style={[styles.fullTableRow, { borderBottomWidth: 2 }]}> 
+            <View key={i} style={[styles.fullTableRow, { borderBottomWidth: 2 }]}>
               <Text style={[styles.fullTd, { flex: 2 }]}>{r.desc}</Text>
               <Text style={[styles.fullTd, { flex: 0.7, textAlign: 'center' }]}>{r.qty}</Text>
               <Text style={[styles.fullTd, { flex: 1, textAlign: 'right' }]}>{`${curr}${r.price.toFixed(2)}`}</Text>
               <Text style={[styles.fullTd, { flex: 1, textAlign: 'right' }]}>{`${curr}${r.total.toFixed(2)}`}</Text>
             </View>
           ))}
-          <View style={[styles.fullTotalsRight, { backgroundColor: Colors.gray[100], padding: Spacing.md, borderRadius: 8 }]}> 
+          <View style={[styles.fullTotalsRight, { backgroundColor: Colors.gray[100], padding: Spacing.md, borderRadius: 8 }]}>
             <View style={styles.fullTotalRow}><Text style={styles.fullMeta}>Subtotal</Text><Text style={styles.fullMeta}>{`${curr}${subtotal.toFixed(2)}`}</Text></View>
             {tax > 0 && (
               <View style={styles.fullTotalRow}><Text style={styles.fullMeta}>Tax</Text><Text style={styles.fullMeta}>{`${curr}${tax.toFixed(2)}`}</Text></View>
@@ -351,14 +352,14 @@ function renderFullInvoicePreview(company, template, brandColor, liveInvoice) {
       );
     case 'compact':
       return (
-        <View style={[styles.fullCard, { borderColor: theme.border }]}> 
-          <View style={styles.fullRow}> 
+        <View style={[styles.fullCard, { borderColor: theme.border }]}>
+          <View style={styles.fullRow}>
             <Text style={[styles.fullTitleSm, { color: theme.primary }]}>INVOICE</Text>
             <View style={{ alignItems: 'flex-end', flex: 1 }}>
               <Text style={styles.fullMeta}>{new Date().toLocaleDateString()}</Text>
             </View>
           </View>
-          <View style={styles.fullRow}> 
+          <View style={styles.fullRow}>
             <View style={{ flex: 1 }}>
               {!!company?.logo && (
                 <Image source={{ uri: company.logo }} style={{ width: 56, height: 56, borderRadius: 8, marginBottom: 6 }} />
@@ -381,21 +382,21 @@ function renderFullInvoicePreview(company, template, brandColor, liveInvoice) {
               <Text style={styles.fullText}>{liveInvoice?.customerContact || 'client@email.com / +1 (555) 555-5555'}</Text>
             </View>
           </View>
-          <View style={styles.fullTableHeader}> 
+          <View style={styles.fullTableHeader}>
             <Text style={[styles.fullTh, { flex: 2, fontWeight: '700' }]}>Item</Text>
             <Text style={[styles.fullTh, { flex: 0.6, textAlign: 'center', fontWeight: '700' }]}>Qty</Text>
             <Text style={[styles.fullTh, { flex: 1, textAlign: 'right', fontWeight: '700' }]}>Price</Text>
             <Text style={[styles.fullTh, { flex: 1, textAlign: 'right', fontWeight: '700' }]}>Total</Text>
           </View>
           {rows.map((r, i) => (
-            <View key={i} style={[styles.fullTableRow, { paddingVertical: 6 }]}> 
+            <View key={i} style={[styles.fullTableRow, { paddingVertical: 6 }]}>
               <Text style={[styles.fullTd, { flex: 2 }]}>{r.desc}</Text>
               <Text style={[styles.fullTd, { flex: 0.6, textAlign: 'center' }]}>{r.qty}</Text>
               <Text style={[styles.fullTd, { flex: 1, textAlign: 'right' }]}>{`${curr}${r.price.toFixed(2)}`}</Text>
               <Text style={[styles.fullTd, { flex: 1, textAlign: 'right' }]}>{`${curr}${r.total.toFixed(2)}`}</Text>
             </View>
           ))}
-          <View style={styles.fullTotalsRight}> 
+          <View style={styles.fullTotalsRight}>
             <View style={styles.fullTotalRow}><Text style={styles.fullMeta}>Subtotal</Text><Text style={styles.fullMeta}>{`${curr}${subtotal.toFixed(2)}`}</Text></View>
             <View style={styles.fullTotalRow}><Text style={styles.fullMeta}>Tax</Text><Text style={styles.fullMeta}>{`${curr}${tax.toFixed(2)}`}</Text></View>
             <View style={styles.fullTotalRow}><Text style={styles.fullTitleSm}>Total</Text><Text style={styles.fullTitleSm}>{`${curr}${grand.toFixed(2)}`}</Text></View>
@@ -413,27 +414,27 @@ function renderFullInvoicePreview(company, template, brandColor, liveInvoice) {
     case 'classic':
     default:
       return (
-        <View style={[styles.fullCard, { borderColor: theme.border }]}> 
-          <View style={styles.fullRow}> 
+        <View style={[styles.fullCard, { borderColor: theme.border }]}>
+          <View style={styles.fullRow}>
             <Text style={[styles.fullCompany]}>{name}</Text>
             <Text style={[styles.fullTitle, { color: theme.primary }]}>INVOICE</Text>
           </View>
           <View style={[styles.fullAccent, { backgroundColor: theme.accent }]} />
           <View style={styles.fullSeparator} />
-          <View style={styles.fullRow}> 
+          <View style={styles.fullRow}>
             <View style={{ flex: 1 }}>
               <Text style={[styles.fullSection, { color: theme.primary }]}>BILL TO</Text>
-        <Text style={styles.fullText}>{liveInvoice?.customerName || 'Sample Client LLC'}</Text>
-        <Text style={styles.fullText}>{liveInvoice?.customerAddress || '123 Client Street'}</Text>
-        <Text style={styles.fullText}>{liveInvoice?.customerContact || 'client@email.com / +1 (555) 555-5555'}</Text>
-            <View style={{ marginTop: 8 }}>
-              <Text style={[styles.fullSection, { color: theme.primary }]}>Invoice</Text>
-              <Text style={styles.fullMeta}>Issuance: {issuanceDate.toISOString().slice(0,10)}</Text>
-              <Text style={styles.fullMeta}>Due: {dueDate.toISOString().slice(0,10)}</Text>
+              <Text style={styles.fullText}>{liveInvoice?.customerName || 'Sample Client LLC'}</Text>
+              <Text style={styles.fullText}>{liveInvoice?.customerAddress || '123 Client Street'}</Text>
+              <Text style={styles.fullText}>{liveInvoice?.customerContact || 'client@email.com / +1 (555) 555-5555'}</Text>
+              <View style={{ marginTop: 8 }}>
+                <Text style={[styles.fullSection, { color: theme.primary }]}>Invoice</Text>
+                <Text style={styles.fullMeta}>Issuance: {issuanceDate.toISOString().slice(0, 10)}</Text>
+                <Text style={styles.fullMeta}>Due: {dueDate.toISOString().slice(0, 10)}</Text>
+              </View>
             </View>
-          </View>
             <View style={{ alignItems: 'flex-end', flex: 1 }}>
-              <View style={[styles.fullInfoBox, { borderColor: theme.border }]}> 
+              <View style={[styles.fullInfoBox, { borderColor: theme.border }]}>
                 {!!company?.logo && (
                   <Image source={{ uri: company.logo }} style={{ width: 64, height: 64, borderRadius: 8, marginBottom: 6 }} />
                 )}
@@ -451,21 +452,21 @@ function renderFullInvoicePreview(company, template, brandColor, liveInvoice) {
               </View>
             </View>
           </View>
-          <View style={[styles.fullTableHeader, { borderColor: theme.border }]}> 
+          <View style={[styles.fullTableHeader, { borderColor: theme.border }]}>
             <Text style={[styles.fullTh, { flex: 2 }]}>Description</Text>
             <Text style={[styles.fullTh, { flex: 0.7, textAlign: 'center' }]}>Qty</Text>
             <Text style={[styles.fullTh, { flex: 1, textAlign: 'right' }]}>Price</Text>
             <Text style={[styles.fullTh, { flex: 1, textAlign: 'right' }]}>Total</Text>
           </View>
           {rows.map((r, i) => (
-            <View key={i} style={styles.fullTableRow}> 
+            <View key={i} style={styles.fullTableRow}>
               <Text style={[styles.fullTd, { flex: 2 }]}>{r.desc}</Text>
               <Text style={[styles.fullTd, { flex: 0.7, textAlign: 'center' }]}>{r.qty}</Text>
               <Text style={[styles.fullTd, { flex: 1, textAlign: 'right' }]}>{`${curr}${r.price.toFixed(2)}`}</Text>
               <Text style={[styles.fullTd, { flex: 1, textAlign: 'right' }]}>{`${curr}${r.total.toFixed(2)}`}</Text>
             </View>
           ))}
-          <View style={styles.fullTotalsRight}> 
+          <View style={styles.fullTotalsRight}>
             <View style={styles.fullTotalRow}><Text style={styles.fullMeta}>Subtotal</Text><Text style={styles.fullMeta}>{`${curr}${subtotal.toFixed(2)}`}</Text></View>
             {tax > 0 && (
               <View style={styles.fullTotalRow}><Text style={styles.fullMeta}>Tax</Text><Text style={styles.fullMeta}>{`${curr}${tax.toFixed(2)}`}</Text></View>
@@ -509,6 +510,95 @@ export default function TemplatePickerScreen({ navigation }) {
     { description: 'Service 1', qty: '1', price: '100' },
   ]);
   const [savingHtmlPdf, setSavingHtmlPdf] = useState(false);
+  const [previewHtml, setPreviewHtml] = useState('');
+
+  useEffect(() => {
+    if (previewVisible) {
+      (async () => {
+        try {
+          const guessMime = (u) => {
+            const ext = (u || '').split('?')[0].split('#')[0].split('.').pop()?.toLowerCase() || '';
+            if (ext === 'jpg' || ext === 'jpeg') return 'image/jpeg';
+            if (ext === 'png') return 'image/png';
+            if (ext === 'gif') return 'image/gif';
+            if (ext === 'webp') return 'image/webp';
+            return 'image/*';
+          };
+
+          const toDataUrl = async (uri) => {
+            if (!uri) return '';
+            if (uri.startsWith('data:')) return uri;
+            try {
+              if (Platform.OS === 'web') {
+                return uri; // Web can usually handle URLs, or we'd need fetch->blob logic
+              } else {
+                if (uri.startsWith('file:')) {
+                  const base64 = await FileSystemLegacy.readAsStringAsync(uri, { encoding: 'base64' });
+                  const mime = guessMime(uri);
+                  return `data:${mime};base64,${base64}`;
+                } else {
+                  // Remote URL? Download to cache first
+                  const tmp = `${FileSystem.cacheDirectory}img-${Date.now()}`;
+                  const dl = await FileSystemLegacy.downloadAsync(uri, tmp);
+                  const base64 = await FileSystemLegacy.readAsStringAsync(dl.uri, { encoding: 'base64' });
+                  const mime = guessMime(uri);
+                  return `data:${mime};base64,${base64}`;
+                }
+              }
+            } catch (err) {
+              console.warn('[Preview] Image load failed:', err);
+              return '';
+            }
+          };
+
+          // Resolve logo
+          let logoCandidate = tempPdfLogo || company?.logo;
+          if (!logoCandidate && company?.companyId) {
+            // Try cache if not in memory
+            try {
+              const cache = await AsyncStorage.getItem('companyLogoCache');
+              if (cache) logoCandidate = cache;
+            } catch { }
+          }
+
+          const resolvedLogo = await toDataUrl(logoCandidate);
+          const resolvedSignature = await toDataUrl(company?.signature);
+
+          const invNo = invoice.invoiceNumber || `INV-${(company?.companyId || 'LOCAL')}-${Date.now()}`;
+
+          const html = buildInvoiceHtml({
+            company: {
+              name: company?.companyName,
+              address: company?.address,
+              email: company?.email,
+              phone: company?.phoneNumber,
+              bankName: company?.bankName,
+              accountName: company?.bankAccountName,
+              accountNumber: company?.bankAccountNumber,
+              logo: resolvedLogo,
+              signature: resolvedSignature,
+            },
+            invoice: {
+              customerName: invoice.customerName,
+              customerAddress: invoice.customerAddress,
+              customerContact: invoice.customerContact,
+              invoiceDate: invoice.invoiceDate?.toISOString().slice(0, 10),
+              dueDate: invoice.dueDate?.toISOString().slice(0, 10),
+              invoiceNumber: invNo,
+            },
+            items: items.map((it) => ({ description: it.description, qty: Number(it.qty || 0), price: Number(it.price || 0) })),
+            template: invoiceTemplate,
+            brandColor,
+            currencySymbol: companyCurrencySymbol,
+          });
+          setPreviewHtml(html);
+        } catch (e) {
+          console.error('Preview generation failed', e);
+          setPreviewHtml('<h1>Preview Error</h1><p>Could not generate preview.</p>');
+        }
+      })();
+    }
+  }, [previewVisible, company, invoice, items, invoiceTemplate, brandColor, tempPdfLogo, companyCurrencySymbol]);
 
   const updateInvoice = (patch) => setInvoice((prev) => ({ ...prev, ...patch }));
   const updateItem = (index, patch) => setItems((prev) => prev.map((it, i) => (i === index ? { ...it, ...patch } : it)));
@@ -591,7 +681,7 @@ export default function TemplatePickerScreen({ navigation }) {
       const picked = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ['images'],
         allowsEditing: true,
-        aspect: [1,1],
+        aspect: [1, 1],
         quality: 0.8,
       });
       if (picked?.canceled) return null;
@@ -624,298 +714,350 @@ export default function TemplatePickerScreen({ navigation }) {
   return (
     <SafeAreaView style={styles.container}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }} keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 80}>
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-        <View style={styles.header}>
-          <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-            <Text style={styles.backButtonText}>← Back</Text>
-          </TouchableOpacity>
-          <Text style={styles.title}>Pick Your Invoice Template</Text>
-          <Text style={styles.subtitle}>Choose how your invoice looks. Tap preview for full layout.</Text>
-          <View style={{ marginTop: 8, alignSelf: 'flex-start', backgroundColor: Colors.success, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 }}>
-            <Text style={{ color: Colors.white, fontWeight: '700' }}>Currency: {companyCurrencySymbol} {companyCurrencySymbol === '₦' ? 'Naira' : companyCurrencySymbol === '$' ? 'Dollar' : companyCurrencySymbol}</Text>
-          </View>
-        </View>
-
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Invoice Template</Text>
-          <View style={styles.grid}>
-            {TEMPLATES.map((t) => (
-              <View key={`inv-${t.key}`} style={styles.gridItem}>
-                {renderTemplate(t.key, t.title, t.emoji, invoiceTemplate === t.key, handleSelectTemplate)}
-              </View>
-            ))}
-          </View>
-          <View style={styles.previewContainer}>
-            <Text style={styles.previewLabel}>Preview</Text>
-            <TouchableOpacity activeOpacity={0.8} onPress={() => setPreviewVisible(true)}>
-              <TemplatePreview companyName={company?.companyName} template={invoiceTemplate} brandColor={brandColor} />
-              <Text style={styles.tapHint}>Tap to view full layout</Text>
+        <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+          <View style={styles.header}>
+            <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
+              <Text style={styles.backButtonText}>← Back</Text>
             </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* Brand Color Picker */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Brand Color</Text>
-          <Text style={styles.subtitle}>Pick a color that matches your brand. It applies to header and accents.</Text>
-          <View style={styles.swatchGrid}>
-            {['#1f6feb','#10b981','#d97706','#ef4444','#7c3aed','#14b8a6','#0ea5e9','#f43f5e','#3b82f6','#22c55e','#eab308','#6b7280'].map((c) => (
-              <TouchableOpacity key={c} style={[styles.swatch, { backgroundColor: c }, brandColor === c && styles.swatchSelected]} onPress={() => setBrandColor(c)} />
-            ))}
-          </View>
-          <View style={styles.colorInputRow}>
-            <TextInput
-              style={[styles.input, { flex: 1 }]}
-              placeholder="#RRGGBB"
-              placeholderTextColor={Colors.textSecondary}
-              value={brandColor}
-              onChangeText={(t) => setBrandColor(t.startsWith('#') ? t : `#${t}`)}
-              autoCapitalize="none"
-              autoCorrect={false}
-            />
-            <View style={[styles.colorPreviewBox, { backgroundColor: brandColor || Colors.primary }]} />
-          </View>
-        </View>
-
-        {/* Live Invoice Editor */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Invoice Details</Text>
-          <Text style={styles.subtitle}>Only customer and items are required. Template applies automatically.</Text>
-          <View style={{ gap: 10 }}>
-            <TextInput style={styles.input} placeholder="Customer Name" placeholderTextColor={Colors.textSecondary} value={invoice.customerName} onChangeText={(t) => updateInvoice({ customerName: t })} />
-            <TextInput style={styles.input} placeholder="Customer Address" placeholderTextColor={Colors.textSecondary} value={invoice.customerAddress} onChangeText={(t) => updateInvoice({ customerAddress: t })} />
-            <TextInput style={styles.input} placeholder="Email or Phone (optional)" placeholderTextColor={Colors.textSecondary} value={invoice.customerContact} onChangeText={(t) => updateInvoice({ customerContact: t })} autoCapitalize="none" />
-          </View>
-          {/* Currency is determined by company settings */}
-          <View style={{ flexDirection: 'row', gap: 10, marginTop: 10 }}>
-            <TouchableOpacity style={[styles.input, { flex: 1, justifyContent: 'center' }]} onPress={() => setShowInvoiceDatePicker(true)}>
-              <Text style={styles.dateText}>Issuance Date: {invoice.invoiceDate?.toISOString().slice(0,10)}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={[styles.input, { flex: 1, justifyContent: 'center' }]} onPress={() => setShowDueDatePicker(true)}>
-              <Text style={styles.dateText}>Due Date: {invoice.dueDate?.toISOString().slice(0,10)}</Text>
-            </TouchableOpacity>
-          </View>
-          {showInvoiceDatePicker && (
-            <DateTimePicker value={invoice.invoiceDate || new Date()} mode="date" display="default" onChange={(e, d) => { setShowInvoiceDatePicker(false); if (d) updateInvoice({ invoiceDate: d }); }} />
-          )}
-          {showDueDatePicker && (
-            <DateTimePicker value={invoice.dueDate || new Date()} mode="date" display="default" onChange={(e, d) => { setShowDueDatePicker(false); if (d) updateInvoice({ dueDate: d }); }} />
-          )}
-
-          <Text style={[styles.sectionTitle, { marginTop: Spacing.md }]}>Items</Text>
-          <View style={{ flexDirection: 'row', gap: 8, marginBottom: 6, paddingHorizontal: 2 }}>
-            <Text style={[styles.fullMeta, { flex: 2 }]}>Item Description</Text>
-            <Text style={[styles.fullMeta, { flex: 0.6, textAlign: 'center' }]}>Qty</Text>
-            <Text style={[styles.fullMeta, { flex: 1, textAlign: 'right' }]}>Price ({companyCurrencySymbol})</Text>
-            <Text style={[styles.fullMeta, { flex: 1, textAlign: 'right' }]}>Total ({companyCurrencySymbol})</Text>
-          </View>
-          {items.map((it, i) => {
-            const qty = Number(it.qty || 0);
-            const price = Number(it.price || 0);
-            const total = Math.round(qty * price * 100) / 100;
-            return (
-              <View key={i} style={{ flexDirection: 'row', gap: 8, alignItems: 'center', marginBottom: 8 }}>
-                <TextInput style={[styles.input, { flex: 2 }]} placeholder="Description" placeholderTextColor={Colors.textSecondary} value={it.description} onChangeText={(t) => updateItem(i, { description: t })} />
-                <TextInput style={[styles.input, { flex: 0.6, textAlign: 'center' }]} placeholder="Qty" placeholderTextColor={Colors.textSecondary} value={it.qty} onChangeText={(t) => updateItem(i, { qty: t })} keyboardType="numeric" />
-                <TextInput style={[styles.input, { flex: 1, textAlign: 'right' }]} placeholder="Price" placeholderTextColor={Colors.textSecondary} value={it.price} onChangeText={(t) => updateItem(i, { price: t })} keyboardType="decimal-pad" />
-                <Text style={[styles.fullText, { flex: 1, textAlign: 'right' }]}>{`${companyCurrencySymbol}${total.toFixed(2)}`}</Text>
-                <TouchableOpacity onPress={() => removeItem(i)} style={[styles.iconButton, { backgroundColor: Colors.error }]}>
-                  <Text style={styles.iconButtonText}>✕</Text>
-                </TouchableOpacity>
-              </View>
-            );
-          })}
-          <View style={{ flexDirection: 'row', gap: 10 }}>
-            <TouchableOpacity onPress={addItem} style={[styles.secondaryButton, { flex: 1 }]}>
-              <Text style={styles.secondaryButtonText}>+ Add Item</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => setPreviewVisible(true)} style={[styles.primaryHollowButton, { flex: 1 }]}>
-              <Text style={styles.primaryHollowButtonText}>Preview</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-
-        {/* Full-screen preview modal */}
-        <Modal visible={previewVisible} animationType="slide" onRequestClose={() => setPreviewVisible(false)}>
-          <SafeAreaView style={[styles.container, { backgroundColor: Colors.gray[100] }]}> 
-            <View style={styles.modalHeader}>
-              <TouchableOpacity style={styles.backButton} onPress={() => setPreviewVisible(false)}>
-                <Text style={styles.backButtonText}>← Close</Text>
-              </TouchableOpacity>
-              <Text style={styles.title}>Invoice Preview — {invoiceTemplate.charAt(0).toUpperCase() + invoiceTemplate.slice(1)}</Text>
+            <Text style={styles.title}>Pick Your Invoice Template</Text>
+            <Text style={styles.subtitle}>Choose how your invoice looks. Tap preview for full layout.</Text>
+            <View style={{ marginTop: 8, alignSelf: 'flex-start', backgroundColor: Colors.success, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 }}>
+              <Text style={{ color: Colors.white, fontWeight: '700' }}>Currency: {companyCurrencySymbol} {companyCurrencySymbol === '₦' ? 'Naira' : companyCurrencySymbol === '$' ? 'Dollar' : companyCurrencySymbol}</Text>
             </View>
-            <ScrollView contentContainerStyle={{ padding: Spacing.lg }}>
-              {renderFullInvoicePreview(company, invoiceTemplate, brandColor, {
-                customerName: invoice.customerName,
-                customerAddress: invoice.customerAddress,
-                customerContact: invoice.customerContact,
-                invoiceDate: invoice.invoiceDate?.toISOString().slice(0,10),
-                dueDate: invoice.dueDate?.toISOString().slice(0,10),
-                items,
-              })}
-              <View style={{ height: 12 }} />
-              <View style={{ flexDirection: 'row', gap: 10, paddingHorizontal: Spacing.lg, flexWrap: 'wrap' }}>
-                <TouchableOpacity onPress={async () => {
-                  try {
-                    setSavingHtmlPdf(true);
+          </View>
 
-                    const guessMime = (u) => {
-                      const ext = (u || '').split('?')[0].split('#')[0].split('.').pop()?.toLowerCase() || '';
-                      if (ext === 'jpg' || ext === 'jpeg') return 'image/jpeg';
-                      if (ext === 'png') return 'image/png';
-                      if (ext === 'gif') return 'image/gif';
-                      if (ext === 'webp') return 'image/webp';
-                      return 'image/*';
-                    };
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Invoice Template</Text>
+            <View style={styles.grid}>
+              {TEMPLATES.map((t) => (
+                <View key={`inv-${t.key}`} style={styles.gridItem}>
+                  {renderTemplate(t.key, t.title, t.emoji, invoiceTemplate === t.key, handleSelectTemplate)}
+                </View>
+              ))}
+            </View>
+            <View style={styles.previewContainer}>
+              <Text style={styles.previewLabel}>Preview</Text>
+              <TouchableOpacity activeOpacity={0.8} onPress={() => setPreviewVisible(true)}>
+                <TemplatePreview companyName={company?.companyName} template={invoiceTemplate} brandColor={brandColor} />
+                <Text style={styles.tapHint}>Tap to view full layout</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
 
-                    const toDataUrl = async (uri) => {
-                      if (!uri) return '';
-                      if (uri.startsWith('data:')) return uri;
+          {/* Brand Color Picker */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Brand Color</Text>
+            <Text style={styles.subtitle}>Pick a color that matches your brand. It applies to header and accents.</Text>
+            <View style={styles.swatchGrid}>
+              {['#1f6feb', '#10b981', '#d97706', '#ef4444', '#7c3aed', '#14b8a6', '#0ea5e9', '#f43f5e', '#3b82f6', '#22c55e', '#eab308', '#6b7280'].map((c) => (
+                <TouchableOpacity key={c} style={[styles.swatch, { backgroundColor: c }, brandColor === c && styles.swatchSelected]} onPress={() => setBrandColor(c)} />
+              ))}
+            </View>
+            <View style={styles.colorInputRow}>
+              <TextInput
+                style={[styles.input, { flex: 1 }]}
+                placeholder="#RRGGBB"
+                placeholderTextColor={Colors.textSecondary}
+                value={brandColor}
+                onChangeText={(t) => setBrandColor(t.startsWith('#') ? t : `#${t}`)}
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+              <View style={[styles.colorPreviewBox, { backgroundColor: brandColor || Colors.primary }]} />
+            </View>
+          </View>
+
+          {/* Live Invoice Editor */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Invoice Details</Text>
+            <Text style={styles.subtitle}>Only customer and items are required. Template applies automatically.</Text>
+            <View style={{ gap: 10 }}>
+              <TextInput style={styles.input} placeholder="Customer Name" placeholderTextColor={Colors.textSecondary} value={invoice.customerName} onChangeText={(t) => updateInvoice({ customerName: t })} />
+              <TextInput style={styles.input} placeholder="Customer Address" placeholderTextColor={Colors.textSecondary} value={invoice.customerAddress} onChangeText={(t) => updateInvoice({ customerAddress: t })} />
+              <TextInput style={styles.input} placeholder="Email or Phone (optional)" placeholderTextColor={Colors.textSecondary} value={invoice.customerContact} onChangeText={(t) => updateInvoice({ customerContact: t })} autoCapitalize="none" />
+            </View>
+            {/* Currency is determined by company settings */}
+            <View style={{ flexDirection: 'row', gap: 10, marginTop: 10 }}>
+              <TouchableOpacity style={[styles.input, { flex: 1, justifyContent: 'center' }]} onPress={() => setShowInvoiceDatePicker(true)}>
+                <Text style={styles.dateText}>Issuance Date: {invoice.invoiceDate?.toISOString().slice(0, 10)}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.input, { flex: 1, justifyContent: 'center' }]} onPress={() => setShowDueDatePicker(true)}>
+                <Text style={styles.dateText}>Due Date: {invoice.dueDate?.toISOString().slice(0, 10)}</Text>
+              </TouchableOpacity>
+            </View>
+            {showInvoiceDatePicker && (
+              <DateTimePicker value={invoice.invoiceDate || new Date()} mode="date" display="default" onChange={(e, d) => { setShowInvoiceDatePicker(false); if (d) updateInvoice({ invoiceDate: d }); }} />
+            )}
+            {showDueDatePicker && (
+              <DateTimePicker value={invoice.dueDate || new Date()} mode="date" display="default" onChange={(e, d) => { setShowDueDatePicker(false); if (d) updateInvoice({ dueDate: d }); }} />
+            )}
+
+            <Text style={[styles.sectionTitle, { marginTop: Spacing.md }]}>Items</Text>
+            <View style={{ flexDirection: 'row', gap: 8, marginBottom: 6, paddingHorizontal: 2 }}>
+              <Text style={[styles.fullMeta, { flex: 2 }]}>Item Description</Text>
+              <Text style={[styles.fullMeta, { flex: 0.6, textAlign: 'center' }]}>Qty</Text>
+              <Text style={[styles.fullMeta, { flex: 1, textAlign: 'right' }]}>Price ({companyCurrencySymbol})</Text>
+              <Text style={[styles.fullMeta, { flex: 1, textAlign: 'right' }]}>Total ({companyCurrencySymbol})</Text>
+            </View>
+            {items.map((it, i) => {
+              const qty = Number(it.qty || 0);
+              const price = Number(it.price || 0);
+              const total = Math.round(qty * price * 100) / 100;
+              return (
+                <View key={i} style={{ flexDirection: 'row', gap: 8, alignItems: 'center', marginBottom: 8 }}>
+                  <TextInput style={[styles.input, { flex: 2 }]} placeholder="Description" placeholderTextColor={Colors.textSecondary} value={it.description} onChangeText={(t) => updateItem(i, { description: t })} />
+                  <TextInput style={[styles.input, { flex: 0.6, textAlign: 'center' }]} placeholder="Qty" placeholderTextColor={Colors.textSecondary} value={it.qty} onChangeText={(t) => updateItem(i, { qty: t })} keyboardType="numeric" />
+                  <TextInput style={[styles.input, { flex: 1, textAlign: 'right' }]} placeholder="Price" placeholderTextColor={Colors.textSecondary} value={it.price} onChangeText={(t) => updateItem(i, { price: t })} keyboardType="decimal-pad" />
+                  <Text style={[styles.fullText, { flex: 1, textAlign: 'right' }]}>{`${companyCurrencySymbol}${total.toFixed(2)}`}</Text>
+                  <TouchableOpacity onPress={() => removeItem(i)} style={[styles.iconButton, { backgroundColor: Colors.error }]}>
+                    <Text style={styles.iconButtonText}>✕</Text>
+                  </TouchableOpacity>
+                </View>
+              );
+            })}
+            <View style={{ flexDirection: 'row', gap: 10 }}>
+              <TouchableOpacity onPress={addItem} style={[styles.secondaryButton, { flex: 1 }]}>
+                <Text style={styles.secondaryButtonText}>+ Add Item</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => setPreviewVisible(true)} style={[styles.primaryHollowButton, { flex: 1 }]}>
+                <Text style={styles.primaryHollowButtonText}>Preview</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+
+          {/* Full-screen preview modal */}
+          <Modal visible={previewVisible} animationType="slide" onRequestClose={() => setPreviewVisible(false)}>
+            <SafeAreaView style={[styles.container, { backgroundColor: Colors.gray[100] }]}>
+              <View style={styles.modalHeader}>
+                <TouchableOpacity style={styles.backButton} onPress={() => setPreviewVisible(false)}>
+                  <Text style={styles.backButtonText}>← Close</Text>
+                </TouchableOpacity>
+                <Text style={styles.title}>Invoice Preview — {invoiceTemplate.charAt(0).toUpperCase() + invoiceTemplate.slice(1)}</Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <View style={{ flex: 1, marginHorizontal: Spacing.lg, marginBottom: Spacing.md, borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 8, overflow: 'hidden' }}>
+                  {previewHtml ? (
+                    <WebView
+                      source={{ html: previewHtml }}
+                      originWhitelist={['*']}
+                      style={{ flex: 1 }}
+                      javaScriptEnabled={true}
+                      domStorageEnabled={true}
+                    />
+                  ) : (
+                    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}><Text style={{ color: '#888' }}>Generating Preview...</Text></View>
+                  )}
+                </View>
+                <View style={{ paddingHorizontal: Spacing.lg, paddingBottom: Spacing.lg }}>
+                  <View style={{ flexDirection: 'row', gap: 10, flexWrap: 'wrap' }}>
+                    <TouchableOpacity onPress={async () => {
                       try {
+                        setSavingHtmlPdf(true);
+
+                        const guessMime = (u) => {
+                          const ext = (u || '').split('?')[0].split('#')[0].split('.').pop()?.toLowerCase() || '';
+                          if (ext === 'jpg' || ext === 'jpeg') return 'image/jpeg';
+                          if (ext === 'png') return 'image/png';
+                          if (ext === 'gif') return 'image/gif';
+                          if (ext === 'webp') return 'image/webp';
+                          return 'image/*';
+                        };
+
+                        const toDataUrl = async (uri) => {
+                          if (!uri) return '';
+                          if (uri.startsWith('data:')) return uri;
+                          try {
+                            if (Platform.OS === 'web') {
+                              const res = await fetch(uri);
+                              const blob = await res.blob();
+                              const dataUrl = await new Promise((resolve, reject) => {
+                                const reader = new FileReader();
+                                reader.onloadend = () => resolve(reader.result);
+                                reader.onerror = reject;
+                                reader.readAsDataURL(blob);
+                              });
+                              return dataUrl;
+                            } else {
+                              if (uri.startsWith('file:')) {
+                                const base64 = await FileSystemLegacy.readAsStringAsync(uri, { encoding: 'base64' });
+                                const mime = guessMime(uri);
+                                return `data:${mime};base64,${base64}`;
+                              } else {
+                                const tmp = `${FileSystem.cacheDirectory}img-${Date.now()}`;
+                                const dl = await FileSystemLegacy.downloadAsync(uri, tmp);
+                                const base64 = await FileSystemLegacy.readAsStringAsync(dl.uri, { encoding: 'base64' });
+                                const mime = guessMime(uri);
+                                return `data:${mime};base64,${base64}`;
+                              }
+                            }
+                          } catch (err) {
+                            console.warn('[TemplatePicker][toDataUrl] Failed:', err?.message || err);
+                            return uri;
+                          }
+                        };
+
+                        // Resolve logo/signature robustly: prefer in-memory, then AsyncStorage caches, then a web asset
+                        const getCachedLogo = async () => {
+                          try {
+                            const existingRaw = await AsyncStorage.getItem('companyData');
+                            const existing = existingRaw ? JSON.parse(existingRaw) : null;
+                            if (existing?.logo) return existing.logo;
+                          } catch { }
+                          try {
+                            const cache = await AsyncStorage.getItem('companyLogoCache');
+                            if (cache) return cache;
+                          } catch { }
+                          if (Platform.OS === 'web') {
+                            try {
+                              const resp = await fetch('/logo.png');
+                              if (resp.ok) {
+                                const blob = await resp.blob();
+                                const reader = new FileReader();
+                                const dataUrl = await new Promise((resolve) => { reader.onloadend = () => resolve(reader.result); reader.readAsDataURL(blob); });
+                                return String(dataUrl);
+                              }
+                            } catch { }
+                          }
+                          return '';
+                        };
+
+                        let logoCandidate = tempPdfLogo || company?.logo || await getCachedLogo();
+                        const resolvedLogo = await toDataUrl(logoCandidate);
+                        const resolvedSignature = await toDataUrl(company?.signature);
+
+                        // Generate a client-side invoice number for HTML export (server has its own sequence)
+                        const invNo = invoice.invoiceNumber || `INV-${(company?.companyId || 'LOCAL')}-${Date.now()}`;
+
+                        const html = buildInvoiceHtml({
+                          company: {
+                            name: company?.companyName,
+                            address: company?.address,
+                            email: company?.email,
+                            phone: company?.phoneNumber,
+                            bankName: company?.bankName,
+                            accountName: company?.bankAccountName,
+                            accountNumber: company?.bankAccountNumber,
+                            logo: resolvedLogo,
+                            signature: resolvedSignature,
+                          },
+                          invoice: {
+                            customerName: invoice.customerName,
+                            customerAddress: invoice.customerAddress,
+                            customerContact: invoice.customerContact,
+                            invoiceDate: invoice.invoiceDate?.toISOString().slice(0, 10),
+                            dueDate: invoice.dueDate?.toISOString().slice(0, 10),
+                            invoiceNumber: invNo,
+                          },
+                          items: items.map((it) => ({ description: it.description, qty: Number(it.qty || 0), price: Number(it.price || 0) })),
+                          template: invoiceTemplate,
+                          brandColor,
+                          currencySymbol: companyCurrencySymbol,
+                        });
+
                         if (Platform.OS === 'web') {
-                          const res = await fetch(uri);
-                          const blob = await res.blob();
-                          const dataUrl = await new Promise((resolve, reject) => {
-                            const reader = new FileReader();
-                            reader.onloadend = () => resolve(reader.result);
-                            reader.onerror = reject;
-                            reader.readAsDataURL(blob);
-                          });
-                          return dataUrl;
-                        } else {
-                          if (uri.startsWith('file:')) {
-                        const base64 = await FileSystemLegacy.readAsStringAsync(uri, { encoding: 'base64' });
-                            const mime = guessMime(uri);
-                            return `data:${mime};base64,${base64}`;
-                          } else {
-                            const tmp = `${FileSystem.cacheDirectory}img-${Date.now()}`;
-                            const dl = await FileSystemLegacy.downloadAsync(uri, tmp);
-                            const base64 = await FileSystemLegacy.readAsStringAsync(dl.uri, { encoding: 'base64' });
-                            const mime = guessMime(uri);
-                            return `data:${mime};base64,${base64}`;
-                          }
+                          const withPrint = html.replace('</body>', '<script>setTimeout(()=>{try{window.print()}catch(_){}},300)</script></body>');
+                          const dataUrl = 'data:text/html;charset=utf-8,' + encodeURIComponent(withPrint);
+                          await Linking.openURL(dataUrl);
+                          // Do not return here; continue to register history below
                         }
-                      } catch (err) {
-                        console.warn('[TemplatePicker][toDataUrl] Failed:', err?.message || err);
-                        return uri;
-                      }
-                    };
 
-                    // Resolve logo/signature robustly: prefer in-memory, then AsyncStorage caches, then a web asset
-                    const getCachedLogo = async () => {
-                      try {
-                        const existingRaw = await AsyncStorage.getItem('companyData');
-                        const existing = existingRaw ? JSON.parse(existingRaw) : null;
-                        if (existing?.logo) return existing.logo;
-                      } catch {}
-                      try {
-                        const cache = await AsyncStorage.getItem('companyLogoCache');
-                        if (cache) return cache;
-                      } catch {}
-                      if (Platform.OS === 'web') {
-                        try {
-                          const resp = await fetch('/logo.png');
-                          if (resp.ok) {
+                        const file = await Print.printToFileAsync({ html });
+                        const safeName = `${invNo}.pdf`.replace(/[^a-zA-Z0-9_.-]/g, '_');
+                        // Web: force browser download with custom filename
+                        if (Platform.OS === 'web') {
+                          try {
+                            const resp = await fetch(file.uri);
                             const blob = await resp.blob();
-                            const reader = new FileReader();
-                            const dataUrl = await new Promise((resolve) => { reader.onloadend = () => resolve(reader.result); reader.readAsDataURL(blob); });
-                            return String(dataUrl);
+                            const url = URL.createObjectURL(blob);
+                            const a = document.createElement('a');
+                            a.href = url;
+                            a.download = safeName;
+                            document.body.appendChild(a);
+                            a.click();
+                            a.remove();
+                            setTimeout(() => URL.revokeObjectURL(url), 1500);
+                          } catch (webErr) {
+                            console.warn('[TemplatePicker][HTML->PDF][Web] Download fallback failed, opening URI:', webErr?.message || webErr);
+                            await Linking.openURL(file.uri);
                           }
-                        } catch {}
-                      }
-                      return '';
-                    };
-
-                    let logoCandidate = tempPdfLogo || company?.logo || await getCachedLogo();
-                    const resolvedLogo = await toDataUrl(logoCandidate);
-                    const resolvedSignature = await toDataUrl(company?.signature);
-
-                    // Generate a client-side invoice number for HTML export (server has its own sequence)
-                    const invNo = invoice.invoiceNumber || `INV-${(company?.companyId || 'LOCAL')}-${Date.now()}`;
-
-                    const html = buildInvoiceHtml({
-                      company: {
-                        name: company?.companyName,
-                        address: company?.address,
-                        email: company?.email,
-                        phone: company?.phoneNumber,
-                        bankName: company?.bankName,
-                        accountName: company?.bankAccountName,
-                        accountNumber: company?.bankAccountNumber,
-                        logo: resolvedLogo,
-                        signature: resolvedSignature,
-                      },
-                      invoice: {
-                        customerName: invoice.customerName,
-                        customerAddress: invoice.customerAddress,
-                        customerContact: invoice.customerContact,
-                        invoiceDate: invoice.invoiceDate?.toISOString().slice(0,10),
-                        dueDate: invoice.dueDate?.toISOString().slice(0,10),
-                        invoiceNumber: invNo,
-                      },
-                      items: items.map((it) => ({ description: it.description, qty: Number(it.qty || 0), price: Number(it.price || 0) })),
-                      template: invoiceTemplate,
-                      brandColor,
-                      currencySymbol: companyCurrencySymbol,
-                    });
-
-                    if (Platform.OS === 'web') {
-                      const withPrint = html.replace('</body>', '<script>setTimeout(()=>{try{window.print()}catch(_){}},300)</script></body>');
-                      const dataUrl = 'data:text/html;charset=utf-8,' + encodeURIComponent(withPrint);
-                      await Linking.openURL(dataUrl);
-                      // Do not return here; continue to register history below
-                    }
-
-                    const file = await Print.printToFileAsync({ html });
-                    const safeName = `${invNo}.pdf`.replace(/[^a-zA-Z0-9_.-]/g, '_');
-                    // Web: force browser download with custom filename
-                    if (Platform.OS === 'web') {
-                      try {
-                        const resp = await fetch(file.uri);
-                        const blob = await resp.blob();
-                        const url = URL.createObjectURL(blob);
-                        const a = document.createElement('a');
-                        a.href = url;
-                        a.download = safeName;
-                        document.body.appendChild(a);
-                        a.click();
-                        a.remove();
-                        setTimeout(() => URL.revokeObjectURL(url), 1500);
-                      } catch (webErr) {
-                        console.warn('[TemplatePicker][HTML->PDF][Web] Download fallback failed, opening URI:', webErr?.message || webErr);
-                        await Linking.openURL(file.uri);
-                      }
-                    } else {
-                      // Native: move to a path with expected filename then share/open
-                      try {
-                        const baseDir = FileSystem.documentDirectory || FileSystem.cacheDirectory || '';
-                        const targetUri = `${baseDir}${safeName}`;
-                        await FileSystem.moveAsync({ from: file.uri, to: targetUri });
-                        if (await Sharing.isAvailableAsync()) {
-                          await Sharing.shareAsync(targetUri, { UTI: 'com.adobe.pdf', mimeType: 'application/pdf' });
                         } else {
-                          await Linking.openURL(targetUri);
+                          // Native: move to a path with expected filename then share/open
+                          try {
+                            const baseDir = FileSystem.documentDirectory || FileSystem.cacheDirectory || '';
+                            const targetUri = `${baseDir}${safeName}`;
+                            await FileSystem.moveAsync({ from: file.uri, to: targetUri });
+                            if (await Sharing.isAvailableAsync()) {
+                              await Sharing.shareAsync(targetUri, { UTI: 'com.adobe.pdf', mimeType: 'application/pdf' });
+                            } else {
+                              await Linking.openURL(targetUri);
+                            }
+                          } catch (nativeErr) {
+                            console.warn('[TemplatePicker][HTML->PDF][Native] Rename failed, sharing original file:', nativeErr?.message || nativeErr);
+                            if (await Sharing.isAvailableAsync()) {
+                              await Sharing.shareAsync(file.uri, { UTI: 'com.adobe.pdf', mimeType: 'application/pdf' });
+                            } else {
+                              await Linking.openURL(file.uri);
+                            }
+                          }
                         }
-                      } catch (nativeErr) {
-                        console.warn('[TemplatePicker][HTML->PDF][Native] Rename failed, sharing original file:', nativeErr?.message || nativeErr);
-                        if (await Sharing.isAvailableAsync()) {
-                          await Sharing.shareAsync(file.uri, { UTI: 'com.adobe.pdf', mimeType: 'application/pdf' });
-                        } else {
-                          await Linking.openURL(file.uri);
-                        }
-                      }
-                    }
 
-                    // After client-side generation/sharing, register invoice history on server
-                    try {
-                      if (!company?.companyId) {
-                        console.warn('[TemplatePicker][HTML->PDF] Skipping history registration: missing companyId');
-                      } else {
+                        // After client-side generation/sharing, register invoice history on server
+                        try {
+                          if (!company?.companyId) {
+                            console.warn('[TemplatePicker][HTML->PDF] Skipping history registration: missing companyId');
+                          } else {
+                            const payload = {
+                              companyId: company.companyId,
+                              invoiceDate: invoice.invoiceDate?.toISOString().slice(0, 10),
+                              dueDate: invoice.dueDate?.toISOString().slice(0, 10),
+                              customer: {
+                                name: invoice.customerName,
+                                address: invoice.customerAddress,
+                                contact: invoice.customerContact,
+                              },
+                              items: items.map((it) => ({ description: it.description, qty: Number(it.qty || 0), price: Number(it.price || 0) })),
+                              template: invoiceTemplate,
+                              brandColor,
+                              currencySymbol: companyCurrencySymbol,
+                              companyOverride: {
+                                name: company?.companyName,
+                                companyName: company?.companyName,
+                                address: company?.address,
+                                email: company?.email,
+                                phone: company?.phoneNumber,
+                                logo: company?.logo,
+                                signature: company?.signature,
+                                bankName: company?.bankName,
+                                accountName: company?.bankAccountName,
+                                accountNumber: company?.bankAccountNumber,
+                              },
+                            };
+                            await createInvoice(payload);
+                            console.log('[TemplatePicker][HTML->PDF] Invoice registered in history');
+                          }
+                        } catch (histErr) {
+                          console.warn('[TemplatePicker][HTML->PDF] Failed to register history:', histErr?.message || histErr);
+                        }
+
+                      } catch (err) {
+                        console.error('[TemplatePicker][HTML->PDF] Failed:', err?.message || err);
+                        Alert.alert('Export failed', String(err?.message || err));
+                      } finally {
+                        setSavingHtmlPdf(false);
+                      }
+                    }} style={[styles.primaryHollowButton, { flex: 1, borderColor: Colors.success }, savingHtmlPdf && { opacity: 0.7 }]} disabled={savingHtmlPdf}>
+                      <Text style={[styles.primaryHollowButtonText, { color: Colors.success }]}>{savingHtmlPdf ? 'Generating…' : 'Download Invoice/Share'}</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={async () => {
+                      if (!company?.companyId) return Alert.alert('Error', 'Missing company ID. Please login again.');
+                      try {
+                        setDownloading(true);
+                        console.log('[TemplatePicker] Download clicked');
                         const payload = {
                           companyId: company.companyId,
-                          invoiceDate: invoice.invoiceDate?.toISOString().slice(0,10),
-                          dueDate: invoice.dueDate?.toISOString().slice(0,10),
+                          invoiceDate: invoice.invoiceDate?.toISOString().slice(0, 10),
+                          dueDate: invoice.dueDate?.toISOString().slice(0, 10),
                           customer: {
                             name: invoice.customerName,
                             address: invoice.customerAddress,
@@ -924,7 +1066,7 @@ export default function TemplatePickerScreen({ navigation }) {
                           items: items.map((it) => ({ description: it.description, qty: Number(it.qty || 0), price: Number(it.price || 0) })),
                           template: invoiceTemplate,
                           brandColor,
-                          currencySymbol: companyCurrencySymbol,
+                          // currency set by server/company settings
                           companyOverride: {
                             name: company?.companyName,
                             companyName: company?.companyName,
@@ -938,146 +1080,101 @@ export default function TemplatePickerScreen({ navigation }) {
                             accountNumber: company?.bankAccountNumber,
                           },
                         };
-                        await createInvoice(payload);
-                        console.log('[TemplatePicker][HTML->PDF] Invoice registered in history');
-                      }
-                    } catch (histErr) {
-                      console.warn('[TemplatePicker][HTML->PDF] Failed to register history:', histErr?.message || histErr);
-                    }
-
-                  } catch (err) {
-                    console.error('[TemplatePicker][HTML->PDF] Failed:', err?.message || err);
-                    Alert.alert('Export failed', String(err?.message || err));
-                  } finally {
-                    setSavingHtmlPdf(false);
-                  }
-                }} style={[styles.primaryHollowButton, { flex: 1, borderColor: Colors.success }, savingHtmlPdf && { opacity: 0.7 }]} disabled={savingHtmlPdf}>
-                  <Text style={[styles.primaryHollowButtonText, { color: Colors.success }]}>{savingHtmlPdf ? 'Generating…' : 'Download Invoice/Share'}</Text>
-                </TouchableOpacity>
-                <TouchableOpacity onPress={async () => {
-                  if (!company?.companyId) return Alert.alert('Error', 'Missing company ID. Please login again.');
-                  try {
-                    setDownloading(true);
-                    console.log('[TemplatePicker] Download clicked');
-                    const payload = {
-                      companyId: company.companyId,
-                      invoiceDate: invoice.invoiceDate?.toISOString().slice(0,10),
-                      dueDate: invoice.dueDate?.toISOString().slice(0,10),
-                      customer: {
-                        name: invoice.customerName,
-                        address: invoice.customerAddress,
-                        contact: invoice.customerContact,
-                      },
-                      items: items.map((it) => ({ description: it.description, qty: Number(it.qty || 0), price: Number(it.price || 0) })),
-                      template: invoiceTemplate,
-                      brandColor,
-                      // currency set by server/company settings
-                      companyOverride: {
-                        name: company?.companyName,
-                        companyName: company?.companyName,
-                        address: company?.address,
-                        email: company?.email,
-                        phone: company?.phoneNumber,
-                        logo: company?.logo,
-                        signature: company?.signature,
-                        bankName: company?.bankName,
-                        accountName: company?.bankAccountName,
-                        accountNumber: company?.bankAccountNumber,
-                      },
-                    };
-                    console.log('[TemplatePicker] Payload:', payload);
-                    const res = await createInvoice(payload);
-                    if (!res?.pdfUrl) throw new Error(res?.message || 'Failed to generate PDF');
-                    console.log('[TemplatePicker] Server pdfUrl:', res.pdfUrl);
-                    if (Platform.OS === 'web') {
-                      try {
-                        const fname = (res.filename || (invoice.invoiceNumber ? `${invoice.invoiceNumber}.pdf` : 'invoice.pdf')).replace(/[^a-zA-Z0-9_.-]/g, '_');
-                        const resp = await fetch(res.pdfUrl);
-                        const blob = await resp.blob();
-                        const url = URL.createObjectURL(blob);
-                        const a = document.createElement('a');
-                        a.href = url;
-                        a.download = fname;
-                        document.body.appendChild(a);
-                        a.click();
-                        a.remove();
-                        setTimeout(() => URL.revokeObjectURL(url), 1500);
-                      } catch (webErr) {
-                        console.warn('[TemplatePicker][Server->PDF][Web] Direct download failed, opening URL:', webErr?.message || webErr);
-                        await Linking.openURL(res.pdfUrl);
-                      }
-                      return;
-                    }
-                    const invNoServer = invoice.invoiceNumber || `INV-${(company?.companyId || 'LOCAL')}-${Date.now()}`;
-                    const filename = `${invNoServer}.pdf`.replace(/[^a-zA-Z0-9_.-]/g, '_');
-                    let baseDir = FileSystem.cacheDirectory || FileSystem.documentDirectory || null;
-                    if (!baseDir && FileSystem.documentDirectory) {
-                      // Create a temporary dir under documentDirectory
-                      const tmpDir = `${FileSystem.documentDirectory}tmp/`;
-                      try {
-                        await FileSystem.makeDirectoryAsync(tmpDir, { intermediates: true });
-                        baseDir = tmpDir;
-                      } catch (mkErr) {
-                        console.warn('[TemplatePicker] makeDirectory tmp failed:', mkErr?.message || mkErr);
-                      }
-                    }
-                    if (!baseDir) {
-                      console.warn('[TemplatePicker] No writable temp directory available, opening remote URL');
-                      await Linking.openURL(res.pdfUrl);
-                      return;
-                    }
-                    const tempUri = `${baseDir}${filename}`;
-                    console.log('[TemplatePicker] tempUri:', tempUri);
-                    const dl = await FileSystemLegacy.downloadAsync(res.pdfUrl, tempUri);
-                    console.log('[TemplatePicker] Downloaded to temp:', dl?.uri);
-                    if (Platform.OS === 'android') {
-                      try {
-                        const perm = await FileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync();
-                        console.log('[TemplatePicker][Android] SAF permission:', perm);
-                        if (perm.granted && perm.directoryUri) {
-                          const fileUri = await FileSystem.StorageAccessFramework.createFileAsync(perm.directoryUri, filename, 'application/pdf');
-                          console.log('[TemplatePicker][Android] SAF fileUri:', fileUri);
-                    const base64 = await FileSystemLegacy.readAsStringAsync(dl.uri, { encoding: 'base64' });
-                          await FileSystem.StorageAccessFramework.writeAsStringAsync(fileUri, base64, { encoding: 'base64' });
-                          Alert.alert('Saved', 'Invoice PDF saved to selected folder.');
+                        console.log('[TemplatePicker] Payload:', payload);
+                        const res = await createInvoice(payload);
+                        if (!res?.pdfUrl) throw new Error(res?.message || 'Failed to generate PDF');
+                        console.log('[TemplatePicker] Server pdfUrl:', res.pdfUrl);
+                        if (Platform.OS === 'web') {
+                          try {
+                            const fname = (res.filename || (invoice.invoiceNumber ? `${invoice.invoiceNumber}.pdf` : 'invoice.pdf')).replace(/[^a-zA-Z0-9_.-]/g, '_');
+                            const resp = await fetch(res.pdfUrl);
+                            const blob = await resp.blob();
+                            const url = URL.createObjectURL(blob);
+                            const a = document.createElement('a');
+                            a.href = url;
+                            a.download = fname;
+                            document.body.appendChild(a);
+                            a.click();
+                            a.remove();
+                            setTimeout(() => URL.revokeObjectURL(url), 1500);
+                          } catch (webErr) {
+                            console.warn('[TemplatePicker][Server->PDF][Web] Direct download failed, opening URL:', webErr?.message || webErr);
+                            await Linking.openURL(res.pdfUrl);
+                          }
+                          return;
+                        }
+                        const invNoServer = invoice.invoiceNumber || `INV-${(company?.companyId || 'LOCAL')}-${Date.now()}`;
+                        const filename = `${invNoServer}.pdf`.replace(/[^a-zA-Z0-9_.-]/g, '_');
+                        let baseDir = FileSystem.cacheDirectory || FileSystem.documentDirectory || null;
+                        if (!baseDir && FileSystem.documentDirectory) {
+                          // Create a temporary dir under documentDirectory
+                          const tmpDir = `${FileSystem.documentDirectory}tmp/`;
+                          try {
+                            await FileSystem.makeDirectoryAsync(tmpDir, { intermediates: true });
+                            baseDir = tmpDir;
+                          } catch (mkErr) {
+                            console.warn('[TemplatePicker] makeDirectory tmp failed:', mkErr?.message || mkErr);
+                          }
+                        }
+                        if (!baseDir) {
+                          console.warn('[TemplatePicker] No writable temp directory available, opening remote URL');
+                          await Linking.openURL(res.pdfUrl);
+                          return;
+                        }
+                        const tempUri = `${baseDir}${filename}`;
+                        console.log('[TemplatePicker] tempUri:', tempUri);
+                        const dl = await FileSystemLegacy.downloadAsync(res.pdfUrl, tempUri);
+                        console.log('[TemplatePicker] Downloaded to temp:', dl?.uri);
+                        if (Platform.OS === 'android') {
+                          try {
+                            const perm = await FileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync();
+                            console.log('[TemplatePicker][Android] SAF permission:', perm);
+                            if (perm.granted && perm.directoryUri) {
+                              const fileUri = await FileSystem.StorageAccessFramework.createFileAsync(perm.directoryUri, filename, 'application/pdf');
+                              console.log('[TemplatePicker][Android] SAF fileUri:', fileUri);
+                              const base64 = await FileSystemLegacy.readAsStringAsync(dl.uri, { encoding: 'base64' });
+                              await FileSystem.StorageAccessFramework.writeAsStringAsync(fileUri, base64, { encoding: 'base64' });
+                              Alert.alert('Saved', 'Invoice PDF saved to selected folder.');
+                            } else {
+                              // Fallback: open file from cache
+                              console.log('[TemplatePicker][Android] SAF not granted, opening from cache');
+                              const contentUri = await FileSystem.getContentUriAsync(dl.uri);
+                              console.log('[TemplatePicker][Android] contentUri:', contentUri);
+                              await Linking.openURL(contentUri);
+                            }
+                          } catch (e) {
+                            // Fallback open
+                            console.warn('[TemplatePicker][Android] SAF write failed:', e?.message || e);
+                            try {
+                              const contentUri = await FileSystem.getContentUriAsync(dl.uri);
+                              console.log('[TemplatePicker][Android] Fallback contentUri:', contentUri);
+                              await Linking.openURL(contentUri);
+                            } catch (openErr) {
+                              console.error('[TemplatePicker][Android] Fallback open failed:', openErr?.message || openErr);
+                            }
+                          }
                         } else {
-                          // Fallback: open file from cache
-                          console.log('[TemplatePicker][Android] SAF not granted, opening from cache');
-                          const contentUri = await FileSystem.getContentUriAsync(dl.uri);
-                          console.log('[TemplatePicker][Android] contentUri:', contentUri);
-                          await Linking.openURL(contentUri);
+                          console.log('[TemplatePicker][iOS/Web] Opening temp file');
+                          await Linking.openURL(dl.uri);
                         }
-                      } catch (e) {
-                        // Fallback open
-                        console.warn('[TemplatePicker][Android] SAF write failed:', e?.message || e);
-                        try {
-                          const contentUri = await FileSystem.getContentUriAsync(dl.uri);
-                          console.log('[TemplatePicker][Android] Fallback contentUri:', contentUri);
-                          await Linking.openURL(contentUri);
-                        } catch (openErr) {
-                          console.error('[TemplatePicker][Android] Fallback open failed:', openErr?.message || openErr);
-                        }
+                      } catch (err) {
+                        console.error('[TemplatePicker] Download failed:', err?.message || err);
+                        Alert.alert('Download failed', String(err?.message || err));
+                      } finally {
+                        setDownloading(false);
                       }
-                    } else {
-                      console.log('[TemplatePicker][iOS/Web] Opening temp file');
-                      await Linking.openURL(dl.uri);
-                    }
-                  } catch (err) {
-                    console.error('[TemplatePicker] Download failed:', err?.message || err);
-                    Alert.alert('Download failed', String(err?.message || err));
-                  } finally {
-                    setDownloading(false);
-                  }
-                }} style={{ display: 'none' }}>
-                  <Text />
-                </TouchableOpacity>
+                    }} style={{ display: 'none' }}>
+                      <Text />
+                    </TouchableOpacity>
+                  </View>
+                </View>
               </View>
-            </ScrollView>
-          </SafeAreaView>
-        </Modal>
-      </ScrollView>
+
+            </SafeAreaView>
+          </Modal>
+        </ScrollView>
       </KeyboardAvoidingView>
-    </SafeAreaView>
+    </SafeAreaView >
   );
 }
 

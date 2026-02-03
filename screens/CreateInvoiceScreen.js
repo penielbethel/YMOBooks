@@ -10,6 +10,8 @@ import { Linking } from 'react-native';
 import * as FileSystem from 'expo-file-system';
 import * as FileSystemLegacy from 'expo-file-system/legacy';
 import { WebView } from 'react-native-webview';
+import * as Print from 'expo-print';
+import { buildInvoiceHtml } from '../utils/invoiceHtml';
 
 const emptyItem = { description: '', qty: '1', price: '0' };
 
@@ -21,7 +23,7 @@ const CreateInvoiceScreen = ({ navigation }) => {
     invoiceDate: new Date(),
     dueDate: new Date(),
   });
-  const [items, setItems] = useState([ { ...emptyItem } ]);
+  const [items, setItems] = useState([{ ...emptyItem }]);
   const [loading, setLoading] = useState(false);
   const [showInvoiceDatePicker, setShowInvoiceDatePicker] = useState(false);
   const [showDueDatePicker, setShowDueDatePicker] = useState(false);
@@ -36,7 +38,7 @@ const CreateInvoiceScreen = ({ navigation }) => {
       try {
         const stored = await AsyncStorage.getItem('companyData');
         if (stored) setCompanyData(JSON.parse(stored));
-      } catch (_) {}
+      } catch (_) { }
     })();
   }, []);
 
@@ -44,7 +46,7 @@ const CreateInvoiceScreen = ({ navigation }) => {
   const updateItem = (index, field, value) => {
     setItems(prev => prev.map((it, i) => i === index ? { ...it, [field]: value } : it));
   };
-  const addItem = () => setItems(prev => [ ...prev, { ...emptyItem } ]);
+  const addItem = () => setItems(prev => [...prev, { ...emptyItem }]);
   const removeItem = (index) => setItems(prev => prev.filter((_, i) => i !== index));
 
   const handleGenerate = async () => {
@@ -56,12 +58,73 @@ const CreateInvoiceScreen = ({ navigation }) => {
         Alert.alert('Not logged in', 'Please login to your company account');
         return;
       }
-      const companyCurrencySymbol = companyData?.currencySymbol || '$';
+
+      // Ensure we have logo/signature if they are missing (e.g. from optimized storage)
+      let fullCompanyData = { ...companyData };
+      if ((!fullCompanyData.logo || !fullCompanyData.signature) && companyData.companyId) {
+        try {
+          // try cache first for logo
+          if (!fullCompanyData.logo) {
+            const cachedLogo = await AsyncStorage.getItem('companyLogoCache');
+            if (cachedLogo) fullCompanyData.logo = cachedLogo;
+          }
+
+          // if still missing either, fetch from server
+          if (!fullCompanyData.logo || !fullCompanyData.signature) {
+            // Only fetch if we really need to (to avoid network delay if not needed)
+            if (companyData.hasLogo || companyData.hasSignature) { // Optimization flags from Login
+              const fetched = await import('../utils/api').then(m => m.fetchCompany(companyData.companyId));
+              if (fetched?.company) {
+                fullCompanyData = { ...fullCompanyData, ...fetched.company };
+                // Update cache for next time? Maybe not the full data to avoid storage bloat, but maybe logo cache
+                if (fetched.company.logo) {
+                  AsyncStorage.setItem('companyLogoCache', fetched.company.logo).catch(() => { });
+                }
+              }
+            } else {
+              // Even if no flags, try once just in case
+              const fetched = await import('../utils/api').then(m => m.fetchCompany(companyData.companyId));
+              if (fetched?.company) {
+                fullCompanyData = { ...fullCompanyData, ...fetched.company };
+              }
+            }
+          }
+        } catch (e) {
+          console.warn('Failed to fetch full company details', e);
+        }
+      }
+
+      const companyCurrencySymbol = fullCompanyData?.currencySymbol || '$';
+
+      // Generate Local PDF for immediate preview
+      const invoiceData = {
+        invoiceDate: invoice.invoiceDate,
+        dueDate: invoice.dueDate,
+        customerName: invoice.customerName,
+        customerAddress: invoice.customerAddress,
+        customerContact: invoice.contact,
+        // Generate a temp number or let server assign (for local preview we use temp)
+        invoiceNumber: `INV-${Date.now()}`
+      };
+
+      const html = buildInvoiceHtml({
+        company: fullCompanyData,
+        invoice: invoiceData,
+        items: items.map(it => ({ description: it.description, qty: Number(it.qty || 0), price: Number(it.price || 0) })),
+        template: fullCompanyData?.invoiceTemplate || 'classic',
+        brandColor: fullCompanyData?.brandColor,
+        currencySymbol: companyCurrencySymbol
+      });
+
+      const { uri } = await Print.printToFileAsync({ html });
+      setPreviewUrl(uri);
+      setPreviewVisible(true);
+
+      // Sync with server
       const payload = {
         companyId: companyData.companyId,
         template: companyData?.invoiceTemplate,
         brandColor: companyData?.brandColor,
-        // Enforce company-wide currency
         currencySymbol: companyCurrencySymbol,
         invoiceDate: invoice.invoiceDate?.toISOString().slice(0, 10),
         dueDate: invoice.dueDate?.toISOString().slice(0, 10),
@@ -72,14 +135,12 @@ const CreateInvoiceScreen = ({ navigation }) => {
         },
         items: items.map(it => ({ description: it.description, qty: Number(it.qty || 0), price: Number(it.price || 0) })),
       };
-      const res = await createInvoice(payload);
-      if (res?.success && res?.pdfUrl) {
-        setPreviewUrl(res.pdfUrl);
-        setPreviewVisible(true);
-      } else {
-        Alert.alert('Failed', res?.message || 'Could not generate invoice');
-      }
+
+      // We don't block the UI heavily for this, but we await to ensure it succeeds
+      createInvoice(payload).catch(err => console.warn('Background sync failed', err));
+
     } catch (err) {
+      console.error(err);
       Alert.alert('Error', 'Invoice generation failed');
     } finally {
       setLoading(false);
@@ -105,8 +166,8 @@ const CreateInvoiceScreen = ({ navigation }) => {
           if (perm.granted && perm.directoryUri) {
             const fileUri = await FileSystem.StorageAccessFramework.createFileAsync(perm.directoryUri, filename, 'application/pdf');
             console.log('[Download][Android] SAF created fileUri:', fileUri);
-  const base64 = await FileSystemLegacy.readAsStringAsync(dl.uri, { encoding: 'base64' });
-  await FileSystem.StorageAccessFramework.writeAsStringAsync(fileUri, base64, { encoding: 'base64' });
+            const base64 = await FileSystemLegacy.readAsStringAsync(dl.uri, { encoding: 'base64' });
+            await FileSystem.StorageAccessFramework.writeAsStringAsync(fileUri, base64, { encoding: 'base64' });
             Alert.alert('Saved', 'Invoice PDF saved to selected folder.');
           } else {
             console.log('[Download][Android] SAF not granted, opening from cache');
@@ -147,52 +208,52 @@ const CreateInvoiceScreen = ({ navigation }) => {
       </View>
 
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        {!!companyData?.invoiceTemplate && (
-          <View style={styles.usingTemplateBox}>
-            <Text style={styles.usingTemplateText}>
-              Using Template: {String(companyData.invoiceTemplate).charAt(0).toUpperCase() + String(companyData.invoiceTemplate).slice(1)}
-            </Text>
-          </View>
-        )}
+        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+          {!!companyData?.invoiceTemplate && (
+            <View style={styles.usingTemplateBox}>
+              <Text style={styles.usingTemplateText}>
+                Using Template: {String(companyData.invoiceTemplate).charAt(0).toUpperCase() + String(companyData.invoiceTemplate).slice(1)}
+              </Text>
+            </View>
+          )}
 
-        <Text style={styles.sectionTitle}>Customer</Text>
-        <TextInput style={styles.input} placeholder="Name" placeholderTextColor={Colors.textSecondary} value={invoice.customerName} onChangeText={(t) => updateInvoice('customerName', t)} />
-        <TextInput style={[styles.input, styles.textArea]} placeholder="Address" placeholderTextColor={Colors.textSecondary} value={invoice.customerAddress} onChangeText={(t) => updateInvoice('customerAddress', t)} multiline />
-        <TextInput style={styles.input} placeholder="Email or Phone (optional)" placeholderTextColor={Colors.textSecondary} value={invoice.contact} onChangeText={(t) => updateInvoice('contact', t)} />
+          <Text style={styles.sectionTitle}>Customer</Text>
+          <TextInput style={styles.input} placeholder="Name" placeholderTextColor={Colors.textSecondary} value={invoice.customerName} onChangeText={(t) => updateInvoice('customerName', t)} />
+          <TextInput style={[styles.input, styles.textArea]} placeholder="Address" placeholderTextColor={Colors.textSecondary} value={invoice.customerAddress} onChangeText={(t) => updateInvoice('customerAddress', t)} multiline />
+          <TextInput style={styles.input} placeholder="Email or Phone (optional)" placeholderTextColor={Colors.textSecondary} value={invoice.contact} onChangeText={(t) => updateInvoice('contact', t)} />
 
-        <Text style={styles.sectionTitle}>Invoice Details</Text>
-        <View style={styles.dateRow}>
-          <TouchableOpacity style={[styles.input, styles.dateInput]} onPress={() => setShowInvoiceDatePicker(true)}>
-            <Text style={styles.dateText}>Issuance Date: {invoice.invoiceDate?.toISOString().slice(0,10)}</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={[styles.input, styles.dateInput]} onPress={() => setShowDueDatePicker(true)}>
-            <Text style={styles.dateText}>Due Date: {invoice.dueDate?.toISOString().slice(0,10)}</Text>
-          </TouchableOpacity>
-        </View>
-        {showInvoiceDatePicker && (
-          <DateTimePicker value={invoice.invoiceDate || new Date()} mode="date" display="default" onChange={(e, d) => { setShowInvoiceDatePicker(false); if (d) updateInvoice('invoiceDate', d); }} />
-        )}
-        {showDueDatePicker && (
-          <DateTimePicker value={invoice.dueDate || new Date()} mode="date" display="default" onChange={(e, d) => { setShowDueDatePicker(false); if (d) updateInvoice('dueDate', d); }} />
-        )}
-
-        <Text style={styles.sectionTitle}>Items</Text>
-        {items.map((it, idx) => (
-          <View key={idx} style={styles.itemRow}>
-            <TextInput style={[styles.input, styles.itemDesc]} placeholder="Description" placeholderTextColor={Colors.textSecondary} value={it.description} onChangeText={(t) => updateItem(idx, 'description', t)} />
-            <TextInput style={[styles.input, styles.itemQty]} placeholder="Qty" placeholderTextColor={Colors.textSecondary} keyboardType="number-pad" value={it.qty} onChangeText={(t) => updateItem(idx, 'qty', t)} />
-            <TextInput style={[styles.input, styles.itemPrice]} placeholder="Price" placeholderTextColor={Colors.textSecondary} keyboardType="decimal-pad" value={it.price} onChangeText={(t) => updateItem(idx, 'price', t)} />
-            <TouchableOpacity style={styles.removeButton} onPress={() => removeItem(idx)}>
-              <Text style={styles.removeButtonText}>✕</Text>
+          <Text style={styles.sectionTitle}>Invoice Details</Text>
+          <View style={styles.dateRow}>
+            <TouchableOpacity style={[styles.input, styles.dateInput]} onPress={() => setShowInvoiceDatePicker(true)}>
+              <Text style={styles.dateText}>Issuance Date: {invoice.invoiceDate?.toISOString().slice(0, 10)}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.input, styles.dateInput]} onPress={() => setShowDueDatePicker(true)}>
+              <Text style={styles.dateText}>Due Date: {invoice.dueDate?.toISOString().slice(0, 10)}</Text>
             </TouchableOpacity>
           </View>
-        ))}
-        <TouchableOpacity style={styles.addButton} onPress={addItem}><Text style={styles.addButtonText}>+ Add Item</Text></TouchableOpacity>
-        <TouchableOpacity style={[styles.generateButton, loading && styles.generateButtonDisabled]} disabled={loading} onPress={handleGenerate}>
-          <Text style={styles.generateButtonText}>{loading ? 'Generating...' : 'Generate Invoice'}</Text>
-        </TouchableOpacity>
-      </ScrollView>
+          {showInvoiceDatePicker && (
+            <DateTimePicker value={invoice.invoiceDate || new Date()} mode="date" display="default" onChange={(e, d) => { setShowInvoiceDatePicker(false); if (d) updateInvoice('invoiceDate', d); }} />
+          )}
+          {showDueDatePicker && (
+            <DateTimePicker value={invoice.dueDate || new Date()} mode="date" display="default" onChange={(e, d) => { setShowDueDatePicker(false); if (d) updateInvoice('dueDate', d); }} />
+          )}
+
+          <Text style={styles.sectionTitle}>Items</Text>
+          {items.map((it, idx) => (
+            <View key={idx} style={styles.itemRow}>
+              <TextInput style={[styles.input, styles.itemDesc]} placeholder="Description" placeholderTextColor={Colors.textSecondary} value={it.description} onChangeText={(t) => updateItem(idx, 'description', t)} />
+              <TextInput style={[styles.input, styles.itemQty]} placeholder="Qty" placeholderTextColor={Colors.textSecondary} keyboardType="number-pad" value={it.qty} onChangeText={(t) => updateItem(idx, 'qty', t)} />
+              <TextInput style={[styles.input, styles.itemPrice]} placeholder="Price" placeholderTextColor={Colors.textSecondary} keyboardType="decimal-pad" value={it.price} onChangeText={(t) => updateItem(idx, 'price', t)} />
+              <TouchableOpacity style={styles.removeButton} onPress={() => removeItem(idx)}>
+                <Text style={styles.removeButtonText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+          ))}
+          <TouchableOpacity style={styles.addButton} onPress={addItem}><Text style={styles.addButtonText}>+ Add Item</Text></TouchableOpacity>
+          <TouchableOpacity style={[styles.generateButton, loading && styles.generateButtonDisabled]} disabled={loading} onPress={handleGenerate}>
+            <Text style={styles.generateButtonText}>{loading ? 'Generating...' : 'Generate Invoice'}</Text>
+          </TouchableOpacity>
+        </ScrollView>
       </KeyboardAvoidingView>
 
       {/* Preview Modal */}
@@ -212,7 +273,7 @@ const CreateInvoiceScreen = ({ navigation }) => {
                 source={{ uri: previewUrl }}
                 startInLoadingState
                 renderLoading={() => (
-                  <View style={styles.previewLoading}> 
+                  <View style={styles.previewLoading}>
                     <ActivityIndicator size="large" color={Colors.primary} />
                     <Text style={styles.loadingHint}>Loading preview…</Text>
                   </View>
@@ -220,7 +281,7 @@ const CreateInvoiceScreen = ({ navigation }) => {
                 style={styles.webview}
               />
             ) : (
-              <View style={styles.previewLoading}> 
+              <View style={styles.previewLoading}>
                 <ActivityIndicator size="large" color={Colors.primary} />
               </View>
             )}

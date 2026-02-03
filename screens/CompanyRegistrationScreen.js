@@ -306,6 +306,8 @@ const CompanyRegistrationScreen = ({ navigation, route }) => {
               bankAccountNumber: server.accountNumber || server.bankAccountNumber || formData.bankAccountNumber || '',
               brandColor: server.brandColor || existing.brandColor || null,
               currencySymbol: server.currencySymbol || existing.currencySymbol || '$',
+              hasLogo: !!(server.logo ?? formData.logo),
+              hasSignature: !!(server.signature ?? formData.signature),
               // Preserve canonical keys alongside legacy ones for broader UI compatibility
               name: server.name ?? existing.name ?? formData.companyName,
               phone: server.phone ?? existing.phone ?? formData.phoneNumber,
@@ -345,6 +347,8 @@ const CompanyRegistrationScreen = ({ navigation, route }) => {
               bankAccountNumber: c.accountNumber || c.bankAccountNumber || formData.bankAccountNumber || '',
               brandColor: c.brandColor || null,
               currencySymbol: c.currencySymbol || '$',
+              hasLogo: !!(c.logo ?? formData.logo),
+              hasSignature: !!(c.signature ?? formData.signature),
             };
             await AsyncStorage.setItem('companyData', JSON.stringify(stored));
           } catch {

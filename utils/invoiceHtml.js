@@ -3,6 +3,15 @@
 
 export function buildInvoiceHtml({ company = {}, invoice = {}, items = [], template = 'classic', brandColor = '#6C63FF', currencySymbol = '₦' }) {
   const safe = (v) => (v == null ? '' : String(v));
+  const escapeHtml = (str) => {
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  };
+
   const name = safe(company.companyName || company.name || 'Your Company');
   const address = safe(company.address || '');
   const email = safe(company.email || '');
@@ -15,15 +24,11 @@ export function buildInvoiceHtml({ company = {}, invoice = {}, items = [], templ
   const terms = safe(company.termsAndConditions || company.terms || '');
 
   const brand = brandColor || '#6C63FF';
-  const border = '#e6e6e6';
-  const text = '#222';
-  const textSecondary = '#6b7280';
   const theme = getThemeFor(template, brand);
-  const tplClass = `tpl-${template}`;
 
   const issuanceDate = safe(invoice.invoiceDate || new Date().toISOString().slice(0, 10));
   const dueDate = safe(invoice.dueDate || new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10));
-  const invoiceNumber = safe(invoice.invoiceNumber || `INV-${new Date().toISOString().slice(0,10).replace(/-/g,'')}-${String(Date.now()).slice(-4)}`);
+  const invoiceNumber = safe(invoice.invoiceNumber || `INV-${String(Date.now()).slice(-6)}`);
   const customerName = safe(invoice.customerName || invoice?.customer?.name || '');
   const customerAddress = safe(invoice.customerAddress || invoice?.customer?.address || '');
   const customerContact = safe(invoice.customerContact || invoice?.customer?.contact || '');
@@ -35,318 +40,509 @@ export function buildInvoiceHtml({ company = {}, invoice = {}, items = [], templ
     return { desc: safe(it.description || it.desc || '-'), qty, price, total };
   });
   const subtotal = rows.reduce((s, r) => s + r.total, 0);
-  const grand = subtotal; // no tax in client; add if needed
+  const tax = 0; // Tax logic can be added here
+  const grand = subtotal + tax;
   const amountWords = amountToWordsWithCurrencyNameOnly(grand, currencySymbol);
 
-  const rowsHtml = rows.map((r) => `
-      <tr>
-        <td class="td desc">${escapeHtml(r.desc)}</td>
-        <td class="td qty">${r.qty}</td>
-        <td class="td price">${currencySymbol}${r.price.toFixed(2)}</td>
-        <td class="td total">${currencySymbol}${r.total.toFixed(2)}</td>
-      </tr>
+  // --- HTML Sub-components ---
+
+  const bankDetailsBlock = (bankName || accountName || accountNumber) ? `
+    <div class="bank-details">
+      <div class="section-title">Bank Details</div>
+      ${bankName ? `<div class="info-row"><span>Bank:</span> ${escapeHtml(bankName)}</div>` : ''}
+      ${accountName ? `<div class="info-row"><span>Account Name:</span> ${escapeHtml(accountName)}</div>` : ''}
+      ${accountNumber ? `<div class="info-row"><span>Account Number:</span> ${escapeHtml(accountNumber)}</div>` : ''}
+    </div>
+  ` : '';
+
+  const signatureBlock = signature ? `
+    <div class="signature-block">
+      <img src="${signature}" alt="Signature" />
+      <div class="line"></div>
+      <div class="label">Authorized Signature</div>
+    </div>
+  ` : '';
+
+  const itemsRows = rows.map((r, i) => `
+    <tr class="${i % 2 === 0 ? 'even' : 'odd'}">
+      <td class="col-desc">${escapeHtml(r.desc)}</td>
+      <td class="col-qty">${r.qty}</td>
+      <td class="col-price">${currencySymbol}${r.price.toFixed(2)}</td>
+      <td class="col-total">${currencySymbol}${r.total.toFixed(2)}</td>
+    </tr>
   `).join('');
 
-  // Build variant-specific header/content blocks so each template is structurally unique
-  const headerClassic = `
-    <div class="row header">
-      <div class="company">${escapeHtml(name)}</div>
-      <div class="title">INVOICE</div>
-    </div>
-    <div class="accent"></div>
-    <div class="separator"></div>
-  `;
+  // --- Template Specific Structures ---
 
-  const headerModern = `
-    <div class="row header" style="align-items:center;">
-      <div style="display:flex; align-items:center; gap:12px;">
-        ${logo ? `<img class="logo" src="${logo}" />` : ''}
-        <div>
-          <div class="company" style="${template==='modern' ? `color:${theme.headerText}` : ''}">${escapeHtml(name)}</div>
-          <div class="meta" style="${template==='modern' ? `color:${theme.headerText}` : ''}">${escapeHtml(address)}</div>
-        </div>
-      </div>
-      <div style="text-align:right">
-        <div class="title" style="font-size:24px; ${template==='modern' ? `color:${theme.headerText}` : ''}">INVOICE</div>
-        <div class="meta" style="${template==='modern' ? `color:${theme.headerText}` : ''}">Issuance: ${escapeHtml(issuanceDate)}</div>
-        <div class="meta" style="${template==='modern' ? `color:${theme.headerText}` : ''}">Due: ${escapeHtml(dueDate)}</div>
-      </div>
-    </div>
-    <div class="accent"></div>
-  `;
+  let contentHtml = '';
 
-  const headerMinimal = `
-    <div class="row header" style="padding-bottom:8px;">
-      <div style="display:flex; align-items:center; gap:8px;">
-        ${logo ? `<img class="logo" style="width:48px;height:48px;margin:0;" src="${logo}" />` : ''}
-        <div>
-          <div class="company">${escapeHtml(name)}</div>
-          <div class="meta">${escapeHtml(address)}</div>
-        </div>
-      </div>
-      <div class="title">Invoice</div>
-    </div>
-    <div class="separator"></div>
-  `;
-
-  const headerBold = `
-    <div class="row header" style="flex-direction:column; align-items:center; text-align:center; gap:6px;">
-      ${logo ? `<img class="logo" style="width:80px;height:80px;margin:0;" src="${logo}" />` : ''}
-      <div class="company" style="font-size:20px;">${escapeHtml(name)}</div>
-      <div class="title" style="font-size:24px;">INVOICE</div>
-    </div>
-    <div class="accent"></div>
-  `;
-
-  const headerCompact = `
-    <div class="row header" style="padding:10px 16px;">
-      <div class="company">${escapeHtml(name)}</div>
-      <div class="title" style="font-size:16px;">INVOICE</div>
-    </div>
-    <div class="accent"></div>
-  `;
-
-  const headerHtml = (
-    template === 'modern' ? headerModern :
-    template === 'minimal' ? headerMinimal :
-    template === 'bold' ? headerBold :
-    template === 'compact' ? headerCompact :
-    headerClassic
-  );
-
-  const rightBoxClassic = `
-    <div class="box">
-      ${logo && template!=='modern' && template!=='bold' ? `<img class="logo" src="${logo}" />` : ''}
-      ${address ? `<div class="text">${escapeHtml(address)}</div>` : ''}
-      ${email ? `<div class="text">Email: ${escapeHtml(email)}</div>` : ''}
-      ${phone ? `<div class="text">Phone: ${escapeHtml(phone)}</div>` : ''}
-      ${(bankName || accountName || accountNumber) && template!=='minimal' && template!=='compact' ? `
-        <div style="margin-top:6px">
-          <div class="section">Bank Details</div>
-          ${bankName ? `<div class="text">Bank: ${escapeHtml(bankName)}</div>` : ''}
-          ${accountName ? `<div class="text">Account Name: ${escapeHtml(accountName)}</div>` : ''}
-          ${accountNumber ? `<div class="text">Account Number: ${escapeHtml(accountNumber)}</div>` : ''}
-        </div>
-      ` : ''}
-    </div>`;
-
-  const rightBoxModern = `
-    <div style="display:flex; flex-direction:column; gap:4px;">
-      ${email ? `<div class="text">Email: ${escapeHtml(email)}</div>` : ''}
-      ${phone ? `<div class="text">Phone: ${escapeHtml(phone)}</div>` : ''}
-      ${(bankName || accountName || accountNumber) ? `
-        <div style="margin-top:6px">
-          <div class="section">Bank Details</div>
-          ${bankName ? `<div class="text">Bank: ${escapeHtml(bankName)}</div>` : ''}
-          ${accountName ? `<div class="text">Account Name: ${escapeHtml(accountName)}</div>` : ''}
-          ${accountNumber ? `<div class="text">Account Number: ${escapeHtml(accountNumber)}</div>` : ''}
-        </div>
-      ` : ''}
-    </div>`;
-
-  const rightBoxMinimal = `
-    <div style="display:flex; flex-direction:column; gap:4px;">
-      ${email ? `<div class=\"text\">Email: ${escapeHtml(email)}</div>` : ''}
-      ${phone ? `<div class=\"text\">Phone: ${escapeHtml(phone)}</div>` : ''}
-    </div>`;
-
-  const afterTableMinimal = (bankName || accountName || accountNumber) ? `
-    <div style="padding: 0 24px; margin-top: 8px;">
-      <div class="section">Bank Details</div>
-      ${bankName ? `<div class="text">Bank: ${escapeHtml(bankName)}</div>` : ''}
-      ${accountName ? `<div class="text">Account Name: ${escapeHtml(accountName)}</div>` : ''}
-      ${accountNumber ? `<div class="text">Account Number: ${escapeHtml(accountNumber)}</div>` : ''}
-    </div>
-  ` : '';
-
-  const afterTableBold = (bankName || accountName || accountNumber) ? `
-    <div style="padding: 0 24px; margin-top: 8px;">
-      <div class="section">Bank Details</div>
-      ${bankName ? `<div class="text">Bank: ${escapeHtml(bankName)}</div>` : ''}
-      ${accountName ? `<div class="text">Account Name: ${escapeHtml(accountName)}</div>` : ''}
-      ${accountNumber ? `<div class="text">Account Number: ${escapeHtml(accountNumber)}</div>` : ''}
-    </div>
-  ` : '';
-  const afterTableCompact = (bankName || accountName || accountNumber) ? `
-    <div style="padding: 0 16px; margin-top: 6px;">
-      <div class="section">Bank Details</div>
-      ${bankName ? `<div class="text">Bank: ${escapeHtml(bankName)}</div>` : ''}
-      ${accountName ? `<div class="text">Account Name: ${escapeHtml(accountName)}</div>` : ''}
-      ${accountNumber ? `<div class="text">Account Number: ${escapeHtml(accountNumber)}</div>` : ''}
-    </div>
-  ` : '';
-
-  const preTableSection = (
-    template === 'bold'
-      ? `
-        <div class="row">
-          <div style="flex:1; padding-right: 8px;">
-            <div class="section" style="color:${theme.primary}">Invoice</div>
-            <div class="meta">Number: ${escapeHtml(invoiceNumber)}</div>
-            <div class="meta">Issuance: ${escapeHtml(issuanceDate)}</div>
-            <div class="meta">Due: ${escapeHtml(dueDate)}</div>
-            <div class="meta">Amount in words: ${escapeHtml(amountWords)}</div>
+  if (template === 'modern') {
+    contentHtml = `
+      <div class="header-modern" style="background-color: ${theme.primary}; color: ${theme.headerText};">
+        <div class="header-content">
+          <div class="brand-area">
+            ${logo ? `<img class="logo-img" src="${logo}" />` : ''}
+            <div>
+              <div class="company-name">${escapeHtml(name)}</div>
+              <div class="company-meta">${escapeHtml(email)}</div>
+              <div class="company-meta">${escapeHtml(phone)}</div>
+            </div>
           </div>
-          <div style="flex:1; display:flex; justify-content:flex-end;">
-            <div class="box">
-              <div class="section" style="color:${theme.primary}">BILL TO</div>
-              <div class="text">${escapeHtml(customerName)}</div>
-              <div class="text">${escapeHtml(customerAddress)}</div>
-              <div class="text">${escapeHtml(customerContact)}</div>
+          <div class="invoice-title-area">
+            <div class="invoice-badge">INVOICE</div>
+            <div class="invoice-number">#${escapeHtml(invoiceNumber)}</div>
+          </div>
+        </div>
+      </div>
+      
+      <div class="body-content">
+        <div class="meta-grid">
+          <div class="meta-box">
+            <div class="label">Bill To</div>
+            <div class="value strong">${escapeHtml(customerName)}</div>
+            <div class="value">${escapeHtml(customerAddress)}</div>
+            <div class="value">${escapeHtml(customerContact)}</div>
+          </div>
+          <div class="meta-box align-right">
+            <div class="info-pair">
+              <span class="label">Date:</span>
+              <span class="value">${escapeHtml(issuanceDate)}</span>
+            </div>
+            <div class="info-pair">
+              <span class="label">Due Date:</span>
+              <span class="value">${escapeHtml(dueDate)}</span>
             </div>
           </div>
         </div>
-      `
-      : `
-        <div class="row">
-          <div style="flex:1; padding-right: 8px;">
-            <div class="section" style="color:${theme.primary}">BILL TO</div>
-            <div class="text">${escapeHtml(customerName)}</div>
-            <div class="text">${escapeHtml(customerAddress)}</div>
-            <div class="text">${escapeHtml(customerContact)}</div>
-            <div style="margin-top:8px">
-              <div class="section" style="color:${theme.primary}">Invoice</div>
-              <div class="meta">Number: ${escapeHtml(invoiceNumber)}</div>
-              <div class="meta">Issuance: ${escapeHtml(issuanceDate)}</div>
-              <div class="meta">Due: ${escapeHtml(dueDate)}</div>
-              <div class="meta">Amount in words: ${escapeHtml(amountWords)}</div>
+
+        <table class="modern-table">
+          <thead>
+            <tr>
+              <th class="col-desc">Description</th>
+              <th class="col-qty">Qty</th>
+              <th class="col-price">Price</th>
+              <th class="col-total">Total</th>
+            </tr>
+          </thead>
+          <tbody>${itemsRows}</tbody>
+        </table>
+
+        <div class="summary-section">
+          <div class="left-area">
+            <div class="amount-words"><strong>Amount in Words:</strong> ${escapeHtml(amountWords)}</div>
+            ${bankDetailsBlock}
+          </div>
+          <div class="totals-area">
+            <div class="total-row"><span>Subtotal</span> <span>${currencySymbol}${subtotal.toFixed(2)}</span></div>
+            <div class="total-row grand-total" style="color: ${theme.primary}">
+              <span>Total</span> <span>${currencySymbol}${grand.toFixed(2)}</span>
             </div>
           </div>
-          <div style="flex:1; display:flex; justify-content:flex-end;">
-            ${template==='modern' ? rightBoxModern : template==='minimal' ? rightBoxMinimal : rightBoxClassic}
+        </div>
+
+        <div class="footer-area">
+          <div class="signature-wrapper">${signatureBlock}</div>
+          ${terms ? `<div class="terms"><strong>Terms:</strong> ${escapeHtml(terms)}</div>` : ''}
+          <div class="footer-note">Thank you for your business!</div>
+        </div>
+      </div>
+    `;
+  } else if (template === 'bold') {
+    contentHtml = `
+      <div class="header-bold">
+        <div class="top-bar" style="background-color: ${theme.primary}"></div>
+        <div class="header-inner">
+          <div class="company-info">
+            ${logo ? `<img class="logo-img" src="${logo}" />` : ''}
+            <div class="company-name" style="color: ${theme.primary}">${escapeHtml(name)}</div>
+            <div class="company-address">${escapeHtml(address)}</div>
+          </div>
+          <div class="invoice-big-title" style="color: ${theme.accent}">INVOICE</div>
+        </div>
+      </div>
+
+      <div class="body-content">
+        <div class="client-grid">
+          <div class="client-box" style="border-left: 4px solid ${theme.primary}">
+            <div class="label">Invoiced To:</div>
+            <div class="value big">${escapeHtml(customerName)}</div>
+            <div class="value">${escapeHtml(customerAddress)}</div>
+          </div>
+          <div class="details-box">
+             <div class="detail-row"><span class="label">Invoice No:</span> <span class="value">${escapeHtml(invoiceNumber)}</span></div>
+             <div class="detail-row"><span class="label">Date:</span> <span class="value">${escapeHtml(issuanceDate)}</span></div>
+             <div class="detail-row"><span class="label">Due Date:</span> <span class="value">${escapeHtml(dueDate)}</span></div>
           </div>
         </div>
-      `
-  );
 
-  const tableHeaderHtml = (
-    template === 'compact'
-      ? `
-        <div class="table-header" style="padding:6px 12px;">
-          <div class="th" style="flex:2">Item</div>
-          <div class="th" style="flex:.6; text-align:center">Qty</div>
-          <div class="th" style="flex:1; text-align:right">Price</div>
-          <div class="th" style="flex:1; text-align:right">Total</div>
+        <table class="bold-table">
+          <thead style="background-color: ${theme.primary}; color: white;">
+            <tr>
+              <th class="col-desc">Item Description</th>
+              <th class="col-qty">Qty</th>
+              <th class="col-price">Price</th>
+              <th class="col-total">Amount</th>
+            </tr>
+          </thead>
+          <tbody>${itemsRows}</tbody>
+        </table>
+
+        <div class="summary-section">
+           <div class="left-area">
+              <div class="amount-words" style="background-color: #f3f4f6; padding: 10px; border-radius: 4px;">
+                <strong>In Words:</strong> ${escapeHtml(amountWords)}
+              </div>
+              ${bankDetailsBlock}
+           </div>
+           <div class="totals-area">
+              <div class="total-row"><span>Subtotal</span> <span>${currencySymbol}${subtotal.toFixed(2)}</span></div>
+              <div class="total-row grand-total" style="background-color: ${theme.primary}; color: white; padding: 10px;">
+                <span>Total</span> <span>${currencySymbol}${grand.toFixed(2)}</span>
+              </div>
+           </div>
         </div>
-      `
-      : `
-        <div class="table-header">
-          <div class="th" style="flex:2">Description</div>
-          <div class="th" style="flex:.7; text-align:center">Qty</div>
-          <div class="th" style="flex:1; text-align:right">Price</div>
-          <div class="th" style="flex:1; text-align:right">Total</div>
+
+        <div class="footer-area">
+          <div class="signature-wrapper">${signatureBlock}</div>
+          ${terms ? `<div class="terms" style="border-top: 2px solid ${theme.primary}; padding-top: 10px;">${escapeHtml(terms)}</div>` : ''}
         </div>
-      `
-  );
+      </div>
+    `;
+  } else if (template === 'minimal') {
+    contentHtml = `
+      <div class="body-content minimal-layout">
+        <div class="header-minimal">
+          <div class="left">
+            ${logo ? `<img class="logo-img" src="${logo}" />` : ''}
+            <div class="company-name">${escapeHtml(name)}</div>
+            <div class="company-meta">${escapeHtml(address)}</div>
+            <div class="company-meta">${escapeHtml(email)} • ${escapeHtml(phone)}</div>
+          </div>
+          <div class="right">
+            <div class="invoice-title">INVOICE</div>
+            <div class="invoice-ref">#${escapeHtml(invoiceNumber)}</div>
+          </div>
+        </div>
 
-  const totalsHtml = `
-    <div class="totals" style="${template==='compact' ? 'margin:8px 16px 0 auto; width:220px;' : ''}">
-      <div class="total-row"><div class="meta">Subtotal</div><div class="meta">${currencySymbol}${subtotal.toFixed(2)}</div></div>
-      <div class="total-row grand"><div class="title" style="font-size:16px">Total</div><div class="title" style="font-size:16px">${currencySymbol}${grand.toFixed(2)}</div></div>
-    </div>
-  `;
+        <div class="separator-line"></div>
 
-  const footerAfterTable = (
-    template === 'minimal' ? afterTableMinimal :
-    template === 'bold' ? afterTableBold :
-    template === 'compact' ? afterTableCompact : ''
-  );
+        <div class="meta-grid">
+           <div class="meta-box">
+             <div class="label">Bill To</div>
+             <div class="value strong">${escapeHtml(customerName)}</div>
+             <div class="value">${escapeHtml(customerAddress)}</div>
+           </div>
+           <div class="meta-box align-right">
+             <div class="info-pair"><span class="label">Date</span> <span class="value">${escapeHtml(issuanceDate)}</span></div>
+             <div class="info-pair"><span class="label">Due</span> <span class="value">${escapeHtml(dueDate)}</span></div>
+           </div>
+        </div>
+
+        <table class="minimal-table">
+          <thead>
+            <tr>
+              <th class="col-desc">Description</th>
+              <th class="col-qty">Qty</th>
+              <th class="col-price">Price</th>
+              <th class="col-total">Total</th>
+            </tr>
+          </thead>
+          <tbody>${itemsRows}</tbody>
+        </table>
+
+        <div class="summary-section">
+          <div class="left-area">
+             <div class="amount-words">${escapeHtml(amountWords)}</div>
+             ${bankDetailsBlock}
+          </div>
+          <div class="totals-area">
+            <div class="total-row"><span>Subtotal</span> <span>${currencySymbol}${subtotal.toFixed(2)}</span></div>
+            <div class="total-row grand-total"><span>Total</span> <span>${currencySymbol}${grand.toFixed(2)}</span></div>
+          </div>
+        </div>
+
+        <div class="footer-area">
+          <div class="signature-wrapper">${signatureBlock}</div>
+          ${terms ? `<div class="terms">${escapeHtml(terms)}</div>` : ''}
+        </div>
+      </div>
+    `;
+  } else if (template === 'compact') {
+    contentHtml = `
+      <div class="body-content compact-layout">
+        <div class="header-compact" style="border-bottom: 3px solid ${theme.primary}">
+           <div class="row">
+             <div class="col">
+               <div class="invoice-title" style="color: ${theme.primary}">INVOICE</div>
+               <div class="invoice-number">#${escapeHtml(invoiceNumber)}</div>
+             </div>
+             <div class="col align-right">
+               <div class="company-name">${escapeHtml(name)}</div>
+               <div class="company-meta">${escapeHtml(email)}</div>
+               <div class="company-meta">${escapeHtml(phone)}</div>
+             </div>
+           </div>
+        </div>
+
+        <div class="meta-bar">
+           <div class="bill-to">
+             <span class="label">Bill To:</span> <strong>${escapeHtml(customerName)}</strong> | ${escapeHtml(customerAddress)}
+           </div>
+           <div class="dates">
+             ${escapeHtml(issuanceDate)} (Due: ${escapeHtml(dueDate)})
+           </div>
+        </div>
+
+        <table class="compact-table">
+          <thead style="background-color: #f3f4f6;">
+            <tr>
+              <th class="col-desc">Description</th>
+              <th class="col-qty">Qty</th>
+              <th class="col-price">Price</th>
+              <th class="col-total">Total</th>
+            </tr>
+          </thead>
+          <tbody>${itemsRows}</tbody>
+        </table>
+
+        <div class="summary-section">
+          <div class="left-area">
+            ${bankDetailsBlock}
+          </div>
+          <div class="totals-area">
+             <div class="total-row grand-total" style="border-top: 2px solid ${theme.primary}">
+               <span>Total</span> <span>${currencySymbol}${grand.toFixed(2)}</span>
+             </div>
+             <div class="amount-words right">${escapeHtml(amountWords)}</div>
+          </div>
+        </div>
+
+        <div class="footer-area">
+          <div class="signature-wrapper right">${signatureBlock}</div>
+        </div>
+      </div>
+      `;
+  } else {
+    // Classic Template (Default)
+    contentHtml = `
+      <div class="header-classic">
+        <div class="company-block">
+          ${logo ? `<img class="logo-img" src="${logo}" />` : ''}
+          <div class="company-name">${escapeHtml(name)}</div>
+          <div class="company-meta">${escapeHtml(address)}</div>
+          <div class="company-meta">${escapeHtml(email)} | ${escapeHtml(phone)}</div>
+        </div>
+        <div class="invoice-title-block">
+          <div class="invoice-title">INVOICE</div>
+          <div class="invoice-meta">No. ${escapeHtml(invoiceNumber)}</div>
+          <div class="invoice-meta">Date: ${escapeHtml(issuanceDate)}</div>
+        </div>
+      </div>
+      <div class="divider-double"></div>
+
+      <div class="body-content">
+        <div class="bill-to-section">
+           <div class="label">TO:</div>
+           <div class="customer-name">${escapeHtml(customerName)}</div>
+           <div class="customer-address">${escapeHtml(customerAddress)}</div>
+           <div class="customer-contact">${escapeHtml(customerContact)}</div>
+        </div>
+
+        <table class="classic-table">
+          <thead>
+            <tr>
+              <th class="col-desc">DESCRIPTION</th>
+              <th class="col-qty">QTY</th>
+              <th class="col-price">PRICE</th>
+              <th class="col-total">AMOUNT</th>
+            </tr>
+          </thead>
+          <tbody>${itemsRows}</tbody>
+        </table>
+
+        <div class="summary-section">
+           <div class="left-area">
+              <div class="amount-words"><strong>Amount in Words:</strong> ${escapeHtml(amountWords)}</div>
+              ${bankDetailsBlock}
+           </div>
+           <div class="totals-area">
+              <div class="total-row"><span>Subtotal</span> <span>${currencySymbol}${subtotal.toFixed(2)}</span></div>
+              <div class="total-row grand-total"><span>Total</span> <span>${currencySymbol}${grand.toFixed(2)}</span></div>
+           </div>
+        </div>
+
+        <div class="footer-area">
+          <div class="signature-wrapper">${signatureBlock}</div>
+          ${terms ? `<div class="terms"><strong>Terms & Conditions:</strong> ${escapeHtml(terms)}</div>` : ''}
+          <div class="classic-footer-line">Thank you for your business.</div>
+        </div>
+      </div>
+    `;
+  }
 
   return `<!DOCTYPE html>
   <html>
     <head>
       <meta charset="utf-8" />
-      <meta name="viewport" content="width=device-width, initial-scale=1" />
+      <title>Invoice ${invoiceNumber}</title>
+      <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Merriweather:wght@400;700&family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
       <style>
+        /* GLOBAL RESET & A4 SETUP */
         * { box-sizing: border-box; }
-        body { font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica, Arial, sans-serif; color: ${text}; margin: 0; }
-        .page { padding: 24px; }
-        .card { border: 1px solid ${border}; border-radius: 12px; overflow: hidden; }
-        .row { display: flex; justify-content: space-between; align-items: flex-start; padding: 16px 24px; }
-        .company { font-size: 16px; font-weight: 600; }
-        .title { font-size: 20px; font-weight: 700; color: ${theme.primary}; }
-        .accent { height: 6px; background: ${theme.accent}; }
-        .separator { height: 1px; background: ${border}; margin: 8px 24px 0 24px; }
-        .box { min-width: 160px; border: 1px solid ${border}; border-radius: 8px; padding: 8px; }
-        .section { font-size: 12px; color: ${textSecondary}; margin-bottom: 4px; }
-        .text { font-size: 12px; color: ${text}; }
-        .meta { font-size: 12px; color: ${textSecondary}; }
-        .table-header { display: flex; padding: 8px 16px; border-top: 1px solid ${border}; border-bottom: 1px solid ${border}; margin-top: 12px; }
-        .th { font-size: 12px; font-weight: 600; color: ${text}; }
-        table { width: 100%; border-collapse: collapse; }
-        tr { border-bottom: 1px solid ${border}; }
-        .td { font-size: 12px; padding: 8px 16px; }
-        .desc { width: 50%; }
-        .qty { width: 12%; text-align: center; }
-        .price, .total { width: 19%; text-align: right; }
-        .totals { width: 260px; margin: 12px 24px 0 auto; }
-        .total-row { display: flex; justify-content: space-between; margin-bottom: 6px; }
-        .grand { border-top: 1px solid ${border}; padding-top: 6px; margin-top: 6px; }
-        .hint { font-size: 12px; color: ${textSecondary}; text-align: center; margin: 12px 0 16px; }
-        .logo { width: 64px; height: 64px; object-fit: contain; border-radius: 8px; margin-bottom: 6px; }
-        .signature { width: 140px; height: 70px; object-fit: contain; }
+        body { 
+          margin: 0; 
+          padding: 0; 
+          font-family: 'Inter', sans-serif; 
+          background: #f0f0f0; 
+          -webkit-print-color-adjust: exact; 
+          color: #333;
+        }
+        
+        @page { size: A4; margin: 0; }
+        
+        .page-container {
+          width: 210mm;
+          min-height: 297mm;
+          margin: 0 auto;
+          background: white;
+          padding: 15mm;
+          position: relative;
+          box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
 
-        /* Template variants */
-        body.${tplClass} .row.header { ${template === 'modern' ? `background:${theme.primary}; color:${theme.headerText};` : ''} }
-        body.${tplClass} .row.header .title { ${template === 'modern' ? `color:${theme.headerText}` : ''} }
-        body.${tplClass} .row.header .company { ${template === 'modern' ? `color:${theme.headerText}` : ''} }
-        body.${tplClass} .table-header { ${template === 'modern' ? `background:${theme.accent}; border-color:${theme.accent};` : template === 'bold' ? `background:${theme.primary}; border-color:${theme.primary};` : ''} }
-        body.${tplClass} .th { ${template === 'modern' || template === 'bold' ? `color:${theme.headerText}` : ''} }
-        body.${tplClass} .td { ${template === 'compact' ? 'padding:6px 12px; font-size:12px;' : ''} }
-        body.${tplClass} .row { ${template === 'compact' ? 'padding:12px 16px;' : ''} }
-        body.${tplClass} .accent { ${template === 'compact' ? 'height:4px;' : template === 'modern' ? 'height:8px;' : ''} }
-        body.${tplClass} .box { ${template === 'minimal' ? 'border:none; background:#fafafa;' : ''} }
+        @media print {
+          body { background: white; }
+          .page-container { width: 100%; height: 100%; box-shadow: none; margin: 0; padding: 15mm; }
+        }
+
+        /* UTILS */
+        .align-right { text-align: right; }
+        .row { display: flex; justify-content: space-between; }
+        .col { display: flex; flex-direction: column; }
+        
+        img.logo-img { max-width: 120px; max-height: 80px; object-fit: contain; margin-bottom: 10px; }
+        
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; margin-bottom: 20px; }
+        th, td { padding: 10px; text-align: left; }
+        th.col-qty, td.col-qty { text-align: center; width: 60px; }
+        th.col-price, td.col-price { text-align: right; width: 120px; }
+        th.col-total, td.col-total { text-align: right; width: 120px; }
+        
+        .summary-section { display: flex; justify-content: space-between; margin-top: 20px; page-break-inside: avoid; }
+        .left-area { flex: 1; padding-right: 40px; }
+        .totals-area { width: 300px; }
+        .total-row { display: flex; justify-content: space-between; padding: 6px 0; }
+        .grand-total { font-weight: 700; font-size: 1.2em; border-top: 2px solid #eee; margin-top: 5px; padding-top: 10px; }
+
+        .bank-details { margin-top: 20px; font-size: 0.9em; background: #f9fafb; padding: 12px; border-radius: 4px; }
+        .bank-details .section-title { font-weight: 700; margin-bottom: 4px; font-size: 0.95em; }
+        .bank-details .info-row span { font-weight: 600; color: #666; width: 100px; display: inline-block; }
+
+        .amount-words { font-style: italic; color: #555; margin-bottom: 10px; font-size: 0.9em; }
+
+        .footer-area { margin-top: 40px; page-break-inside: avoid; }
+        .signature-wrapper { margin-bottom: 20px; height: 100px; }
+        .signature-block img { max-height: 80px; }
+        .signature-block .line { width: 200px; border-bottom: 1px solid #333; margin-top: 5px; }
+        .signature-block .label { font-size: 0.8em; margin-top: 4px; color: #555; }
+        
+        .terms { font-size: 0.85em; color: #666; margin-top: 15px; white-space: pre-wrap; }
+
+        /* --- THEME SPECIFICS --- */
+
+        /* MODERN */
+        .header-modern { display: flex; flex-direction: column; margin: -15mm -15mm 20px -15mm; padding: 15mm 15mm 20px 15mm; }
+        .header-modern .header-content { display: flex; justify-content: space-between; align-items: center; }
+        .header-modern .brand-area { display: flex; align-items: center; gap: 15px; }
+        .header-modern .company-name { font-size: 1.8em; font-weight: 700; }
+        .header-modern .invoice-title-area { text-align: right; }
+        .header-modern .invoice-badge { background: rgba(255,255,255,0.2); padding: 4px 12px; border-radius: 4px; font-weight: 600; display: inline-block; margin-bottom: 5px; }
+        .header-modern .invoice-number { font-size: 1.2em; }
+        .modern-table th { background: #f3f4f6; color: #333; font-weight: 700; text-transform: uppercase; font-size: 0.85em; }
+        .modern-table tr { border-bottom: 1px solid #eee; }
+
+        /* BOLD */
+        .header-bold .top-bar { height: 10px; margin: -15mm -15mm 20px -15mm; }
+        .header-bold .header-inner { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 30px; }
+        .header-bold .company-name { font-size: 2.5em; font-weight: 900; letter-spacing: -1px; line-height: 1; }
+        .header-bold .invoice-big-title { font-size: 4em; font-weight: 900; opacity: 0.1; line-height: 0.8; }
+        .bold-table th { padding: 12px; }
+        .bold-table tr { border-bottom: 2px solid #eee; }
+        .client-box { padding-left: 15px; }
+        .client-box .big { font-size: 1.4em; font-weight: 700; margin: 5px 0; }
+        .details-box .detail-row { display: flex; justify-content: flex-end; margin-bottom: 5px; }
+        .details-box .label { font-weight: 600; margin-right: 10px; color: #777; }
+
+        /* MINIMAL */
+        .minimal-layout { font-family: 'Inter', sans-serif; }
+        .header-minimal { display: flex; justify-content: space-between; align-items: flex-start; }
+        .header-minimal .company-name { font-weight: 700; font-size: 1.4em; }
+        .header-minimal .invoice-title { font-weight: 300; font-size: 2em; letter-spacing: 2px; color: #333; }
+        .header-minimal .invoice-ref { text-align: right; font-weight: 600; color: #777; }
+        .separator-line { height: 1px; background: #eee; margin: 20px 0; }
+        .minimal-table th { border-bottom: 1px solid #333; padding-bottom: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; font-size: 0.8em; }
+        .minimal-table td { padding: 15px 10px; }
+
+        /* COMPACT */
+        .compact-layout { font-size: 0.9em; }
+        .header-compact { margin-bottom: 15px; padding-bottom: 15px; }
+        .header-compact .company-name { font-weight: 700; font-size: 1.4em; text-align: right; }
+        .header-compact .invoice-title { font-weight: 900; font-size: 1.8em; }
+        .header-compact .meta-bar { background: #f9fafb; padding: 10px; display: flex; justify-content: space-between; border-radius: 4px; border: 1px solid #eee; }
+        .compact-table th { font-size: 0.85em; text-transform: uppercase;  }
+        .compact-table td { padding: 8px 10px; }
+        
+        /* CLASSIC */
+        .header-classic { text-align: center; }
+        .header-classic .company-name { font-family: 'Playfair Display', serif; font-size: 2.2em; color: #222; margin: 10px 0; }
+        .divider-double { border-top: 1px solid #333; border-bottom: 1px solid #333; height: 3px; margin: 20px 0; }
+        .invoice-title-block { margin: 20px 0; text-align: center; }
+        .invoice-title-block .invoice-title { font-size: 1.4em; font-weight: 600; letter-spacing: 3px; border: 1px solid #333; display: inline-block; padding: 8px 30px; margin-bottom: 10px; }
+        .bill-to-section .label { font-weight: 700; font-size: 0.8em; color: #666; margin-bottom: 4px; }
+        .bill-to-section .customer-name { font-size: 1.2em; font-weight: 700; }
+        .classic-table th { border-bottom: 2px solid #333; font-family: 'Playfair Display', serif; font-weight: 700; }
+        .classic-table td { border-bottom: 1px solid #eee; }
+        .classic-footer-line { text-align: center; margin-top: 30px; font-style: italic; color: #777; font-family: 'Playfair Display', serif; }
+
       </style>
     </head>
-    <body class="${tplClass}">
-      <div class="page">
-        <div class="card">
-          ${headerHtml}
-          ${preTableSection}
-          ${tableHeaderHtml}
-          <table>
-            <tbody>
-              ${rowsHtml}
-            </tbody>
-          </table>
-          ${totalsHtml}
-          ${signature ? `
-            <div style="padding: 0 24px; margin-top: 8px;">
-              <div class="meta">Authorized Signature</div>
-              <img class="signature" src="${signature}" />
-            </div>
-          ` : ''}
-          ${terms ? `
-            <div style="padding: 0 ${template==='compact' ? '16px' : '24px'}; margin-top: 8px;">
-              <div class="section" style="color:${theme.primary}">Terms and Conditions</div>
-              <div class="text">${escapeHtml(terms)}</div>
-            </div>
-          ` : ''}
-          ${footerAfterTable}
-          <div class="hint">This invoice is generated electronically by ${escapeHtml(name)} and any alteration renders it invalid — Printed on ${new Date().toLocaleDateString()}</div>
-        </div>
+    <body>
+      <div class="page-container">
+        ${contentHtml}
       </div>
     </body>
   </html>`;
 }
 
-function escapeHtml(str) {
-  return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
-}
+// --- Utils ---
 
-function amountToWords(amount) {
-  const n = Math.abs(Number(amount || 0));
-  const whole = Math.floor(n);
-  const cents = Math.round((n - whole) * 100);
-  const words = numberToWords(whole);
-  const centsStr = String(cents).padStart(2, '0');
-  if (whole === 0 && cents === 0) return 'Zero and 00/100';
-  return `${words} and ${centsStr}/100`;
+function getThemeFor(tpl, brand) {
+  // Helper to adjust color brightness
+  const shade = (col, amt) => {
+    let usePound = false;
+    if (col[0] == "#") {
+      col = col.slice(1);
+      usePound = true;
+    }
+    let num = parseInt(col, 16);
+    let r = (num >> 16) + amt;
+    if (r > 255) r = 255;
+    else if (r < 0) r = 0;
+    let b = ((num >> 8) & 0x00FF) + amt;
+    if (b > 255) b = 255;
+    else if (b < 0) b = 0;
+    let g = (num & 0x0000FF) + amt;
+    if (g > 255) g = 255;
+    else if (g < 0) g = 0;
+    return (usePound ? "#" : "") + (g | (b << 8) | (r << 16)).toString(16);
+  };
+
+  switch (tpl) {
+    case 'modern': return { primary: brand, accent: shade(brand, -20), headerText: '#ffffff' };
+    case 'bold': return { primary: brand, accent: '#e5e7eb' };
+    case 'compact': return { primary: brand };
+    default: return { primary: brand };
+  }
 }
 
 // Map currency symbol to common currency name; default to symbol if unknown
@@ -354,8 +550,8 @@ function currencyNameForSymbol(sym) {
   const s = String(sym || '').trim();
   switch (s) {
     case '₦': return 'Naira';
-    case '$': return 'Dollar';
-    case '€': return 'Euro';
+    case '$': return 'Dollars';
+    case '€': return 'Euros';
     case '£': return 'Pounds';
     case '₵': return 'Cedis';
     case 'KSh': return 'Shillings';
@@ -363,7 +559,6 @@ function currencyNameForSymbol(sym) {
   }
 }
 
-// Format amount in words as "<Words> <Currency> Only" (no minor units)
 function amountToWordsWithCurrencyNameOnly(amount, currencySymbol) {
   const n = Math.abs(Number(amount || 0));
   const whole = Math.floor(n);
@@ -373,71 +568,54 @@ function amountToWordsWithCurrencyNameOnly(amount, currencySymbol) {
 }
 
 function numberToWords(num) {
+  // Simple implementation for demo purposes
+  // In prod, use a robust library
   num = Math.floor(Math.abs(Number(num || 0)));
   if (num === 0) return 'Zero';
-  const belowTwenty = [
-    '', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten',
-    'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'
-  ];
-  const tensWords = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
-  const scales = ['','Thousand','Million','Billion','Trillion'];
 
-  const toWordsBelow1000 = (n) => {
-    let res = '';
-    if (n >= 100) {
-      res += belowTwenty[Math.floor(n/100)] + ' Hundred';
-      n = n % 100;
-      if (n) res += ' ';
-    }
-    if (n >= 20) {
-      res += tensWords[Math.floor(n/10)];
-      n = n % 10;
-      if (n) res += '-' + belowTwenty[n];
-    } else if (n > 0) {
-      res += belowTwenty[n];
-    }
-    return res;
+  const a = ['', 'One ', 'Two ', 'Three ', 'Four ', 'Five ', 'Six ', 'Seven ', 'Eight ', 'Nine ', 'Ten ', 'Eleven ', 'Twelve ', 'Thirteen ', 'Fourteen ', 'Fifteen ', 'Sixteen ', 'Seventeen ', 'Eighteen ', 'Nineteen '];
+  const b = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
+
+  const inWords = (n) => {
+    if ((n = n.toString()).length > 9) return 'overflow';
+    let n_array = ('000000000' + n).substr(-9).match(/^(\d{2})(\d{2})(\d{2})(\d{1})(\d{2})$/);
+    if (!n_array) return;
+    let str = '';
+    str += (n_array[1] != 0) ? (a[Number(n_array[1])] || b[n_array[1][0]] + ' ' + a[n_array[1][1]]) + 'Crore ' : '';
+    str += (n_array[2] != 0) ? (a[Number(n_array[2])] || b[n_array[2][0]] + ' ' + a[n_array[2][1]]) + 'Lakh ' : '';
+    // Simplified standard mapping
+    return convertThreeDigits(n);
   };
+
+  // Better custom recursive function for standard billions/millions
+  const ones = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'];
+  const tens = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
+  const scales = ['', 'Thousand', 'Million', 'Billion', 'Trillion'];
 
   let words = '';
-  let scaleIdx = 0;
-  while (num > 0 && scaleIdx < scales.length) {
-    const chunk = num % 1000;
-    if (chunk) {
-      const prefix = toWordsBelow1000(chunk);
-      const scale = scales[scaleIdx];
-      words = prefix + (scale ? ' ' + scale : '') + (words ? ' ' + words : '');
+  let scaleIndex = 0;
+
+  while (num > 0) {
+    let chunk = num % 1000;
+    if (chunk > 0) {
+      let chunkStr = '';
+      if (chunk >= 100) {
+        chunkStr += ones[Math.floor(chunk / 100)] + ' Hundred ';
+        chunk %= 100;
+      }
+      if (chunk >= 20) {
+        chunkStr += tens[Math.floor(chunk / 10)] + ' ';
+        chunk %= 10;
+      }
+      if (chunk > 0) {
+        chunkStr += ones[chunk] + ' ';
+      }
+      words = chunkStr + scales[scaleIndex] + ' ' + words;
     }
     num = Math.floor(num / 1000);
-    scaleIdx++;
+    scaleIndex++;
   }
-  return words || 'Zero';
+  return words.trim();
 }
 
-function getThemeFor(tpl, brand) {
-  const shade = (hex, percent) => {
-    try {
-      const h = hex.replace('#','');
-      const bigint = parseInt(h.length === 3 ? h.split('').map(c=>c+c).join('') : h, 16);
-      let r = (bigint >> 16) & 255;
-      let g = (bigint >> 8) & 255;
-      let b = bigint & 255;
-      const adjust = (v) => Math.min(255, Math.max(0, Math.round(v + (percent/100)*255)));
-      r = adjust(r); g = adjust(g); b = adjust(b);
-      return `#${(1<<24 | (r<<16) | (g<<8) | b).toString(16).slice(1)}`;
-    } catch (_) { return hex; }
-  };
-  switch (tpl) {
-    case 'modern':
-      return { primary: brand, accent: shade(brand, -10), headerBg: shade(brand, -20), headerText: '#ffffff' };
-    case 'minimal':
-      return { primary: brand, accent: '#efefef', headerBg: '#f5f5f5', headerText: '#111111' };
-    case 'bold':
-      return { primary: brand, accent: shade(brand, -30), headerBg: brand, headerText: '#ffffff' };
-    case 'compact':
-      return { primary: brand, accent: shade(brand, 50), headerBg: shade(brand, -15), headerText: '#ffffff' };
-    case 'classic':
-    default:
-      return { primary: brand, accent: shade(brand, -10), headerBg: '#ffffff', headerText: '#111111' };
-  }
-}
+function convertThreeDigits(n) { return '...'; } // Stub not used, logic inline above

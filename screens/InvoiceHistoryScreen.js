@@ -5,7 +5,7 @@ import dayjs from 'dayjs';
 import { Colors } from '../constants/Colors';
 import { Fonts } from '../constants/Fonts';
 import { Spacing } from '../constants/Spacing';
-import { fetchInvoices, fetchReceipts, createReceipt, deleteInvoice, deleteReceiptByInvoice } from '../utils/api';
+import { fetchInvoices, fetchReceipts, createReceipt, deleteInvoice, deleteReceiptByInvoice, getApiBaseUrl, fetchCompany } from '../utils/api';
 import * as FileSystem from 'expo-file-system';
 import * as FileSystemLegacy from 'expo-file-system/legacy';
 import * as Print from 'expo-print';
@@ -47,7 +47,7 @@ const InvoiceHistoryScreen = ({ navigation, route }) => {
           if (Array.isArray(saved.selectedCurrencies)) setSelectedCurrencies(saved.selectedCurrencies);
           if (typeof saved.paidFilter === 'string') setPaidFilter(saved.paidFilter);
         }
-      } catch (_e) {}
+      } catch (_e) { }
     })();
   }, []);
 
@@ -56,7 +56,7 @@ const InvoiceHistoryScreen = ({ navigation, route }) => {
       try {
         const payload = { searchQuery, filterDays, selectedCurrencies, paidFilter };
         await AsyncStorage.setItem('invoiceHistoryFilters', JSON.stringify(payload));
-      } catch (_e) {}
+      } catch (_e) { }
     })();
   }, [searchQuery, filterDays, selectedCurrencies, paidFilter]);
 
@@ -166,10 +166,37 @@ const InvoiceHistoryScreen = ({ navigation, route }) => {
     return company?.currencySymbol || '$';
   };
 
+  const fetchFullCompanyDataIfNeeded = async (company) => {
+    if (!company?.companyId) return company;
+    let full = { ...company };
+    if ((!full.logo || !full.signature)) {
+      try {
+        if (!full.logo) {
+          const cachedLogo = await AsyncStorage.getItem('companyLogoCache');
+          if (cachedLogo) full.logo = cachedLogo;
+        }
+        if (!full.logo || !full.signature) {
+          if (company.hasLogo || company.hasSignature) {
+            const fetched = await fetchCompany(company.companyId);
+            const c = fetched?.company || fetched?.data;
+            if (c) {
+              full = { ...full, ...c };
+              if (c.logo) AsyncStorage.setItem('companyLogoCache', c.logo).catch(() => { });
+            }
+          }
+        }
+      } catch (e) {
+        console.warn('[History] Failed to fetch full company details', e);
+      }
+    }
+    return full;
+  };
+
   const openInvoicePreview = async (item) => {
     try {
       const stored = await AsyncStorage.getItem('companyData');
-      const company = stored ? JSON.parse(stored) : {};
+      let company = stored ? JSON.parse(stored) : {};
+      company = await fetchFullCompanyDataIfNeeded(company);
       const resolvedLogo = await toDataUrl(company?.logo);
       const resolvedSignature = await toDataUrl(company?.signature);
       const currencySymbol = resolveCurrencySymbol(item, company);
@@ -208,7 +235,7 @@ const InvoiceHistoryScreen = ({ navigation, route }) => {
   };
 
   const buildReceiptHtml = (opts) => {
-    const { company = {}, invoiceNumber, customer = {}, amountPaid = 0, receiptNumber, receiptDate, currencySymbol = '₦' } = opts || {};
+    const { company = {}, invoiceNumber, customer = {}, amountPaid = 0, receiptNumber, receiptDate, currencySymbol = '₦', brandColor = '#16a34a' } = opts || {};
     const name = company?.companyName || company?.name || 'Your Company';
     const address = company?.address || '';
     const email = company?.email || '';
@@ -219,7 +246,7 @@ const InvoiceHistoryScreen = ({ navigation, route }) => {
     const custAddr = customer?.address || '';
     const custContact = customer?.contact || '';
     const safe = (s) => (s == null ? '' : String(s));
-    const escapeHtml = (s) => safe(s).replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[c]));
+    const escapeHtml = (s) => safe(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', '\'': '&#39;' }[c]));
     return `<!DOCTYPE html><html><head><meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Receipt ${escapeHtml(receiptNumber || '')}</title>
@@ -228,8 +255,8 @@ const InvoiceHistoryScreen = ({ navigation, route }) => {
       .page{max-width:860px;margin:0 auto;padding:24px}
       .card{background:#fff;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden}
       .header{display:flex;justify-content:space-between;align-items:center;padding:16px 24px;border-bottom:1px solid #e5e7eb}
-      .title{font-size:22px;font-weight:700;color:#16a34a}
-      .paid{background:#16a34a;color:#fff;padding:4px 8px;border-radius:999px;font-size:12px;margin-left:8px}
+      .title{font-size:22px;font-weight:700;color:${brandColor}}
+      .paid{background:${brandColor};color:#fff;padding:4px 8px;border-radius:999px;font-size:12px;margin-left:8px}
       .logo{height:48px}
       .section{padding:16px 24px}
       .row{display:flex;gap:12px}
@@ -268,7 +295,7 @@ const InvoiceHistoryScreen = ({ navigation, route }) => {
             </div>
             <div style="flex:1;text-align:right">
               <div class="label">Amount Paid</div>
-              <div class="text" style="font-size:18px;font-weight:700">${escapeHtml(currencySymbol)}${Number(amountPaid||0).toFixed(2)}</div>
+              <div class="text" style="font-size:18px;font-weight:700">${escapeHtml(currencySymbol)}${Number(amountPaid || 0).toFixed(2)}</div>
             </div>
           </div>
         </div>
@@ -281,7 +308,8 @@ const InvoiceHistoryScreen = ({ navigation, route }) => {
   const openReceiptPreview = async (item) => {
     try {
       const stored = await AsyncStorage.getItem('companyData');
-      const company = stored ? JSON.parse(stored) : {};
+      let company = stored ? JSON.parse(stored) : {};
+      company = await fetchFullCompanyDataIfNeeded(company);
       const resolvedLogo = await toDataUrl(company?.logo);
       const resolvedSignature = await toDataUrl(company?.signature);
       const currencySymbol = resolveCurrencySymbol(item, company);
@@ -294,6 +322,7 @@ const InvoiceHistoryScreen = ({ navigation, route }) => {
         customer: item.customer || {},
         amountPaid: Number(item.grandTotal || 0),
         currencySymbol,
+        brandColor: company.brandColor || '#16a34a',
       });
       setPreviewTitle(`${item.invoiceNumber} — Receipt Preview (PAID)`);
       setPreviewHtml(html);
@@ -334,7 +363,7 @@ const InvoiceHistoryScreen = ({ navigation, route }) => {
           try {
             const contentUri = await FileSystem.getContentUriAsync(dl.uri);
             await Linking.openURL(contentUri);
-          } catch (_) {}
+          } catch (_) { }
         }
       } else {
         await Linking.openURL(dl.uri);
@@ -353,21 +382,23 @@ const InvoiceHistoryScreen = ({ navigation, route }) => {
       `Are you sure you want to delete ${item.invoiceNumber}?`,
       [
         { text: 'Cancel', style: 'cancel' },
-        { text: 'Delete', style: 'destructive', onPress: async () => {
-          try {
-            const res = await deleteInvoice(companyId, item.invoiceNumber);
-            if (res?.success) {
-              setInvoices((prev) => prev.filter((x) => x.invoiceNumber !== item.invoiceNumber));
-              // Refresh receipts map to reflect cascaded deletion and paid status change
-              try { await refetch(); } catch (_) {}
-              Alert.alert('Deleted', 'Invoice removed from history');
-            } else {
-              Alert.alert('Failed', res?.message || 'Could not delete invoice');
+        {
+          text: 'Delete', style: 'destructive', onPress: async () => {
+            try {
+              const res = await deleteInvoice(companyId, item.invoiceNumber);
+              if (res?.success) {
+                setInvoices((prev) => prev.filter((x) => x.invoiceNumber !== item.invoiceNumber));
+                // Refresh receipts map to reflect cascaded deletion and paid status change
+                try { await refetch(); } catch (_) { }
+                Alert.alert('Deleted', 'Invoice removed from history');
+              } else {
+                Alert.alert('Failed', res?.message || 'Could not delete invoice');
+              }
+            } catch (e) {
+              Alert.alert('Error', 'Delete failed');
             }
-          } catch (e) {
-            Alert.alert('Error', 'Delete failed');
           }
-        } },
+        },
       ]
     );
   };
@@ -393,28 +424,30 @@ const InvoiceHistoryScreen = ({ navigation, route }) => {
       `Delete ${targets.length} selected invoice${targets.length === 1 ? '' : 's'}?`,
       [
         { text: 'Cancel', style: 'cancel' },
-        { text: 'Delete', style: 'destructive', onPress: async () => {
-          try {
-            setBulkDeleting(true);
-            let successCount = 0;
-            for (const invNum of targets) {
-              try {
-                const res = await deleteInvoice(companyId, invNum);
-                if (res?.success) successCount++;
-              } catch (_) {}
+        {
+          text: 'Delete', style: 'destructive', onPress: async () => {
+            try {
+              setBulkDeleting(true);
+              let successCount = 0;
+              for (const invNum of targets) {
+                try {
+                  const res = await deleteInvoice(companyId, invNum);
+                  if (res?.success) successCount++;
+                } catch (_) { }
+              }
+              if (successCount > 0) {
+                setInvoices((prev) => prev.filter((x) => !selectedInvoicesMap[x.invoiceNumber]));
+                clearSelection();
+                try { await refetch(); } catch (_) { }
+                Alert.alert('Deleted', `Removed ${successCount} invoice${successCount === 1 ? '' : 's'} from history`);
+              } else {
+                Alert.alert('Failed', 'Could not delete selected invoices');
+              }
+            } finally {
+              setBulkDeleting(false);
             }
-            if (successCount > 0) {
-              setInvoices((prev) => prev.filter((x) => !selectedInvoicesMap[x.invoiceNumber]));
-              clearSelection();
-              try { await refetch(); } catch (_) {}
-              Alert.alert('Deleted', `Removed ${successCount} invoice${successCount === 1 ? '' : 's'} from history`);
-            } else {
-              Alert.alert('Failed', 'Could not delete selected invoices');
-            }
-          } finally {
-            setBulkDeleting(false);
           }
-        } },
+        },
       ]
     );
   };
@@ -631,7 +664,7 @@ const InvoiceHistoryScreen = ({ navigation, route }) => {
                     await AsyncStorage.setItem('invoiceHistoryFilters', JSON.stringify({
                       searchQuery: '', filterDays: null, paidFilter: 'ALL',
                     }));
-                  } catch (_e) {}
+                  } catch (_e) { }
                 }}
               >
                 <Text style={styles.resetBtnText}>Show all invoices</Text>
@@ -744,7 +777,7 @@ const InvoiceHistoryScreen = ({ navigation, route }) => {
                       const payload = {
                         companyId,
                         invoiceNumber: invoiceItem.invoiceNumber,
-                        receiptDate: new Date().toISOString().slice(0,10),
+                        receiptDate: new Date().toISOString().slice(0, 10),
                         customer: invoiceItem.customer || {},
                         amountPaid: Number(invoiceItem.grandTotal || 0),
                         currencySymbol: resolveCurrencySymbol(invoiceItem, company),
@@ -752,7 +785,7 @@ const InvoiceHistoryScreen = ({ navigation, route }) => {
                       };
                       await createReceipt(payload);
                     }
-                  } catch (_regErr) {}
+                  } catch (_regErr) { }
                 } catch (err) {
                   Alert.alert('Export failed', String(err?.message || err));
                 } finally {

@@ -7,6 +7,12 @@ import { Fonts } from '../constants/Fonts';
 import { Spacing } from '../constants/Spacing';
 import { updateCompany, fetchCompany } from '../utils/api';
 
+import { Modal } from 'react-native';
+import SignatureCanvas from 'react-native-signature-canvas';
+import * as FileSystem from 'expo-file-system';
+import * as FileSystemLegacy from 'expo-file-system/legacy';
+import * as ImageManipulator from 'expo-image-manipulator';
+
 const SettingsScreen = ({ navigation }) => {
   // State for form fields
   const [name, setName] = useState('');
@@ -26,6 +32,7 @@ const SettingsScreen = ({ navigation }) => {
   const [logo, setLogo] = useState(null);
   const [signature, setSignature] = useState(null);
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [signatureModalVisible, setSignatureModalVisible] = useState(false);
 
   // Local state for company object
   const [company, setCompany] = useState(null);
@@ -76,22 +83,88 @@ const SettingsScreen = ({ navigation }) => {
     } catch (_) { }
   };
 
+  // --- Client-side image compression helpers (Copied from CompanyRegistration) ---
+  const isDataUrl = (v) => typeof v === 'string' && v.startsWith('data:');
+  const parseDataUrl = (dataUrl) => {
+    try {
+      const [header, b64] = dataUrl.split(',');
+      const mime = header.slice(5, header.indexOf(';')) || 'image/png';
+      return { mime, base64: b64 };
+    } catch {
+      return { mime: 'image/png', base64: null };
+    }
+  };
+  const ensureFileUriFromInput = async (input, kind) => {
+    if (!input) return null;
+    if (isDataUrl(input)) {
+      try {
+        const { base64 } = parseDataUrl(input);
+        if (!base64) return null;
+        const path = `${FileSystem.cacheDirectory || ''}img-${kind}-${Date.now()}.png`;
+        await FileSystem.writeAsStringAsync(path, base64, { encoding: FileSystem.EncodingType.Base64 });
+        return path;
+      } catch {
+        return null;
+      }
+    }
+    return input;
+  };
+  const compressToDataUrl = async (input, kind = 'logo') => {
+    try {
+      const fileUri = await ensureFileUriFromInput(input, kind);
+      if (!fileUri) return null;
+      const bounds = kind === 'signature' ? { width: 600, height: 220 } : { width: 512, height: 512 };
+      const result = await ImageManipulator.manipulateAsync(
+        fileUri,
+        [{ resize: { width: bounds.width, height: bounds.height } }],
+        { compress: 0.7, format: ImageManipulator.SaveFormat.PNG, base64: true }
+      );
+      if (result?.base64) return `data:image/png;base64,${result.base64}`;
+    } catch { }
+    try {
+      const fileUri = await ensureFileUriFromInput(input, kind);
+      if (!fileUri) return null;
+      const base64 = await FileSystemLegacy.readAsStringAsync(fileUri, { encoding: 'base64' });
+      return `data:image/png;base64,${base64}`;
+    } catch {
+      return null;
+    }
+  };
+
   const pickImage = async (type) => {
     try {
+      const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (permissionResult.granted === false) {
+        Alert.alert('Permission Required', 'Permission to access camera roll is required!');
+        return;
+      }
+
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: ['images'],
         allowsEditing: true,
-        aspect: type === 'logo' ? [1, 1] : [2, 1], // square for logo, wide for signature
-        quality: 0.5,
-        base64: true,
+        aspect: type === 'logo' ? [1, 1] : [4, 2],
+        quality: 0.8,
       });
 
-      if (!result.canceled && result.assets && result.assets.length > 0) {
+      if (!result.canceled) {
         const uri = result.assets[0].uri;
-        const base64 = result.assets[0].base64;
-        const dataUrl = `data:image/jpeg;base64,${base64}`;
-        if (type === 'logo') setLogo(dataUrl);
-        else setSignature(dataUrl);
+        if (type === 'logo') {
+          try {
+            const dataUrl = await compressToDataUrl(uri, 'logo');
+            if (dataUrl) {
+              // cache immediately for other screens
+              AsyncStorage.setItem('companyLogoCache', dataUrl).catch(() => { });
+              setLogo(dataUrl);
+            } else {
+              setLogo(uri);
+            }
+          } catch (e) { setLogo(uri); }
+        } else {
+          try {
+            const dataUrl = await compressToDataUrl(uri, 'signature');
+            setSignature(dataUrl || uri);
+          } catch (e) { setSignature(uri); }
+        }
       }
     } catch (e) {
       Alert.alert('Error', 'Could not pick image');
@@ -110,6 +183,7 @@ const SettingsScreen = ({ navigation }) => {
   const handleLogout = async () => {
     try {
       await AsyncStorage.removeItem('companyData');
+      await AsyncStorage.removeItem('companyLogoCache');
       Alert.alert('Logged out', 'You have been logged out successfully.');
       navigation.reset({ index: 0, routes: [{ name: 'Welcome' }] });
     } catch (err) {
@@ -124,6 +198,10 @@ const SettingsScreen = ({ navigation }) => {
     }
     setSaving(true);
     try {
+      // Re-compress if needed (e.g. if they just picked uncompressed) - generally already handled in pickImage/onOK
+      // but let's be safe. Though compressToDataUrl aims to handle raw URIs. 
+      // Existing data URLs are fast-pathed.
+
       const payload = {
         companyId: String(company.companyId).trim(),
         name,
@@ -138,8 +216,8 @@ const SettingsScreen = ({ navigation }) => {
         country: String(country || '').trim() || undefined,
         currencySymbol,
         currencyCode: symbolToCode(currencySymbol),
-        logo,
-        signature
+        logo: await compressToDataUrl(logo, 'logo'),
+        signature: await compressToDataUrl(signature, 'signature')
       };
 
       const res = await updateCompany(payload);
@@ -170,9 +248,16 @@ const SettingsScreen = ({ navigation }) => {
           country: payload.country || '',
           currencySymbol: payload.currencySymbol,
           currencyCode: payload.currencyCode,
-          logo: serverCompany?.logo || logo,
-          signature: serverCompany?.signature || signature
+          logo: serverCompany?.logo || payload.logo,
+          signature: serverCompany?.signature || payload.signature,
+          hasLogo: !!(serverCompany?.logo || payload.logo),
+          hasSignature: !!(serverCompany?.signature || payload.signature)
         };
+
+        // Cache optimization: Store logo separately if possible, or just as is
+        if (updated.logo) {
+          AsyncStorage.setItem('companyLogoCache', updated.logo).catch(() => { });
+        }
 
         await AsyncStorage.setItem('companyData', JSON.stringify(updated));
         setCompany(updated);
@@ -188,159 +273,212 @@ const SettingsScreen = ({ navigation }) => {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-          <Text style={styles.backButtonText}>← Back</Text>
-        </TouchableOpacity>
-        <Text style={styles.title}>Settings</Text>
-        <Text style={styles.subtitle}>Manage your account and preferences</Text>
-      </View>
-
-      <ScrollView contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
-        {/* Section 1: Company Information */}
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Company Profile</Text>
-          <View style={styles.formRow}>
-            <Text style={styles.label}>Company Name</Text>
-            <TextInput style={styles.input} value={name} onChangeText={setName} placeholder="Company Name" />
-          </View>
-          <View style={styles.formRow}>
-            <Text style={styles.label}>Address</Text>
-            <TextInput style={styles.input} value={address} onChangeText={setAddress} placeholder="Full Address" />
-          </View>
-          <View style={styles.formRow}>
-            <Text style={styles.label}>Email</Text>
-            <TextInput style={styles.input} value={email} onChangeText={setEmail} placeholder="Email Address" keyboardType="email-address" />
-          </View>
-          <View style={styles.formRow}>
-            <Text style={styles.label}>Phone Number</Text>
-            <TextInput style={styles.input} value={phone} onChangeText={setPhone} placeholder="Phone Number" keyboardType="phone-pad" />
-          </View>
+    <>
+      <SafeAreaView style={styles.container}>
+        <View style={styles.header}>
+          <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
+            <Text style={styles.backButtonText}>← Back</Text>
+          </TouchableOpacity>
+          <Text style={styles.title}>Settings</Text>
+          <Text style={styles.subtitle}>Manage your account and preferences</Text>
         </View>
 
-        {/* Section 2: Bank Details */}
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Bank Details</Text>
-          <View style={styles.formRow}>
-            <Text style={styles.label}>Bank Name</Text>
-            <TextInput style={styles.input} value={bankName} onChangeText={setBankName} placeholder="e.g. Chase Bank" />
-          </View>
-          <View style={styles.formRow}>
-            <Text style={styles.label}>Account Name</Text>
-            <TextInput style={styles.input} value={accountName} onChangeText={setAccountName} placeholder="Account Holder Name" />
-          </View>
-          <View style={styles.formRow}>
-            <Text style={styles.label}>Account Number</Text>
-            <TextInput style={styles.input} value={accountNumber} onChangeText={setAccountNumber} placeholder="Account Number" keyboardType="numeric" />
-          </View>
-        </View>
-
-        {/* Section 3: Global Settings */}
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Global Settings (Currency & Location)</Text>
-          <View style={styles.formRow}>
-            <Text style={styles.label}>Country</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="e.g., Nigeria"
-              placeholderTextColor={Colors.textSecondary}
-              value={country}
-              onChangeText={setCountry}
-            />
-          </View>
-          <View style={styles.formRow}>
-            <Text style={styles.label}>Currency</Text>
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-              {[
-                { sym: '₦', name: 'Naira' },
-                { sym: '$', name: 'Dollar' },
-                { sym: '£', name: 'Pounds' },
-                { sym: '€', name: 'Euros' },
-                { sym: '₵', name: 'Cedis' },
-                { sym: 'KSh', name: 'Shillings' },
-              ].map(({ sym, name }) => (
-                <TouchableOpacity
-                  key={sym}
-                  style={[styles.chip, currencySymbol === sym && styles.chipActive]}
-                  onPress={() => setCurrencySymbol(sym)}
-                >
-                  <Text style={[styles.chipText, currencySymbol === sym && { color: Colors.white }]}>{name} ({sym})</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-        </View>
-
-        {/* Section 4: Advanced Options (Hidden by default) */}
-        {showAdvanced && (
-          <View style={[styles.card, { borderColor: Colors.primary, borderWidth: 1 }]}>
-            <Text style={styles.cardTitle}>Advanced Options: Branding</Text>
-            <Text style={styles.helperText}>Upload your official assets for documents.</Text>
-
-            <View style={[styles.formRow, { marginTop: 15 }]}>
-              <Text style={styles.label}>Company Logo</Text>
-              {logo ? (
-                <View style={{ alignItems: 'center', marginBottom: 12, borderWidth: 1, borderColor: '#eee', borderRadius: 8, padding: 8 }}>
-                  <Image source={{ uri: logo }} style={{ width: 100, height: 100, resizeMode: 'contain', marginBottom: 8 }} />
-                  <TouchableOpacity onPress={() => setLogo(null)}><Text style={{ color: Colors.error, fontWeight: '500' }}>Remove Logo</Text></TouchableOpacity>
-                </View>
-              ) : null}
-              <TouchableOpacity style={styles.uploadBtn} onPress={() => pickImage('logo')}>
-                <Text style={styles.uploadBtnText}>{logo ? 'Change Logo' : 'Click to Upload Logo'}</Text>
-              </TouchableOpacity>
-            </View>
-
-            <View style={{ height: 1, backgroundColor: Colors.border, marginVertical: 15 }} />
-
+        <ScrollView contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
+          {/* Section 1: Company Information */}
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Company Profile</Text>
             <View style={styles.formRow}>
-              <Text style={styles.label}>Signature</Text>
-              {signature ? (
-                <View style={{ alignItems: 'center', marginBottom: 12, borderWidth: 1, borderColor: '#eee', borderRadius: 8, padding: 8 }}>
-                  <Image source={{ uri: signature }} style={{ width: 150, height: 80, resizeMode: 'contain', marginBottom: 8 }} />
-                  <TouchableOpacity onPress={() => setSignature(null)}><Text style={{ color: Colors.error, fontWeight: '500' }}>Remove Signature</Text></TouchableOpacity>
-                </View>
-              ) : null}
-              <TouchableOpacity style={styles.uploadBtn} onPress={() => pickImage('signature')}>
-                <Text style={styles.uploadBtnText}>{signature ? 'Change Signature' : 'Click to Upload Signature'}</Text>
-              </TouchableOpacity>
+              <Text style={styles.label}>Company Name</Text>
+              <TextInput style={styles.input} value={name} onChangeText={setName} placeholder="Company Name" />
+            </View>
+            <View style={styles.formRow}>
+              <Text style={styles.label}>Address</Text>
+              <TextInput style={styles.input} value={address} onChangeText={setAddress} placeholder="Full Address" />
+            </View>
+            <View style={styles.formRow}>
+              <Text style={styles.label}>Email</Text>
+              <TextInput style={styles.input} value={email} onChangeText={setEmail} placeholder="Email Address" keyboardType="email-address" />
+            </View>
+            <View style={styles.formRow}>
+              <Text style={styles.label}>Phone Number</Text>
+              <TextInput style={styles.input} value={phone} onChangeText={setPhone} placeholder="Phone Number" keyboardType="phone-pad" />
             </View>
           </View>
-        )}
 
-        {/* Primary Actions: The 3 Requested Buttons */}
-        <View style={styles.actionGroup}>
-          {/* Button 1: Edit/Save Profile */}
-          <TouchableOpacity
-            style={[styles.primaryBtn, saving && { opacity: 0.8 }]}
-            disabled={saving}
-            onPress={handleSave}
-          >
-            <Text style={styles.primaryBtnText}>{saving ? 'Saving...' : "Edit Company's Profile"}</Text>
-          </TouchableOpacity>
+          {/* Section 2: Bank Details */}
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Bank Details</Text>
+            <View style={styles.formRow}>
+              <Text style={styles.label}>Bank Name</Text>
+              <TextInput style={styles.input} value={bankName} onChangeText={setBankName} placeholder="e.g. Chase Bank" />
+            </View>
+            <View style={styles.formRow}>
+              <Text style={styles.label}>Account Name</Text>
+              <TextInput style={styles.input} value={accountName} onChangeText={setAccountName} placeholder="Account Holder Name" />
+            </View>
+            <View style={styles.formRow}>
+              <Text style={styles.label}>Account Number</Text>
+              <TextInput style={styles.input} value={accountNumber} onChangeText={setAccountNumber} placeholder="Account Number" keyboardType="numeric" />
+            </View>
+          </View>
 
-          {/* Button 2: Advanced Options Toggle */}
-          <TouchableOpacity
-            style={styles.secondaryBtn}
-            onPress={() => setShowAdvanced(!showAdvanced)}
-          >
-            <Text style={styles.secondaryBtnText}>
-              {showAdvanced ? 'Hide Advanced Options' : 'Advance Option'}
+          {/* Section 3: Global Settings */}
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Global Settings (Currency & Location)</Text>
+            <View style={styles.formRow}>
+              <Text style={styles.label}>Country</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="e.g., Nigeria"
+                placeholderTextColor={Colors.textSecondary}
+                value={country}
+                onChangeText={setCountry}
+              />
+            </View>
+            <View style={styles.formRow}>
+              <Text style={styles.label}>Currency</Text>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                {[
+                  { sym: '₦', name: 'Naira' },
+                  { sym: '$', name: 'Dollar' },
+                  { sym: '£', name: 'Pounds' },
+                  { sym: '€', name: 'Euros' },
+                  { sym: '₵', name: 'Cedis' },
+                  { sym: 'KSh', name: 'Shillings' },
+                ].map(({ sym, name }) => (
+                  <TouchableOpacity
+                    key={sym}
+                    style={[styles.chip, currencySymbol === sym && styles.chipActive]}
+                    onPress={() => setCurrencySymbol(sym)}
+                  >
+                    <Text style={[styles.chipText, currencySymbol === sym && { color: Colors.white }]}>{name} ({sym})</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          </View>
+
+          {/* Section 4: Advanced Options (Hidden by default) */}
+          {showAdvanced && (
+            <View style={[styles.card, { borderColor: Colors.primary, borderWidth: 1 }]}>
+              <Text style={styles.cardTitle}>Advanced Options: Branding</Text>
+              <Text style={styles.helperText}>Upload your official assets for documents.</Text>
+
+              <View style={[styles.formRow, { marginTop: 15 }]}>
+                <Text style={styles.label}>Company Logo</Text>
+                {logo ? (
+                  <View style={{ alignItems: 'center', marginBottom: 12, borderWidth: 1, borderColor: '#eee', borderRadius: 8, padding: 8 }}>
+                    <Image source={{ uri: logo }} style={{ width: 100, height: 100, resizeMode: 'contain', marginBottom: 8 }} />
+                    <TouchableOpacity onPress={() => setLogo(null)}><Text style={{ color: Colors.error, fontWeight: '500' }}>Remove Logo</Text></TouchableOpacity>
+                  </View>
+                ) : null}
+                <TouchableOpacity style={styles.uploadBtn} onPress={() => pickImage('logo')}>
+                  <Text style={styles.uploadBtnText}>{logo ? 'Change Logo' : 'Click to Upload Logo'}</Text>
+                </TouchableOpacity>
+              </View>
+
+              <View style={{ height: 1, backgroundColor: Colors.border, marginVertical: 15 }} />
+
+              <View style={styles.formRow}>
+                <Text style={styles.label}>Signature</Text>
+                {signature ? (
+                  <View style={{ alignItems: 'center', marginBottom: 12, borderWidth: 1, borderColor: '#eee', borderRadius: 8, padding: 8 }}>
+                    <Image source={{ uri: signature }} style={{ width: 150, height: 80, resizeMode: 'contain', marginBottom: 8 }} />
+                    <View style={{ flexDirection: 'row', gap: 20 }}>
+                      <TouchableOpacity onPress={() => setSignatureModalVisible(true)}>
+                        <Text style={{ color: Colors.primary, fontWeight: '500' }}>Re-sign</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity onPress={() => setSignature(null)}>
+                        <Text style={{ color: Colors.error, fontWeight: '500' }}>Remove</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                ) : null}
+                <View style={{ flexDirection: 'row', gap: 10 }}>
+                  <TouchableOpacity style={[styles.uploadBtn, { flex: 1 }]} onPress={() => pickImage('signature')}>
+                    <Text style={styles.uploadBtnText}>Upload Image</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={[styles.uploadBtn, { flex: 1, backgroundColor: '#fdf4ff', borderColor: '#f0abfc' }]} onPress={() => setSignatureModalVisible(true)}>
+                    <Text style={[styles.uploadBtnText, { color: '#c026d3' }]}>Draw Signature</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          )}
+
+          {/* Primary Actions: The 3 Requested Buttons */}
+          <View style={styles.actionGroup}>
+            {/* Button 1: Edit/Save Profile */}
+            <TouchableOpacity
+              style={[styles.primaryBtn, saving && { opacity: 0.8 }]}
+              disabled={saving}
+              onPress={handleSave}
+            >
+              <Text style={styles.primaryBtnText}>{saving ? 'Saving...' : "Edit Company's Profile"}</Text>
+            </TouchableOpacity>
+
+            {/* Button 2: Advanced Options Toggle */}
+            <TouchableOpacity
+              style={styles.secondaryBtn}
+              onPress={() => setShowAdvanced(!showAdvanced)}
+            >
+              <Text style={styles.secondaryBtnText}>
+                {showAdvanced ? 'Hide Advanced Options' : 'Advance Option'}
+              </Text>
+            </TouchableOpacity>
+
+            {/* Button 3: Logout */}
+            <TouchableOpacity
+              style={styles.destructiveBtn}
+              onPress={handleLogout}
+            >
+              <Text style={styles.destructiveBtnText}>Logout</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={{ height: 40 }} />
+        </ScrollView>
+      </SafeAreaView>
+      <Modal
+        visible={signatureModalVisible}
+        animationType="slide"
+        transparent={false}
+        onRequestClose={() => setSignatureModalVisible(false)}
+      >
+        <SafeAreaView style={{ flex: 1, backgroundColor: Colors.background }}>
+          <View style={{ flex: 1, padding: Spacing.lg }}>
+            <Text style={{ fontSize: Fonts.sizes.header, fontWeight: Fonts.weights.bold, marginBottom: Spacing.md }}>
+              Draw Your Signature
             </Text>
-          </TouchableOpacity>
-
-          {/* Button 3: Logout */}
-          <TouchableOpacity
-            style={styles.destructiveBtn}
-            onPress={handleLogout}
-          >
-            <Text style={styles.destructiveBtnText}>Logout</Text>
-          </TouchableOpacity>
-        </View>
-
-        <View style={{ height: 40 }} />
-      </ScrollView>
-    </SafeAreaView>
+            <Text style={{ color: Colors.textSecondary, marginBottom: Spacing.md }}>
+              Use a stylus or your finger to sign in the area below. Your signature will be saved to your profile and used on generated documents.
+            </Text>
+            <View style={{ flex: 1, backgroundColor: Colors.white, borderWidth: 1, borderColor: Colors.border, borderRadius: 8 }}>
+              <SignatureCanvas
+                onOK={async (sig) => {
+                  // sig is a base64 data URL; recompress for smaller payload
+                  const compact = await compressToDataUrl(sig, 'signature');
+                  setSignature(compact || sig);
+                  setSignatureModalVisible(false);
+                  Alert.alert('Signature Saved', 'Your electronic signature has been captured.');
+                }}
+                onEmpty={() => {
+                  Alert.alert('No Signature', 'Please draw your signature before saving.');
+                }}
+                descriptionText="Sign here"
+                clearText="Clear"
+                confirmText="Save Signature"
+                webStyle=".m-signature-pad--footer {box-shadow: none;}"
+                backgroundColor={Colors.white}
+              />
+            </View>
+            <TouchableOpacity style={[styles.uploadedBtn, { marginTop: Spacing.lg, padding: 15, alignItems: 'center', backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border, borderRadius: 8 }]} onPress={() => setSignatureModalVisible(false)}>
+              <Text style={{ fontWeight: '600', color: Colors.text }}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </SafeAreaView>
+      </Modal>
+    </>
   );
 };
 
