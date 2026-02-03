@@ -276,12 +276,15 @@ const CompanyRegistrationScreen = ({ navigation, route }) => {
         } else {
           const result = await updateCompany(existing.companyId, payload);
           if (result?.success) {
-            // Refetch authoritative server state to ensure immediate UI reflection
+            // Trust the returned company object from the update operation to avoid stale cache issues
             let server = result.company || {};
-            try {
-              const refetch = await fetchCompany(existing.companyId);
-              if (refetch?.company) server = refetch.company;
-            } catch (_) {}
+            // Only refetch if for some reason the update didn't return the company object
+            if (!server.companyId) {
+              try {
+                const refetch = await fetchCompany(existing.companyId);
+                if (refetch?.company) server = refetch.company;
+              } catch (_) {}
+            }
 
             const normalized = {
               companyName: server.name ?? formData.companyName,
