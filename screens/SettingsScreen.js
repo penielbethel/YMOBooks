@@ -7,7 +7,15 @@ import { Spacing } from '../constants/Spacing';
 import { updateCompany, fetchCompany } from '../utils/api';
 
 const SettingsScreen = ({ navigation }) => {
-  const [company, setCompany] = useState(null);
+  // State for form fields
+  const [name, setName] = useState('');
+  const [address, setAddress] = useState('');
+  const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
+  const [bankName, setBankName] = useState('');
+  const [accountName, setAccountName] = useState('');
+  const [accountNumber, setAccountNumber] = useState('');
+
   const [country, setCountry] = useState('');
   const [currencySymbol, setCurrencySymbol] = useState('');
   const [saving, setSaving] = useState(false);
@@ -25,15 +33,26 @@ const SettingsScreen = ({ navigation }) => {
     }
   };
 
+  const populateFields = (c) => {
+    setCompany(c);
+    setName(c?.companyName || c?.name || '');
+    setAddress(c?.address || '');
+    setEmail(c?.email || '');
+    setPhone(c?.phoneNumber || c?.phone || '');
+    setBankName(c?.bankName || '');
+    setAccountName(c?.bankAccountName || c?.accountName || '');
+    setAccountNumber(c?.bankAccountNumber || c?.accountNumber || '');
+    setCountry(c?.country || '');
+    setCurrencySymbol(c?.currencySymbol || '$');
+  };
+
   useEffect(() => {
     (async () => {
       try {
         const stored = await AsyncStorage.getItem('companyData');
         const c = stored ? JSON.parse(stored) : null;
-        setCompany(c);
-        setCountry(c?.country || '');
-        setCurrencySymbol(c?.currencySymbol || '$');
-      } catch (_) {}
+        populateFields(c);
+      } catch (_) { }
     })();
   }, []);
 
@@ -41,12 +60,11 @@ const SettingsScreen = ({ navigation }) => {
     try {
       const stored = await AsyncStorage.getItem('companyData');
       const c = stored ? JSON.parse(stored) : null;
-      setCompany(c);
-      setCountry(c?.country || '');
-      setCurrencySymbol(c?.currencySymbol || '$');
-    } catch (_) {}
+      populateFields(c);
+    } catch (_) { }
   };
 
+  // ... (onRefresh, handleLogout same as before) 
   const onRefresh = async () => {
     setRefreshing(true);
     try {
@@ -75,11 +93,22 @@ const SettingsScreen = ({ navigation }) => {
     try {
       const payload = {
         companyId: company.companyId,
+        name,
+        address,
+        email,
+        phone,
+        bankName,
+        accountName,
+        accountNumber,
+        bankAccountName: accountName, // legacy support
+        bankAccountNumber: accountNumber, // legacy support
         country: String(country || '').trim() || undefined,
         currencySymbol,
         currencyCode: symbolToCode(currencySymbol),
       };
+
       const res = await updateCompany(payload);
+
       if (res?.success) {
         // Prefer authoritative data from server immediately after update
         let serverCompany = res?.company;
@@ -87,34 +116,35 @@ const SettingsScreen = ({ navigation }) => {
           try {
             const refetch = await fetchCompany(company.companyId);
             serverCompany = refetch?.company || null;
-          } catch (_) {}
+          } catch (_) { }
         }
 
-        const updated = serverCompany
-          ? {
-              ...(company || {}),
-              ...serverCompany,
-              // Maintain legacy keys so existing UI reflects changes immediately
-              companyName: serverCompany.name ?? (company?.companyName || ''),
-              phoneNumber: serverCompany.phone ?? (company?.phoneNumber || ''),
-            }
-          : {
-              ...(company || {}),
-              country: payload.country || '',
-              currencySymbol: payload.currencySymbol,
-              currencyCode: payload.currencyCode,
-            };
+        // Consolidated object for local storage
+        const updated = {
+          ...(company || {}),
+          ...(serverCompany || {}),
+          companyName: name,
+          name,
+          address,
+          email,
+          phoneNumber: phone, // legacy key
+          phone,
+          bankName,
+          bankAccountName: accountName,
+          bankAccountNumber: accountNumber,
+          country: payload.country || '',
+          currencySymbol: payload.currencySymbol,
+          currencyCode: payload.currencyCode,
+        };
 
         await AsyncStorage.setItem('companyData', JSON.stringify(updated));
         setCompany(updated);
-        setCountry(updated.country || '');
-        setCurrencySymbol(updated.currencySymbol || currencySymbol);
-        Alert.alert('Saved', 'Company settings updated and synced.');
+        Alert.alert('Saved', 'Company profile updated successfully.');
       } else {
-        Alert.alert('Failed', res?.message || 'Could not update company');
+        Alert.alert('Update Failed', res?.message || 'Could not update company');
       }
     } catch (err) {
-      Alert.alert('Error', 'Saving settings failed');
+      Alert.alert('Error', 'Saving settings failed: ' + err.message);
     } finally {
       setSaving(false);
     }
@@ -132,6 +162,40 @@ const SettingsScreen = ({ navigation }) => {
 
       <ScrollView contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
         <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Company Details</Text>
+          <View style={styles.formRow}>
+            <Text style={styles.label}>Company Name</Text>
+            <TextInput style={styles.input} value={name} onChangeText={setName} placeholder="Company Name" />
+          </View>
+          <View style={styles.formRow}>
+            <Text style={styles.label}>Address</Text>
+            <TextInput style={styles.input} value={address} onChangeText={setAddress} placeholder="Full Address" />
+          </View>
+          <View style={styles.formRow}>
+            <Text style={styles.label}>Email</Text>
+            <TextInput style={styles.input} value={email} onChangeText={setEmail} placeholder="Email Address" keyboardType="email-address" />
+          </View>
+          <View style={styles.formRow}>
+            <Text style={styles.label}>Phone Number</Text>
+            <TextInput style={styles.input} value={phone} onChangeText={setPhone} placeholder="Phone Number" keyboardType="phone-pad" />
+          </View>
+
+          <View style={{ height: 1, backgroundColor: Colors.border, marginVertical: 12 }} />
+          <Text style={styles.sectionTitle}>Bank Details</Text>
+          <View style={styles.formRow}>
+            <Text style={styles.label}>Bank Name</Text>
+            <TextInput style={styles.input} value={bankName} onChangeText={setBankName} placeholder="e.g. Chase Bank" />
+          </View>
+          <View style={styles.formRow}>
+            <Text style={styles.label}>Account Name</Text>
+            <TextInput style={styles.input} value={accountName} onChangeText={setAccountName} placeholder="Account Holder Name" />
+          </View>
+          <View style={styles.formRow}>
+            <Text style={styles.label}>Account Number</Text>
+            <TextInput style={styles.input} value={accountNumber} onChangeText={setAccountNumber} placeholder="Account Number" keyboardType="numeric" />
+          </View>
+
+          <View style={{ height: 1, backgroundColor: Colors.border, marginVertical: 12 }} />
           <Text style={styles.sectionTitle}>Global Settings</Text>
           <View style={styles.formRow}>
             <Text style={styles.label}>Country</Text>
@@ -165,12 +229,12 @@ const SettingsScreen = ({ navigation }) => {
             </View>
           </View>
           <TouchableOpacity style={[styles.saveBtn, saving && { opacity: 0.7 }]} disabled={saving} onPress={handleSave}>
-            <Text style={styles.saveBtnText}>{saving ? 'Saving…' : 'Save Settings'}</Text>
+            <Text style={styles.saveBtnText}>{saving ? 'Saving…' : 'Save All Changes'}</Text>
           </TouchableOpacity>
         </View>
 
-        <TouchableOpacity style={styles.actionButton} onPress={() => navigation.navigate('CompanyRegistration', { mode: 'edit' })}>
-          <Text style={styles.actionText}>Edit Company Information</Text>
+        <TouchableOpacity style={[styles.actionButton, styles.logoutButton]} onPress={handleLogout}>
+          <Text style={[styles.actionText, styles.logoutText]}>Logout</Text>
         </TouchableOpacity>
 
         <TouchableOpacity style={[styles.actionButton, styles.logoutButton]} onPress={handleLogout}>
