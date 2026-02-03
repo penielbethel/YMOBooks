@@ -228,18 +228,60 @@ const SettingsScreen = ({ navigation }) => {
               ))}
             </View>
           </View>
+        </View>
+
+        {/* Actions */}
+        <View style={{ gap: 12 }}>
           <TouchableOpacity style={[styles.saveBtn, saving && { opacity: 0.7 }]} disabled={saving} onPress={handleSave}>
-            <Text style={styles.saveBtnText}>{saving ? 'Saving…' : 'Save All Changes'}</Text>
+            <Text style={styles.saveBtnText}>{saving ? 'Saving…' : 'Edit Profile (Save Changes)'}</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={[styles.actionButton, styles.logoutButton]} onPress={handleLogout}>
+            <Text style={[styles.actionText, styles.logoutText]}>Logout</Text>
           </TouchableOpacity>
         </View>
 
-        <TouchableOpacity style={[styles.actionButton, styles.logoutButton]} onPress={handleLogout}>
-          <Text style={[styles.actionText, styles.logoutText]}>Logout</Text>
+        {/* Advanced Options */}
+        <TouchableOpacity
+          style={[styles.actionButton, { marginTop: 20 }]}
+          onPress={() => setShowAdvanced(!showAdvanced)}
+        >
+          <Text style={styles.actionText}>{showAdvanced ? 'Hide Advanced Options' : 'Show Advanced Options'}</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={[styles.actionButton, styles.logoutButton]} onPress={handleLogout}>
-          <Text style={[styles.actionText, styles.logoutText]}>Logout</Text>
-        </TouchableOpacity>
+        {showAdvanced && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Branding Images</Text>
+
+            <View style={styles.formRow}>
+              <Text style={styles.label}>Company Logo</Text>
+              {logo ? (
+                <View style={{ alignItems: 'center', marginBottom: 10 }}>
+                  <Image source={{ uri: logo }} style={{ width: 100, height: 100, resizeMode: 'contain', marginBottom: 8 }} />
+                  <TouchableOpacity onPress={() => setLogo(null)}><Text style={{ color: Colors.error }}>Remove Logo</Text></TouchableOpacity>
+                </View>
+              ) : null}
+              <TouchableOpacity style={styles.uploadBtn} onPress={() => pickImage('logo')}>
+                <Text style={styles.uploadBtnText}>{logo ? 'Change Logo' : 'Upload Logo'}</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={{ height: 1, backgroundColor: Colors.border, marginVertical: 12 }} />
+
+            <View style={styles.formRow}>
+              <Text style={styles.label}>Signature</Text>
+              {signature ? (
+                <View style={{ alignItems: 'center', marginBottom: 10 }}>
+                  <Image source={{ uri: signature }} style={{ width: 150, height: 80, resizeMode: 'contain', marginBottom: 8 }} />
+                  <TouchableOpacity onPress={() => setSignature(null)}><Text style={{ color: Colors.error }}>Remove Signature</Text></TouchableOpacity>
+                </View>
+              ) : null}
+              <TouchableOpacity style={styles.uploadBtn} onPress={() => pickImage('signature')}>
+                <Text style={styles.uploadBtnText}>{signature ? 'Change Signature' : 'Upload Signature'}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -267,6 +309,8 @@ const styles = StyleSheet.create({
   actionText: { fontSize: Fonts.sizes.md, color: Colors.text, fontWeight: Fonts.weights.semiBold },
   logoutButton: { backgroundColor: Colors.white, borderColor: Colors.primary },
   logoutText: { color: Colors.primary },
+  uploadBtn: { backgroundColor: Colors.white, borderWidth: 1, borderColor: Colors.border, borderRadius: 8, padding: 12, alignItems: 'center' },
+  uploadBtnText: { color: Colors.text, fontWeight: '500' },
 });
 
 export default SettingsScreen;
