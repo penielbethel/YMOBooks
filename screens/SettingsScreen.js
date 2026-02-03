@@ -444,7 +444,7 @@ const SettingsScreen = ({ navigation }) => {
               disabled={saving}
               onPress={handleSave}
             >
-              <Text style={styles.primaryBtnText}>{saving ? 'Saving...' : "Edit Company's Profile"}</Text>
+              <Text style={styles.primaryBtnText}>{saving ? 'Saving...' : "Save Changes"}</Text>
             </TouchableOpacity>
 
             {/* Button 2: Advanced Options Toggle */}

@@ -511,6 +511,7 @@ export default function TemplatePickerScreen({ navigation }) {
   ]);
   const [savingHtmlPdf, setSavingHtmlPdf] = useState(false);
   const [previewHtml, setPreviewHtml] = useState('');
+  const [pdfReadyUri, setPdfReadyUri] = useState(null);
 
   useEffect(() => {
     if (previewVisible) {
@@ -598,6 +599,8 @@ export default function TemplatePickerScreen({ navigation }) {
         }
       })();
     }
+    // Reset PDF ready state if inputs change
+    setPdfReadyUri(null);
   }, [previewVisible, company, invoice, items, invoiceTemplate, brandColor, tempPdfLogo, companyCurrencySymbol]);
 
   const updateInvoice = (patch) => setInvoice((prev) => ({ ...prev, ...patch }));
@@ -851,203 +854,206 @@ export default function TemplatePickerScreen({ navigation }) {
                 </View>
                 <View style={{ paddingHorizontal: Spacing.lg, paddingBottom: Spacing.lg }}>
                   <View style={{ flexDirection: 'row', gap: 10, flexWrap: 'wrap' }}>
-                    <TouchableOpacity onPress={async () => {
-                      try {
-                        setSavingHtmlPdf(true);
-
-                        const guessMime = (u) => {
-                          const ext = (u || '').split('?')[0].split('#')[0].split('.').pop()?.toLowerCase() || '';
-                          if (ext === 'jpg' || ext === 'jpeg') return 'image/jpeg';
-                          if (ext === 'png') return 'image/png';
-                          if (ext === 'gif') return 'image/gif';
-                          if (ext === 'webp') return 'image/webp';
-                          return 'image/*';
-                        };
-
-                        const toDataUrl = async (uri) => {
-                          if (!uri) return '';
-                          if (uri.startsWith('data:')) return uri;
-                          try {
-                            if (Platform.OS === 'web') {
-                              const res = await fetch(uri);
-                              const blob = await res.blob();
-                              const dataUrl = await new Promise((resolve, reject) => {
-                                const reader = new FileReader();
-                                reader.onloadend = () => resolve(reader.result);
-                                reader.onerror = reject;
-                                reader.readAsDataURL(blob);
-                              });
-                              return dataUrl;
-                            } else {
-                              if (uri.startsWith('file:')) {
-                                const base64 = await FileSystemLegacy.readAsStringAsync(uri, { encoding: 'base64' });
-                                const mime = guessMime(uri);
-                                return `data:${mime};base64,${base64}`;
-                              } else {
-                                const tmp = `${FileSystem.cacheDirectory}img-${Date.now()}`;
-                                const dl = await FileSystemLegacy.downloadAsync(uri, tmp);
-                                const base64 = await FileSystemLegacy.readAsStringAsync(dl.uri, { encoding: 'base64' });
-                                const mime = guessMime(uri);
-                                return `data:${mime};base64,${base64}`;
-                              }
-                            }
-                          } catch (err) {
-                            console.warn('[TemplatePicker][toDataUrl] Failed:', err?.message || err);
-                            return uri;
-                          }
-                        };
-
-                        // Resolve logo/signature robustly: prefer in-memory, then AsyncStorage caches, then a web asset
-                        const getCachedLogo = async () => {
-                          try {
-                            const existingRaw = await AsyncStorage.getItem('companyData');
-                            const existing = existingRaw ? JSON.parse(existingRaw) : null;
-                            if (existing?.logo) return existing.logo;
-                          } catch { }
-                          try {
-                            const cache = await AsyncStorage.getItem('companyLogoCache');
-                            if (cache) return cache;
-                          } catch { }
+                    <TouchableOpacity
+                      onPress={async () => {
+                        if (pdfReadyUri) {
                           if (Platform.OS === 'web') {
-                            try {
-                              const resp = await fetch('/logo.png');
-                              if (resp.ok) {
-                                const blob = await resp.blob();
-                                const reader = new FileReader();
-                                const dataUrl = await new Promise((resolve) => { reader.onloadend = () => resolve(reader.result); reader.readAsDataURL(blob); });
-                                return String(dataUrl);
-                              }
-                            } catch { }
-                          }
-                          return '';
-                        };
-
-                        let logoCandidate = tempPdfLogo || company?.logo || await getCachedLogo();
-                        const resolvedLogo = await toDataUrl(logoCandidate);
-                        const resolvedSignature = await toDataUrl(company?.signature);
-
-                        // Generate a client-side invoice number for HTML export (server has its own sequence)
-                        const invNo = invoice.invoiceNumber || `INV-${(company?.companyId || 'LOCAL')}-${Date.now()}`;
-
-                        const html = buildInvoiceHtml({
-                          company: {
-                            name: company?.companyName,
-                            address: company?.address,
-                            email: company?.email,
-                            phone: company?.phoneNumber,
-                            bankName: company?.bankName,
-                            accountName: company?.bankAccountName,
-                            accountNumber: company?.bankAccountNumber,
-                            logo: resolvedLogo,
-                            signature: resolvedSignature,
-                          },
-                          invoice: {
-                            customerName: invoice.customerName,
-                            customerAddress: invoice.customerAddress,
-                            customerContact: invoice.customerContact,
-                            invoiceDate: invoice.invoiceDate?.toISOString().slice(0, 10),
-                            dueDate: invoice.dueDate?.toISOString().slice(0, 10),
-                            invoiceNumber: invNo,
-                          },
-                          items: items.map((it) => ({ description: it.description, qty: Number(it.qty || 0), price: Number(it.price || 0) })),
-                          template: invoiceTemplate,
-                          brandColor,
-                          currencySymbol: companyCurrencySymbol,
-                        });
-
-                        if (Platform.OS === 'web') {
-                          const withPrint = html.replace('</body>', '<script>setTimeout(()=>{try{window.print()}catch(_){}},300)</script></body>');
-                          const dataUrl = 'data:text/html;charset=utf-8,' + encodeURIComponent(withPrint);
-                          await Linking.openURL(dataUrl);
-                          // Do not return here; continue to register history below
-                        }
-
-                        const file = await Print.printToFileAsync({ html });
-                        const safeName = `${invNo}.pdf`.replace(/[^a-zA-Z0-9_.-]/g, '_');
-                        // Web: force browser download with custom filename
-                        if (Platform.OS === 'web') {
-                          try {
-                            const resp = await fetch(file.uri);
-                            const blob = await resp.blob();
-                            const url = URL.createObjectURL(blob);
-                            const a = document.createElement('a');
-                            a.href = url;
-                            a.download = safeName;
-                            document.body.appendChild(a);
-                            a.click();
-                            a.remove();
-                            setTimeout(() => URL.revokeObjectURL(url), 1500);
-                          } catch (webErr) {
-                            console.warn('[TemplatePicker][HTML->PDF][Web] Download fallback failed, opening URI:', webErr?.message || webErr);
-                            await Linking.openURL(file.uri);
-                          }
-                        } else {
-                          // Native: move to a path with expected filename then share/open
-                          try {
-                            const baseDir = FileSystem.documentDirectory || FileSystem.cacheDirectory || '';
-                            const targetUri = `${baseDir}${safeName}`;
-                            await FileSystem.moveAsync({ from: file.uri, to: targetUri });
-                            if (await Sharing.isAvailableAsync()) {
-                              await Sharing.shareAsync(targetUri, { UTI: 'com.adobe.pdf', mimeType: 'application/pdf' });
-                            } else {
-                              await Linking.openURL(targetUri);
-                            }
-                          } catch (nativeErr) {
-                            console.warn('[TemplatePicker][HTML->PDF][Native] Rename failed, sharing original file:', nativeErr?.message || nativeErr);
-                            if (await Sharing.isAvailableAsync()) {
-                              await Sharing.shareAsync(file.uri, { UTI: 'com.adobe.pdf', mimeType: 'application/pdf' });
-                            } else {
-                              await Linking.openURL(file.uri);
-                            }
-                          }
-                        }
-
-                        // After client-side generation/sharing, register invoice history on server
-                        try {
-                          if (!company?.companyId) {
-                            console.warn('[TemplatePicker][HTML->PDF] Skipping history registration: missing companyId');
+                            await Linking.openURL(pdfReadyUri);
                           } else {
-                            const payload = {
-                              companyId: company.companyId,
+                            if (await Sharing.isAvailableAsync()) {
+                              await Sharing.shareAsync(pdfReadyUri, { UTI: 'com.adobe.pdf', mimeType: 'application/pdf' });
+                            } else {
+                              await Linking.openURL(pdfReadyUri);
+                            }
+                          }
+                          return;
+                        }
+                        // Trigger generation (this block is already the onPress of this button, but I'll make it explicit)
+                        // Actually, I'll just let the original logic run but set pdfReadyUri at the end.
+                        try {
+                          setSavingHtmlPdf(true);
+
+                          const guessMime = (u) => {
+                            const ext = (u || '').split('?')[0].split('#')[0].split('.').pop()?.toLowerCase() || '';
+                            if (ext === 'jpg' || ext === 'jpeg') return 'image/jpeg';
+                            if (ext === 'png') return 'image/png';
+                            if (ext === 'gif') return 'image/gif';
+                            if (ext === 'webp') return 'image/webp';
+                            return 'image/*';
+                          };
+
+                          const toDataUrl = async (uri) => {
+                            if (!uri) return '';
+                            if (uri.startsWith('data:')) return uri;
+                            try {
+                              if (Platform.OS === 'web') {
+                                const res = await fetch(uri);
+                                const blob = await res.blob();
+                                const dataUrl = await new Promise((resolve, reject) => {
+                                  const reader = new FileReader();
+                                  reader.onloadend = () => resolve(reader.result);
+                                  reader.onerror = reject;
+                                  reader.readAsDataURL(blob);
+                                });
+                                return dataUrl;
+                              } else {
+                                if (uri.startsWith('file:')) {
+                                  const base64 = await FileSystemLegacy.readAsStringAsync(uri, { encoding: 'base64' });
+                                  const mime = guessMime(uri);
+                                  return `data:${mime};base64,${base64}`;
+                                } else {
+                                  const tmp = `${FileSystem.cacheDirectory}img-${Date.now()}`;
+                                  const dl = await FileSystemLegacy.downloadAsync(uri, tmp);
+                                  const base64 = await FileSystemLegacy.readAsStringAsync(dl.uri, { encoding: 'base64' });
+                                  const mime = guessMime(uri);
+                                  return `data:${mime};base64,${base64}`;
+                                }
+                              }
+                            } catch (err) {
+                              console.warn('[TemplatePicker][toDataUrl] Failed:', err?.message || err);
+                              return uri;
+                            }
+                          };
+
+                          // Resolve logo/signature robustly: prefer in-memory, then AsyncStorage caches, then a web asset
+                          const getCachedLogo = async () => {
+                            try {
+                              const existingRaw = await AsyncStorage.getItem('companyData');
+                              const existing = existingRaw ? JSON.parse(existingRaw) : null;
+                              if (existing?.logo) return existing.logo;
+                            } catch { }
+                            try {
+                              const cache = await AsyncStorage.getItem('companyLogoCache');
+                              if (cache) return cache;
+                            } catch { }
+                            if (Platform.OS === 'web') {
+                              try {
+                                const resp = await fetch('/logo.png');
+                                if (resp.ok) {
+                                  const blob = await resp.blob();
+                                  const reader = new FileReader();
+                                  const dataUrl = await new Promise((resolve) => { reader.onloadend = () => resolve(reader.result); reader.readAsDataURL(blob); });
+                                  return String(dataUrl);
+                                }
+                              } catch { }
+                            }
+                            return '';
+                          };
+
+                          let logoCandidate = tempPdfLogo || company?.logo || await getCachedLogo();
+                          const resolvedLogo = await toDataUrl(logoCandidate);
+                          const resolvedSignature = await toDataUrl(company?.signature);
+
+                          // Generate a client-side invoice number for HTML export (server has its own sequence)
+                          const invNo = invoice.invoiceNumber || `INV-${(company?.companyId || 'LOCAL')}-${Date.now()}`;
+
+                          const html = buildInvoiceHtml({
+                            company: {
+                              name: company?.companyName,
+                              address: company?.address,
+                              email: company?.email,
+                              phone: company?.phoneNumber,
+                              bankName: company?.bankName,
+                              accountName: company?.bankAccountName,
+                              accountNumber: company?.bankAccountNumber,
+                              logo: resolvedLogo,
+                              signature: resolvedSignature,
+                            },
+                            invoice: {
+                              customerName: invoice.customerName,
+                              customerAddress: invoice.customerAddress,
+                              customerContact: invoice.customerContact,
                               invoiceDate: invoice.invoiceDate?.toISOString().slice(0, 10),
                               dueDate: invoice.dueDate?.toISOString().slice(0, 10),
-                              customer: {
-                                name: invoice.customerName,
-                                address: invoice.customerAddress,
-                                contact: invoice.customerContact,
-                              },
-                              items: items.map((it) => ({ description: it.description, qty: Number(it.qty || 0), price: Number(it.price || 0) })),
-                              template: invoiceTemplate,
-                              brandColor,
-                              currencySymbol: companyCurrencySymbol,
-                              companyOverride: {
-                                name: company?.companyName,
-                                companyName: company?.companyName,
-                                address: company?.address,
-                                email: company?.email,
-                                phone: company?.phoneNumber,
-                                logo: company?.logo,
-                                signature: company?.signature,
-                                bankName: company?.bankName,
-                                accountName: company?.bankAccountName,
-                                accountNumber: company?.bankAccountNumber,
-                              },
-                            };
-                            await createInvoice(payload);
-                            console.log('[TemplatePicker][HTML->PDF] Invoice registered in history');
-                          }
-                        } catch (histErr) {
-                          console.warn('[TemplatePicker][HTML->PDF] Failed to register history:', histErr?.message || histErr);
-                        }
+                              invoiceNumber: invNo,
+                            },
+                            items: items.map((it) => ({ description: it.description, qty: Number(it.qty || 0), price: Number(it.price || 0) })),
+                            template: invoiceTemplate,
+                            brandColor,
+                            currencySymbol: companyCurrencySymbol,
+                          });
 
-                      } catch (err) {
-                        console.error('[TemplatePicker][HTML->PDF] Failed:', err?.message || err);
-                        Alert.alert('Export failed', String(err?.message || err));
-                      } finally {
-                        setSavingHtmlPdf(false);
-                      }
-                    }} style={[styles.primaryHollowButton, { flex: 1, borderColor: Colors.success }, savingHtmlPdf && { opacity: 0.7 }]} disabled={savingHtmlPdf}>
-                      <Text style={[styles.primaryHollowButtonText, { color: Colors.success }]}>{savingHtmlPdf ? 'Generating…' : 'Download Invoice/Share'}</Text>
+                          if (Platform.OS === 'web') {
+                            const withPrint = html.replace('</body>', '<script>setTimeout(()=>{try{window.print()}catch(_){}},300)</script></body>');
+                            const dataUrl = 'data:text/html;charset=utf-8,' + encodeURIComponent(withPrint);
+                            await Linking.openURL(dataUrl);
+                            // Do not return here; continue to register history below
+                          }
+
+                          const file = await Print.printToFileAsync({ html });
+                          const safeName = `${invNo}.pdf`.replace(/[^a-zA-Z0-9_.-]/g, '_');
+
+                          let targetUri = file.uri;
+                          if (Platform.OS !== 'web') {
+                            try {
+                              const baseDir = FileSystem.documentDirectory || FileSystem.cacheDirectory || '';
+                              targetUri = `${baseDir}${safeName}`;
+                              await FileSystem.moveAsync({ from: file.uri, to: targetUri });
+                            } catch (mvErr) {
+                              console.warn('[TemplatePicker] Rename failed:', mvErr);
+                              targetUri = file.uri;
+                            }
+                          }
+
+                          // After client-side generation/sharing, register invoice history on server
+                          try {
+                            if (!company?.companyId) {
+                              console.warn('[TemplatePicker][HTML->PDF] Skipping history registration: missing companyId');
+                              setPdfReadyUri(targetUri); // Still allow share if local gen worked but no companyId
+                            } else {
+                              const payload = {
+                                companyId: company.companyId,
+                                invoiceDate: invoice.invoiceDate?.toISOString().slice(0, 10),
+                                dueDate: invoice.dueDate?.toISOString().slice(0, 10),
+                                customer: {
+                                  name: invoice.customerName,
+                                  address: invoice.customerAddress,
+                                  contact: invoice.customerContact,
+                                },
+                                items: items.map((it) => ({ description: it.description, qty: Number(it.qty || 0), price: Number(it.price || 0) })),
+                                template: invoiceTemplate,
+                                brandColor,
+                                currencySymbol: companyCurrencySymbol,
+                                companyOverride: {
+                                  name: company?.companyName,
+                                  companyName: company?.companyName,
+                                  address: company?.address,
+                                  email: company?.email,
+                                  phone: company?.phoneNumber,
+                                  logo: company?.logo,
+                                  signature: company?.signature,
+                                  bankName: company?.bankName,
+                                  accountName: company?.bankAccountName,
+                                  accountNumber: company?.bankAccountNumber,
+                                },
+                              };
+                              const res = await createInvoice(payload);
+                              if (res?.success) {
+                                console.log('[TemplatePicker][HTML->PDF] Invoice registered in history');
+                                setPdfReadyUri(targetUri);
+                                Alert.alert('Success', 'Invoice created and registered successfully!');
+                              } else {
+                                throw new Error(res?.message || 'Failed to register invoice on server');
+                              }
+                            }
+                          } catch (histErr) {
+                            console.warn('[TemplatePicker][HTML->PDF] Failed to register history:', histErr?.message || histErr);
+                            Alert.alert('Registration Failed', 'PDF generated but could not save to history. ' + (histErr?.message || ''));
+                          }
+
+                        } catch (err) {
+                          console.error('[TemplatePicker][HTML->PDF] Failed:', err?.message || err);
+                          Alert.alert('Export failed', String(err?.message || err));
+                        } finally {
+                          setSavingHtmlPdf(false);
+                        }
+                      }}
+                      style={[styles.primaryHollowButton, { flex: 1, borderColor: pdfReadyUri ? Colors.primary : Colors.success }, savingHtmlPdf && { opacity: 0.7 }]}
+                      disabled={savingHtmlPdf}
+                    >
+                      <Text style={[styles.primaryHollowButtonText, { color: pdfReadyUri ? Colors.primary : Colors.success }]}>
+                        {savingHtmlPdf ? 'Generating…' : pdfReadyUri ? 'Step 2: Share Invoice' : 'Step 1: Create & Register'}
+                      </Text>
                     </TouchableOpacity>
                     <TouchableOpacity onPress={async () => {
                       if (!company?.companyId) return Alert.alert('Error', 'Missing company ID. Please login again.');

@@ -24,6 +24,7 @@ const InvoiceHistoryScreen = ({ navigation, route }) => {
   const [previewHtml, setPreviewHtml] = useState('');
   const [previewTitle, setPreviewTitle] = useState('');
   const [savingHtmlPdf, setSavingHtmlPdf] = useState(false);
+  const [pdfReadyUri, setPdfReadyUri] = useState(null);
   const currentPreviewRef = useRef({ type: 'invoice', invoiceItem: null });
   const [searchQuery, setSearchQuery] = useState('');
   const [filterDays, setFilterDays] = useState(null); // null = All
@@ -228,6 +229,7 @@ const InvoiceHistoryScreen = ({ navigation, route }) => {
       });
       setPreviewTitle(`${item.invoiceNumber} — Preview`);
       setPreviewHtml(html);
+      setPdfReadyUri(null);
       currentPreviewRef.current = { type: 'invoice', invoiceItem: item };
       setPreviewVisible(true);
     } catch (e) {
@@ -327,6 +329,7 @@ const InvoiceHistoryScreen = ({ navigation, route }) => {
       });
       setPreviewTitle(`${item.invoiceNumber} — Receipt Preview (PAID)`);
       setPreviewHtml(html);
+      setPdfReadyUri(null);
       currentPreviewRef.current = { type: 'receipt', invoiceItem: item };
       setPreviewVisible(true);
     } catch (e) {
@@ -741,21 +744,51 @@ const InvoiceHistoryScreen = ({ navigation, route }) => {
           </View>
           <View style={{ flexDirection: 'row', gap: 10, paddingHorizontal: Spacing.lg, paddingBottom: Spacing.lg }}>
             <TouchableOpacity
-              style={[styles.smallBtn, { backgroundColor: Colors.success, paddingVertical: 10, flex: 1 }, savingHtmlPdf && { opacity: 0.7 }]}
+              style={[styles.smallBtn, { backgroundColor: pdfReadyUri ? Colors.primary : Colors.success, paddingVertical: 10, flex: 1 }, savingHtmlPdf && { opacity: 0.7 }]}
               disabled={savingHtmlPdf}
               onPress={async () => {
+                const { type, invoiceItem } = currentPreviewRef.current || {};
+                const invNo = invoiceItem?.invoiceNumber || 'document';
+                const prefix = type === 'receipt' ? 'RCT' : 'INV';
+                const filename = `${prefix}_${invNo}.pdf`.replace(/[^a-zA-Z0-9_.-]/g, '_');
+
+                if (pdfReadyUri) {
+                  if (Platform.OS === 'web') {
+                    await Linking.openURL(pdfReadyUri);
+                  } else {
+                    if (await Sharing.isAvailableAsync()) {
+                      await Sharing.shareAsync(pdfReadyUri, { UTI: 'com.adobe.pdf', mimeType: 'application/pdf' });
+                    } else {
+                      await Linking.openURL(pdfReadyUri);
+                    }
+                  }
+                  return;
+                }
+
                 if (!previewHtml) return;
                 try {
                   setSavingHtmlPdf(true);
                   const file = await Print.printToFileAsync({ html: previewHtml });
-                  if (Platform.OS === 'web') {
+
+                  let targetUri = file.uri;
+                  if (Platform.OS !== 'web') {
+                    try {
+                      const baseDir = FileSystem.documentDirectory || FileSystem.cacheDirectory || '';
+                      targetUri = `${baseDir}${filename}`;
+                      await FileSystem.moveAsync({ from: file.uri, to: targetUri });
+                    } catch (mvErr) {
+                      console.warn('[History] Rename failed:', mvErr);
+                      targetUri = file.uri;
+                    }
+                  } else {
+                    // Web download logic
                     try {
                       const resp = await fetch(file.uri);
                       const blob = await resp.blob();
                       const url = URL.createObjectURL(blob);
                       const a = document.createElement('a');
                       a.href = url;
-                      a.download = 'document.pdf';
+                      a.download = filename;
                       document.body.appendChild(a);
                       a.click();
                       a.remove();
@@ -763,17 +796,10 @@ const InvoiceHistoryScreen = ({ navigation, route }) => {
                     } catch (_e) {
                       await Linking.openURL(file.uri);
                     }
-                  } else {
-                    if (await Sharing.isAvailableAsync()) {
-                      await Sharing.shareAsync(file.uri, { UTI: 'com.adobe.pdf', mimeType: 'application/pdf' });
-                    } else {
-                      await Linking.openURL(file.uri);
-                    }
                   }
 
                   // If this was a receipt preview, register receipt in history
                   try {
-                    const { type, invoiceItem } = currentPreviewRef.current || {};
                     if (type === 'receipt' && companyId && invoiceItem) {
                       const payload = {
                         companyId,
@@ -784,9 +810,21 @@ const InvoiceHistoryScreen = ({ navigation, route }) => {
                         currencySymbol: resolveCurrencySymbol(invoiceItem, company),
                         currencyCode: invoiceItem.currencyCode,
                       };
-                      await createReceipt(payload);
+                      const res = await createReceipt(payload);
+                      if (res?.success) {
+                        setPdfReadyUri(targetUri);
+                        Alert.alert('Success', 'Receipt created and registered successfully!');
+                      } else {
+                        throw new Error(res?.message || 'Failed to register receipt on server');
+                      }
+                    } else {
+                      // Just an invoice preview, set ready immediately
+                      setPdfReadyUri(targetUri);
                     }
-                  } catch (_regErr) { }
+                  } catch (regErr) {
+                    console.warn('[History] Receipt registration failed:', regErr);
+                    Alert.alert('Registration Failed', 'PDF generated but could not register receipt. ' + (regErr?.message || ''));
+                  }
                 } catch (err) {
                   Alert.alert('Export failed', String(err?.message || err));
                 } finally {
@@ -794,7 +832,9 @@ const InvoiceHistoryScreen = ({ navigation, route }) => {
                 }
               }}
             >
-              <Text style={styles.smallBtnText}>{savingHtmlPdf ? 'Generating…' : 'Download/Share'}</Text>
+              <Text style={styles.smallBtnText}>
+                {savingHtmlPdf ? 'Generating…' : pdfReadyUri ? 'Step 2: Share Document' : 'Step 1: Create & Register'}
+              </Text>
             </TouchableOpacity>
           </View>
         </SafeAreaView>

@@ -133,7 +133,10 @@ const WelcomeScreen = ({ navigation }) => {
             onPress={() => navigation.navigate('Login')}
             activeOpacity={0.8}
           >
-            <Text style={styles.secondaryButtonText}>I have an Account</Text>
+            <View style={styles.loginBtnContent}>
+              <Ionicons name="log-in-outline" size={20} color={Colors.primary} />
+              <Text style={styles.secondaryButtonText}>Login here</Text>
+            </View>
           </TouchableOpacity>
         </View>
 
@@ -303,6 +306,11 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     borderWidth: 1.5,
     borderColor: Colors.primary,
+  },
+  loginBtnContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   secondaryButtonText: {
     color: Colors.primary,
