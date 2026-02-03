@@ -4,6 +4,13 @@ export function getApiBaseUrl() {
   return Config.API_BASE_URL;
 }
 
+export function resolveAssetUri(uri) {
+  if (!uri || typeof uri !== 'string') return null;
+  if (uri.startsWith('data:') || uri.startsWith('file://')) return uri;
+  if (uri.startsWith('/')) return `${Config.API_BASE_URL}${uri}`;
+  return uri;
+}
+
 export async function pingBackend() {
   const url = `${Config.API_BASE_URL}/api/health`;
   try {

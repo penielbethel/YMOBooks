@@ -17,6 +17,7 @@ import { Colors } from '../constants/Colors';
 import { Fonts } from '../constants/Fonts';
 import { Spacing } from '../constants/Spacing';
 import { Ionicons } from '@expo/vector-icons';
+import { getApiBaseUrl, resolveAssetUri } from '../utils/api';
 
 const MenuItem = memo(({ item, onPress }) => (
   <TouchableOpacity style={styles.menuItem} onPress={() => onPress(item.id)}>
@@ -145,7 +146,7 @@ const DashboardScreen = ({ navigation }) => {
           <View style={styles.headerContent}>
             {companyData.logo && (
               <Image
-                source={{ uri: companyData.logo }}
+                source={{ uri: resolveAssetUri(companyData.logo) }}
                 style={styles.companyLogo}
               />
             )}

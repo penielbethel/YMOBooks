@@ -5,7 +5,7 @@ import dayjs from 'dayjs';
 import { Colors } from '../constants/Colors';
 import { Fonts } from '../constants/Fonts';
 import { Spacing } from '../constants/Spacing';
-import { fetchInvoices, fetchReceipts, createReceipt, deleteInvoice, deleteReceiptByInvoice, getApiBaseUrl, fetchCompany } from '../utils/api';
+import { fetchInvoices, fetchReceipts, createReceipt, deleteInvoice, deleteReceiptByInvoice, getApiBaseUrl, fetchCompany, resolveAssetUri } from '../utils/api';
 import * as FileSystem from 'expo-file-system';
 import * as FileSystemLegacy from 'expo-file-system/legacy';
 import * as Print from 'expo-print';
@@ -128,7 +128,8 @@ const InvoiceHistoryScreen = ({ navigation, route }) => {
     }
   };
 
-  const toDataUrl = async (uri) => {
+  const toDataUrl = async (rawUri) => {
+    const uri = resolveAssetUri(rawUri);
     if (!uri) return '';
     if (uri.startsWith('data:')) return uri;
     try {

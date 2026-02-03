@@ -5,7 +5,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { Colors } from '../constants/Colors';
 import { Fonts } from '../constants/Fonts';
 import { Spacing } from '../constants/Spacing';
-import { updateCompany, fetchCompany } from '../utils/api';
+import { updateCompany, fetchCompany, resolveAssetUri } from '../utils/api';
 
 import { Modal } from 'react-native';
 import SignatureCanvas from 'react-native-signature-canvas';
@@ -398,7 +398,7 @@ const SettingsScreen = ({ navigation }) => {
                 <Text style={styles.label}>Company Logo</Text>
                 {logo ? (
                   <View style={{ alignItems: 'center', marginBottom: 12, borderWidth: 1, borderColor: '#eee', borderRadius: 8, padding: 8 }}>
-                    <Image source={{ uri: logo }} style={{ width: 100, height: 100, resizeMode: 'contain', marginBottom: 8 }} />
+                    <Image source={{ uri: resolveAssetUri(logo) }} style={{ width: 100, height: 100, resizeMode: 'contain', marginBottom: 8 }} />
                     <TouchableOpacity onPress={() => setLogo(null)}><Text style={{ color: Colors.error, fontWeight: '500' }}>Remove Logo</Text></TouchableOpacity>
                   </View>
                 ) : null}
@@ -413,7 +413,7 @@ const SettingsScreen = ({ navigation }) => {
                 <Text style={styles.label}>Signature</Text>
                 {signature ? (
                   <View style={{ alignItems: 'center', marginBottom: 12, borderWidth: 1, borderColor: '#eee', borderRadius: 8, padding: 8 }}>
-                    <Image source={{ uri: signature }} style={{ width: 150, height: 80, resizeMode: 'contain', marginBottom: 8 }} />
+                    <Image source={{ uri: resolveAssetUri(signature) }} style={{ width: 150, height: 80, resizeMode: 'contain', marginBottom: 8 }} />
                     <View style={{ flexDirection: 'row', gap: 20 }}>
                       <TouchableOpacity onPress={() => setSignatureModalVisible(true)}>
                         <Text style={{ color: Colors.primary, fontWeight: '500' }}>Re-sign</Text>
