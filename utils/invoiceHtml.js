@@ -1,7 +1,26 @@
-// Generates an HTML invoice that mirrors the in-app preview layout
-// This HTML is designed to be rendered by expo-print (client) and Puppeteer/wkhtmltopdf (server) for parity
+// Consolidated high-premium HTML generator for Invoices and Receipts
+// Optimized for A4 printing and professional brand presentation
 
-export function buildInvoiceHtml({ company = {}, invoice = {}, items = [], template = 'classic', brandColor = '#6C63FF', currencySymbol = '₦' }) {
+export function buildInvoiceHtml(opts) {
+  return buildDocumentHtml({ ...opts, type: 'invoice' });
+}
+
+export function buildReceiptHtml(opts) {
+  return buildDocumentHtml({ ...opts, type: 'receipt' });
+}
+
+function buildDocumentHtml({
+  company = {},
+  invoice = {},
+  items = [],
+  template = 'classic',
+  brandColor = '#1e3050',
+  currencySymbol = '₦',
+  type = 'invoice',
+  receiptNumber = '',
+  receiptDate = '',
+  amountPaid = 0,
+}) {
   const safe = (v) => (v == null ? '' : String(v));
   const escapeHtml = (str) => {
     return String(str)
@@ -12,23 +31,25 @@ export function buildInvoiceHtml({ company = {}, invoice = {}, items = [], templ
       .replace(/'/g, '&#039;');
   };
 
-  const name = safe(company.companyName || company.name || 'Your Company');
+  const isReceipt = type === 'receipt';
+  const name = safe(company.name || company.companyName || 'Your Company');
   const address = safe(company.address || '');
   const email = safe(company.email || '');
-  const phone = safe(company.phoneNumber || company.phone || '');
-  const bankName = safe(company.bankName || '');
-  const accountName = safe(company.bankAccountName || company.accountName || '');
-  const accountNumber = safe(company.bankAccountNumber || company.accountNumber || '');
+  const phone = safe(company.phone || company.phoneNumber || '');
   const logo = safe(company.logo || '');
   const signature = safe(company.signature || '');
   const terms = safe(company.termsAndConditions || company.terms || '');
+  const bankName = safe(company.bankName || '');
+  const accountName = safe(company.accountName || company.bankAccountName || '');
+  const accountNumber = safe(company.accountNumber || company.bankAccountNumber || '');
 
-  const brand = brandColor || '#6C63FF';
-  const theme = getThemeFor(template, brand);
+  const primaryColor = isReceipt ? (brandColor || '#10b981') : (brandColor || '#1e3050');
 
-  const issuanceDate = safe(invoice.invoiceDate || new Date().toISOString().slice(0, 10));
-  const dueDate = safe(invoice.dueDate || new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10));
-  const invoiceNumber = safe(invoice.invoiceNumber || `INV-${String(Date.now()).slice(-6)}`);
+  const docDate = type === 'receipt' ? safe(receiptDate || new Date().toISOString().slice(0, 10)) : safe(invoice.invoiceDate || new Date().toISOString().slice(0, 10));
+  const dueDate = safe(invoice.dueDate || '');
+  const docNumber = type === 'receipt' ? safe(receiptNumber || `RCT-${String(Date.now()).slice(-6)}`) : safe(invoice.invoiceNumber || `INV-${String(Date.now()).slice(-6)}`);
+  const invoiceRef = safe(invoice.invoiceNumber || '');
+
   const customerName = safe(invoice.customerName || invoice?.customer?.name || '');
   const customerAddress = safe(invoice.customerAddress || invoice?.customer?.address || '');
   const customerContact = safe(invoice.customerContact || invoice?.customer?.contact || '');
@@ -39,513 +60,417 @@ export function buildInvoiceHtml({ company = {}, invoice = {}, items = [], templ
     const total = Math.round(qty * price * 100) / 100;
     return { desc: safe(it.description || it.desc || '-'), qty, price, total };
   });
+
   const subtotal = rows.reduce((s, r) => s + r.total, 0);
-  const tax = 0; // Tax logic can be added here
-  const grand = subtotal + tax;
-  const amountWords = amountToWordsWithCurrencyNameOnly(grand, currencySymbol);
+  const totalAmount = isReceipt ? Number(amountPaid || subtotal) : subtotal;
+  const amountWords = amountToWordsWithCurrencyNameOnly(totalAmount, currencySymbol);
 
-  // --- HTML Sub-components ---
+  const label_title = isReceipt ? 'OFFICIAL RECEIPT' : 'INVOICE';
+  const label_recipient = isReceipt ? 'RECEIVED FROM' : 'BILL TO';
+  const label_no = isReceipt ? 'Receipt No' : 'Invoice No';
+  const label_date = isReceipt ? 'Receipt Date' : 'Invoice Date';
+  const status_badge = isReceipt ? '<div class="badge-status paid">PAYMENT CONFIRMED</div>' : '';
 
-  const bankDetailsBlock = (bankName || accountName || accountNumber) ? `
-    <div class="bank-details">
-      <div class="section-title">Bank Details</div>
-      ${bankName ? `<div class="info-row"><span>Bank:</span> ${escapeHtml(bankName)}</div>` : ''}
-      ${accountName ? `<div class="info-row"><span>Account Name:</span> ${escapeHtml(accountName)}</div>` : ''}
-      ${accountNumber ? `<div class="info-row"><span>Account Number:</span> ${escapeHtml(accountNumber)}</div>` : ''}
-    </div>
-  ` : '';
+  // Template Data Helpers
+  const logoImg = logo ? `<img src="${logo}" class="logo-img" />` : `<div class="logo-placeholder" style="color:${primaryColor}">${name.charAt(0)}</div>`;
+  const signatureImg = signature ? `<img src="${signature}" class="signature-img" />` : '';
 
-  const signatureBlock = signature ? `
-    <div class="signature-block">
-      <img src="${signature}" alt="Signature" />
-      <div class="line"></div>
-      <div class="label">Authorized Signature</div>
-    </div>
-  ` : '';
+  const tableHeaderLabel = isReceipt ? 'SERVICES/ITEMS PAID FOR' : 'ITEM DESCRIPTION';
 
-  const itemsRows = rows.map((r, i) => `
-    <tr class="${i % 2 === 0 ? 'even' : 'odd'}">
-      <td class="col-desc">${escapeHtml(r.desc)}</td>
-      <td class="col-qty">${r.qty}</td>
-      <td class="col-price">${currencySymbol}${r.price.toFixed(2)}</td>
-      <td class="col-total">${currencySymbol}${r.total.toFixed(2)}</td>
-    </tr>
-  `).join('');
+  // Common Table Generator
+  const generateTableHtml = (styleClass) => `
+    <table class="${styleClass}">
+      <thead>
+        <tr>
+          <th>${tableHeaderLabel}</th>
+          <th class="center">Qty</th>
+          <th class="right">Price</th>
+          <th class="right">Total</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rows.map((r, i) => `
+          <tr class="${i % 2 === 1 ? 'alt-row' : ''}">
+            <td class="col-desc">${escapeHtml(r.desc)}</td>
+            <td class="col-qty center">${r.qty}</td>
+            <td class="col-price right">${currencySymbol}${r.price.toFixed(2)}</td>
+            <td class="col-total right"><strong>${currencySymbol}${r.total.toFixed(2)}</strong></td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+  `;
 
-  // --- Template Specific Structures ---
-
-  let contentHtml = '';
+  let layoutHtml = '';
 
   if (template === 'modern') {
-    contentHtml = `
-      <div class="header-modern" style="background-color: ${theme.primary}; color: ${theme.headerText};">
-        <div class="header-content">
-          <div class="brand-area">
-            ${logo ? `<img class="logo-img" src="${logo}" />` : ''}
-            <div>
-              <div class="company-name">${escapeHtml(name)}</div>
-              <div class="company-meta">${escapeHtml(email)}</div>
-              <div class="company-meta">${escapeHtml(phone)}</div>
-            </div>
+    layoutHtml = `
+      <div class="modern-header" style="background: ${primaryColor}">
+        <div class="row">
+          <div class="col left">
+             ${logo ? `<img src="${logo}" class="logo-white" />` : `<div class="logo-placeholder-white">${name.charAt(0)}</div>`}
+             <div class="company-name-white">${escapeHtml(name)}</div>
           </div>
-          <div class="invoice-title-area">
-            <div class="invoice-badge">INVOICE</div>
-            <div class="invoice-number">#${escapeHtml(invoiceNumber)}</div>
+          <div class="col right align-right">
+             <div class="doc-title-white">${label_title}</div>
+             <div class="doc-meta-white">${label_no}: #${escapeHtml(docNumber)}</div>
+             <div class="doc-meta-white">${label_date}: ${escapeHtml(docDate)}</div>
           </div>
         </div>
       </div>
-      
-      <div class="body-content">
-        <div class="meta-grid">
-          <div class="meta-box">
-            <div class="label">Bill To</div>
-            <div class="value strong">${escapeHtml(customerName)}</div>
-            <div class="value">${escapeHtml(customerAddress)}</div>
-            <div class="value">${escapeHtml(customerContact)}</div>
+      <div class="content-padding">
+        <div class="row spacing-30">
+          <div class="col">
+            <div class="label-muted">${label_recipient}</div>
+            <div class="client-name">${escapeHtml(customerName)}</div>
+            <div class="client-meta">${escapeHtml(customerAddress)}</div>
+            <div class="client-meta">${escapeHtml(customerContact)}</div>
           </div>
-          <div class="meta-box align-right">
-            <div class="info-pair">
-              <span class="label">Date:</span>
-              <span class="value">${escapeHtml(issuanceDate)}</span>
-            </div>
-            <div class="info-pair">
-              <span class="label">Due Date:</span>
-              <span class="value">${escapeHtml(dueDate)}</span>
-            </div>
+          <div class="col align-right">
+            ${status_badge}
+            ${!isReceipt && dueDate ? `<div class="label-muted">DUE DATE</div><div class="meta-val">${escapeHtml(dueDate)}</div>` : ''}
+            ${isReceipt && invoiceRef ? `<div class="label-muted">INVOICE REFERENCE</div><div class="meta-val">#${escapeHtml(invoiceRef)}</div>` : ''}
           </div>
         </div>
-
-        <table class="modern-table">
-          <thead>
-            <tr>
-              <th class="col-desc">Description</th>
-              <th class="col-qty">Qty</th>
-              <th class="col-price">Price</th>
-              <th class="col-total">Total</th>
-            </tr>
-          </thead>
-          <tbody>${itemsRows}</tbody>
-        </table>
-
-        <div class="summary-section">
-          <div class="left-area">
-            <div class="amount-words"><strong>Amount in Words:</strong> ${escapeHtml(amountWords)}</div>
-            ${bankDetailsBlock}
-          </div>
-          <div class="totals-area">
-            <div class="total-row"><span>Subtotal</span> <span>${currencySymbol}${subtotal.toFixed(2)}</span></div>
-            <div class="total-row grand-total" style="color: ${theme.primary}">
-              <span>Total</span> <span>${currencySymbol}${grand.toFixed(2)}</span>
-            </div>
-          </div>
-        </div>
-
-        <div class="footer-area">
-          <div class="signature-wrapper">${signatureBlock}</div>
-          ${terms ? `<div class="terms"><strong>Terms:</strong> ${escapeHtml(terms)}</div>` : ''}
-          <div class="footer-note">Thank you for your business!</div>
-        </div>
+        ${generateTableHtml('modern-table')}
       </div>
     `;
   } else if (template === 'bold') {
-    contentHtml = `
-      <div class="header-bold">
-        <div class="top-bar" style="background-color: ${theme.primary}"></div>
-        <div class="header-inner">
-          <div class="company-info">
-            ${logo ? `<img class="logo-img" src="${logo}" />` : ''}
-            <div class="company-name" style="color: ${theme.primary}">${escapeHtml(name)}</div>
-            <div class="company-address">${escapeHtml(address)}</div>
+    layoutHtml = `
+      <div class="bold-sidebar" style="background: ${primaryColor}"></div>
+      <div class="content-padding">
+        <div class="row">
+          <div class="col">
+            ${logoImg}
+            <div class="company-title" style="color: ${primaryColor}">${escapeHtml(name)}</div>
+            <div class="company-meta">${escapeHtml(address)}</div>
           </div>
-          <div class="invoice-big-title" style="color: ${theme.accent}">INVOICE</div>
-        </div>
-      </div>
-
-      <div class="body-content">
-        <div class="client-grid">
-          <div class="client-box" style="border-left: 4px solid ${theme.primary}">
-            <div class="label">Invoiced To:</div>
-            <div class="value big">${escapeHtml(customerName)}</div>
-            <div class="value">${escapeHtml(customerAddress)}</div>
-          </div>
-          <div class="details-box">
-             <div class="detail-row"><span class="label">Invoice No:</span> <span class="value">${escapeHtml(invoiceNumber)}</span></div>
-             <div class="detail-row"><span class="label">Date:</span> <span class="value">${escapeHtml(issuanceDate)}</span></div>
-             <div class="detail-row"><span class="label">Due Date:</span> <span class="value">${escapeHtml(dueDate)}</span></div>
+          <div class="col align-right">
+            <div class="huge-title" style="color: ${primaryColor}">${label_title}</div>
+            <div class="bold-meta"><strong>${label_no}:</strong> #${escapeHtml(docNumber)}</div>
+            <div class="bold-meta"><strong>${label_date}:</strong> ${escapeHtml(docDate)}</div>
+            ${status_badge}
           </div>
         </div>
-
-        <table class="bold-table">
-          <thead style="background-color: ${theme.primary}; color: white;">
-            <tr>
-              <th class="col-desc">Item Description</th>
-              <th class="col-qty">Qty</th>
-              <th class="col-price">Price</th>
-              <th class="col-total">Amount</th>
-            </tr>
-          </thead>
-          <tbody>${itemsRows}</tbody>
-        </table>
-
-        <div class="summary-section">
-           <div class="left-area">
-              <div class="amount-words" style="background-color: #f3f4f6; padding: 10px; border-radius: 4px;">
-                <strong>In Words:</strong> ${escapeHtml(amountWords)}
-              </div>
-              ${bankDetailsBlock}
-           </div>
-           <div class="totals-area">
-              <div class="total-row"><span>Subtotal</span> <span>${currencySymbol}${subtotal.toFixed(2)}</span></div>
-              <div class="total-row grand-total" style="background-color: ${theme.primary}; color: white; padding: 10px;">
-                <span>Total</span> <span>${currencySymbol}${grand.toFixed(2)}</span>
-              </div>
-           </div>
+        <div class="horizontal-rule" style="background: ${primaryColor}"></div>
+        <div class="row spacing-20">
+          <div class="col">
+            <div class="bold-label" style="color: ${primaryColor}">${label_recipient}</div>
+            <div class="client-name-bold">${escapeHtml(customerName)}</div>
+            <div class="client-meta">${escapeHtml(customerAddress)}</div>
+          </div>
         </div>
-
-        <div class="footer-area">
-          <div class="signature-wrapper">${signatureBlock}</div>
-          ${terms ? `<div class="terms" style="border-top: 2px solid ${theme.primary}; padding-top: 10px;">${escapeHtml(terms)}</div>` : ''}
-        </div>
+        ${generateTableHtml('bold-table')}
       </div>
     `;
   } else if (template === 'minimal') {
-    contentHtml = `
-      <div class="body-content minimal-layout">
-        <div class="header-minimal">
-          <div class="left">
-            ${logo ? `<img class="logo-img" src="${logo}" />` : ''}
-            <div class="company-name">${escapeHtml(name)}</div>
-            <div class="company-meta">${escapeHtml(address)}</div>
-            <div class="company-meta">${escapeHtml(email)} • ${escapeHtml(phone)}</div>
-          </div>
-          <div class="right">
-            <div class="invoice-title">INVOICE</div>
-            <div class="invoice-ref">#${escapeHtml(invoiceNumber)}</div>
-          </div>
+    layoutHtml = `
+      <div class="content-padding">
+        <div class="minimal-header" style="border-bottom-color: ${primaryColor}">
+           <div class="minimal-brand">${logoImg} <span style="color:${primaryColor}">${escapeHtml(name)}</span></div>
+           <div class="minimal-title">${label_title}</div>
         </div>
-
-        <div class="separator-line"></div>
-
-        <div class="meta-grid">
-           <div class="meta-box">
-             <div class="label">Bill To</div>
-             <div class="value strong">${escapeHtml(customerName)}</div>
-             <div class="value">${escapeHtml(customerAddress)}</div>
+        <div class="row spacing-40">
+           <div class="col">
+              <div class="min-label">CLIENT / CUSTOMER</div>
+              <div class="min-name">${escapeHtml(customerName)}</div>
+              <div class="min-meta">${escapeHtml(customerAddress)}</div>
            </div>
-           <div class="meta-box align-right">
-             <div class="info-pair"><span class="label">Date</span> <span class="value">${escapeHtml(issuanceDate)}</span></div>
-             <div class="info-pair"><span class="label">Due</span> <span class="value">${escapeHtml(dueDate)}</span></div>
+           <div class="col align-right">
+              <div class="min-label">TRANSACTION DETAILS</div>
+              <div class="min-meta">${label_no}: <strong>#${escapeHtml(docNumber)}</strong></div>
+              <div class="min-meta">${label_date}: <strong>${escapeHtml(docDate)}</strong></div>
+              ${status_badge}
            </div>
         </div>
-
-        <table class="minimal-table">
-          <thead>
-            <tr>
-              <th class="col-desc">Description</th>
-              <th class="col-qty">Qty</th>
-              <th class="col-price">Price</th>
-              <th class="col-total">Total</th>
-            </tr>
-          </thead>
-          <tbody>${itemsRows}</tbody>
-        </table>
-
-        <div class="summary-section">
-          <div class="left-area">
-             <div class="amount-words">${escapeHtml(amountWords)}</div>
-             ${bankDetailsBlock}
-          </div>
-          <div class="totals-area">
-            <div class="total-row"><span>Subtotal</span> <span>${currencySymbol}${subtotal.toFixed(2)}</span></div>
-            <div class="total-row grand-total"><span>Total</span> <span>${currencySymbol}${grand.toFixed(2)}</span></div>
-          </div>
-        </div>
-
-        <div class="footer-area">
-          <div class="signature-wrapper">${signatureBlock}</div>
-          ${terms ? `<div class="terms">${escapeHtml(terms)}</div>` : ''}
-        </div>
+        ${generateTableHtml('minimal-table')}
       </div>
     `;
   } else if (template === 'compact') {
-    contentHtml = `
-      <div class="body-content compact-layout">
-        <div class="header-compact" style="border-bottom: 3px solid ${theme.primary}">
-           <div class="row">
-             <div class="col">
-               <div class="invoice-title" style="color: ${theme.primary}">INVOICE</div>
-               <div class="invoice-number">#${escapeHtml(invoiceNumber)}</div>
-             </div>
-             <div class="col align-right">
-               <div class="company-name">${escapeHtml(name)}</div>
-               <div class="company-meta">${escapeHtml(email)}</div>
-               <div class="company-meta">${escapeHtml(phone)}</div>
-             </div>
-           </div>
-        </div>
-
-        <div class="meta-bar">
-           <div class="bill-to">
-             <span class="label">Bill To:</span> <strong>${escapeHtml(customerName)}</strong> | ${escapeHtml(customerAddress)}
-           </div>
-           <div class="dates">
-             ${escapeHtml(issuanceDate)} (Due: ${escapeHtml(dueDate)})
-           </div>
-        </div>
-
-        <table class="compact-table">
-          <thead style="background-color: #f3f4f6;">
-            <tr>
-              <th class="col-desc">Description</th>
-              <th class="col-qty">Qty</th>
-              <th class="col-price">Price</th>
-              <th class="col-total">Total</th>
-            </tr>
-          </thead>
-          <tbody>${itemsRows}</tbody>
-        </table>
-
-        <div class="summary-section">
-          <div class="left-area">
-            ${bankDetailsBlock}
-          </div>
-          <div class="totals-area">
-             <div class="total-row grand-total" style="border-top: 2px solid ${theme.primary}">
-               <span>Total</span> <span>${currencySymbol}${grand.toFixed(2)}</span>
-             </div>
-             <div class="amount-words right">${escapeHtml(amountWords)}</div>
-          </div>
-        </div>
-
-        <div class="footer-area">
-          <div class="signature-wrapper right">${signatureBlock}</div>
-        </div>
+    layoutHtml = `
+      <div class="compact-header" style="border-left: 10px solid ${primaryColor}">
+         <div class="row v-center">
+            <div class="col flex-row">
+               ${logoImg}
+               <div class="compact-brand">
+                  <div class="c-name">${escapeHtml(name)}</div>
+                  <div class="c-meta">${escapeHtml(email)} | ${escapeHtml(phone)}</div>
+               </div>
+            </div>
+            <div class="col align-right">
+               <div class="c-title" style="color: ${primaryColor}">${label_title}</div>
+               <div class="c-no">Ref: #${escapeHtml(docNumber)}</div>
+               <div class="c-no">Date: ${escapeHtml(docDate)}</div>
+            </div>
+         </div>
       </div>
-      `;
+      <div class="content-padding">
+         <div class="compact-strip" style="background: ${primaryColor}08; border-left: 3px solid ${primaryColor}">
+            <strong>${label_recipient}:</strong> ${escapeHtml(customerName)} &bull; ${escapeHtml(customerAddress)}
+         </div>
+         ${status_badge}
+         ${generateTableHtml('compact-table')}
+      </div>
+    `;
   } else {
-    // Classic Template (Default)
-    contentHtml = `
-      <div class="header-classic">
-        <div class="company-block">
-          ${logo ? `<img class="logo-img" src="${logo}" />` : ''}
-          <div class="company-name">${escapeHtml(name)}</div>
-          <div class="company-meta">${escapeHtml(address)}</div>
-          <div class="company-meta">${escapeHtml(email)} | ${escapeHtml(phone)}</div>
-        </div>
-        <div class="invoice-title-block">
-          <div class="invoice-title">INVOICE</div>
-          <div class="invoice-meta">No. ${escapeHtml(invoiceNumber)}</div>
-          <div class="invoice-meta">Date: ${escapeHtml(issuanceDate)}</div>
-        </div>
-      </div>
-      <div class="divider-double"></div>
-
-      <div class="body-content">
-        <div class="bill-to-section">
-           <div class="label">TO:</div>
-           <div class="customer-name">${escapeHtml(customerName)}</div>
-           <div class="customer-address">${escapeHtml(customerAddress)}</div>
-           <div class="customer-contact">${escapeHtml(customerContact)}</div>
-        </div>
-
-        <table class="classic-table">
-          <thead>
-            <tr>
-              <th class="col-desc">DESCRIPTION</th>
-              <th class="col-qty">QTY</th>
-              <th class="col-price">PRICE</th>
-              <th class="col-total">AMOUNT</th>
-            </tr>
-          </thead>
-          <tbody>${itemsRows}</tbody>
-        </table>
-
-        <div class="summary-section">
-           <div class="left-area">
-              <div class="amount-words"><strong>Amount in Words:</strong> ${escapeHtml(amountWords)}</div>
-              ${bankDetailsBlock}
-           </div>
-           <div class="totals-area">
-              <div class="total-row"><span>Subtotal</span> <span>${currencySymbol}${subtotal.toFixed(2)}</span></div>
-              <div class="total-row grand-total"><span>Total</span> <span>${currencySymbol}${grand.toFixed(2)}</span></div>
+    // Classic (Premium Default)
+    layoutHtml = `
+      <div class="content-padding">
+        <div class="classic-header">
+           <div class="classic-left">${logoImg}</div>
+           <div class="classic-right align-right">
+              <div class="classic-title" style="color: ${primaryColor}">${label_title}</div>
+              <div class="classic-id">${label_no}: #${escapeHtml(docNumber)}</div>
+              <div class="classic-date">${label_date}: ${escapeHtml(docDate)}</div>
+              ${status_badge}
            </div>
         </div>
-
-        <div class="footer-area">
-          <div class="signature-wrapper">${signatureBlock}</div>
-          ${terms ? `<div class="terms"><strong>Terms & Conditions:</strong> ${escapeHtml(terms)}</div>` : ''}
-          <div class="classic-footer-line">Thank you for your business.</div>
+        <div class="classic-divider" style="border-color:${primaryColor}"></div>
+        <div class="row spacing-30">
+           <div class="col">
+              <div class="company-name-classic" style="color:${primaryColor}">${escapeHtml(name)}</div>
+              <div class="company-meta">${escapeHtml(address)}</div>
+              <div class="company-meta">${escapeHtml(email)}</div>
+              <div class="company-meta">${escapeHtml(phone)}</div>
+           </div>
+           <div class="col align-right">
+              <div class="label-muted">PREPARED FOR</div>
+              <div class="client-name-classic">${escapeHtml(customerName)}</div>
+              <div class="client-meta">${escapeHtml(customerAddress)}</div>
+              <div class="client-meta">${escapeHtml(customerContact)}</div>
+           </div>
         </div>
+        ${generateTableHtml('classic-table')}
       </div>
     `;
   }
 
+  // Common Footer & Totals Section
+  const totalsHtml = `
+    <div class="content-padding total-section-wrapper">
+      <div class="row total-row-main">
+        <div class="col bottom-left">
+           <div class="amount-in-words">
+              <div class="label-muted">AMOUNT IN WORDS</div>
+              <div class="words-val">${escapeHtml(amountWords)}</div>
+           </div>
+           ${!isReceipt && (bankName || accountNumber) ? `
+           <div class="bank-details-box">
+              <div class="label-muted">PAYMENT INFORMATION</div>
+              <div class="bank-val"><strong>Bank:</strong> ${escapeHtml(bankName)}</div>
+              <div class="bank-val"><strong>A/C Name:</strong> ${escapeHtml(accountName)}</div>
+              <div class="bank-val"><strong>A/C No:</strong> ${escapeHtml(accountNumber)}</div>
+           </div>
+           ` : ''}
+           ${terms ? `<div class="terms-label">Notes / Terms</div><div class="terms-val">${escapeHtml(terms)}</div>` : ''}
+        </div>
+        <div class="col bottom-right align-right">
+           <div class="total-card" style="border-top: 4px solid ${primaryColor}">
+              <div class="t-row"><span>Total Amount</span><span>${currencySymbol}${subtotal.toFixed(2)}</span></div>
+              <div class="t-row grand" style="color: ${primaryColor}"><span>${isReceipt ? 'TOTAL PAID' : 'GRAND TOTAL'}</span><span>${currencySymbol}${totalAmount.toFixed(2)}</span></div>
+           </div>
+           <div class="signature-area">
+              ${signatureImg}
+              <div class="sig-line"></div>
+              <div class="sig-text">Authorized Signature</div>
+           </div>
+        </div>
+      </div>
+      <div class="legal-footer">
+        ${template === 'classic'
+      ? `This document is legally binding and generated via YMOBooks Accounting &bull; Copyright &copy; ${new Date().getFullYear()}`
+      : `This document is legally binding and generated by ${escapeHtml(name)}. Any alteration renders this ${type} invalid &bull; Copyright &copy; ${new Date().getFullYear()}`
+    }
+      </div>
+    </div>
+  `;
+
   return `<!DOCTYPE html>
   <html>
-    <head>
-      <meta charset="utf-8" />
-      <title>Invoice ${invoiceNumber}</title>
-      <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Merriweather:wght@400;700&family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
-      <style>
-        /* GLOBAL RESET & A4 SETUP */
-        * { box-sizing: border-box; }
-        body { 
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+    <title>${label_title} ${docNumber}</title>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Playfair+Display:wght@700;900&display=swap" rel="stylesheet">
+    <style>
+      :root {
+        --primary: ${primaryColor};
+        --text: #1e293b;
+        --muted: #64748b;
+        --border: #e2e8f0;
+      }
+      * { box-sizing: border-box; }
+      body { 
+        margin: 0; padding: 0; 
+        font-family: 'Plus Jakarta Sans', sans-serif; 
+        background-color: #f8fafc; 
+        color: var(--text);
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+      @page { size: A4; margin: 0; }
+      
+      .page-container {
+        width: 210mm;
+        min-height: 297mm;
+        margin: 20px auto;
+        background: white;
+        position: relative;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        box-shadow: 0 20px 50px rgba(0,0,0,0.1);
+      }
+
+      @media screen and (max-width: 210mm) {
+        body { background: white; }
+        .page-container { 
+          width: 100%; 
           margin: 0; 
-          padding: 0; 
-          font-family: 'Inter', sans-serif; 
-          background: #f0f0f0; 
-          -webkit-print-color-adjust: exact; 
-          color: #333;
+          box-shadow: none;
+          transform-origin: top left;
         }
-        
-        @page { size: A4; margin: 0; }
-        
-        .page-container {
-          width: 210mm;
-          min-height: 297mm;
-          margin: 0 auto;
-          background: white;
-          padding: 15mm;
-          position: relative;
-          box-shadow: 0 0 10px rgba(0,0,0,0.1);
+      }
+
+      @media print {
+        body { background: white; padding: 0; }
+        .page-container { width: 100%; height: 100%; margin: 0; box-shadow: none; border-radius: 0; }
+      }
+
+      /* SHARED STYLES */
+      .content-padding { padding: 45px; }
+      .row { display: flex; justify-content: space-between; }
+      .col { display: flex; flex-direction: column; }
+      .align-right { text-align: right; }
+      .center { text-align: center; }
+      .right { text-align: right; }
+      .spacing-20 { margin-top: 20px; }
+      .spacing-30 { margin-top: 30px; }
+      .spacing-40 { margin-top: 40px; }
+      .label-muted { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 6px; }
+      
+      img.logo-img { max-width: 160px; max-height: 90px; object-fit: contain; margin-bottom: 12px; }
+      .logo-placeholder { background: #f1f5f9; width: 70px; height: 70px; border-radius: 16px; display: flex; align-items: center; justify-content: center; font-size: 32px; font-weight: 800; margin-bottom: 12px; }
+      
+      .badge-status.paid { 
+        background: #10b981; color: white; padding: 8px 18px; border-radius: 6px; 
+        font-weight: 800; font-size: 13px; display: inline-block; margin: 15px 0;
+        box-shadow: 0 4px 6px -1px rgba(16, 185, 129, 0.2);
+      }
+
+      table { width: 100%; border-collapse: separate; border-spacing: 0; margin: 35px 0; }
+      th { padding: 15px; text-align: left; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; border-bottom: 2px solid var(--border); }
+      td { padding: 15px; border-bottom: 1px solid var(--border); font-size: 14px; color: #334155; }
+      .alt-row { background-color: #f8fafc; }
+
+      .total-section-wrapper { margin-top: auto; border-top: 1px solid #f1f5f9; background: #fafafa; padding-bottom: 30px; }
+      .total-card { background: white; padding: 25px; border-radius: 12px; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.05); min-width: 280px; }
+      .t-row { display: flex; justify-content: space-between; font-size: 15px; margin-bottom: 10px; color: var(--muted); }
+      .t-row.grand { font-size: 22px; font-weight: 800; margin-top: 15px; padding-top: 15px; border-top: 1px dashed #e2e8f0; }
+      
+      .amount-in-words { margin-bottom: 30px; padding: 15px; background: white; border-radius: 8px; border-left: 4px solid var(--primary); }
+      .words-val { font-size: 13px; font-style: italic; color: #475569; font-weight: 600; text-transform: capitalize; }
+      
+      .bank-details-box { background: #fdfdfd; padding: 18px; border-radius: 10px; border: 1px solid #e2e8f0; margin-bottom: 25px; font-size: 12px; color: #475569; }
+      .bank-val { margin-bottom: 4px; }
+      .terms-label { font-size: 11px; font-weight: 800; color: var(--muted); text-transform: uppercase; margin-bottom: 8px; }
+      .terms-val { font-size: 11px; line-height: 1.6; color: #64748b; white-space: pre-wrap; }
+
+      .signature-area { margin-top: 35px; display: flex; flex-direction: column; align-items: flex-end; }
+      img.signature-img { max-width: 160px; max-height: 70px; margin-bottom: 8px; }
+      .sig-line { width: 200px; border-bottom: 2px solid #1e293b; margin-bottom: 6px; }
+      .sig-text { font-size: 11px; font-weight: 800; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; }
+
+      .legal-footer { text-align: center; font-size: 10px; color: #94a3b8; padding: 30px 45px 0 45px; border-top: 1px solid #f1f5f9; margin-top: 25px; }
+
+      /* TEMPLATE SPECIFICS */
+      
+      /* MODERN */
+      .modern-header { padding: 45px; color: white; }
+      .logo-white { height: 65px; }
+      .logo-placeholder-white { background: rgba(255,255,255,0.2); width: 60px; height: 60px; border-radius: 12px; font-weight: 800; display: flex; align-items: center; justify-content: center; margin-bottom: 12px; font-size: 28px; }
+      .company-name-white { font-size: 24px; font-weight: 800; letter-spacing: -0.5px; }
+      .doc-title-white { font-size: 36px; font-weight: 900; letter-spacing: -1.5px; margin-bottom: 10px; }
+      .doc-meta-white { font-size: 14px; font-weight: 500; opacity: 0.9; }
+      .modern-table th { background: transparent; color: var(--primary); }
+
+      /* BOLD */
+      .bold-sidebar { position: absolute; left: 0; top: 0; bottom: 0; width: 20px; }
+      .huge-title { font-size: 55px; font-weight: 900; line-height: 1; margin-bottom: 20px; opacity: 0.08; position: absolute; right: 45px; top: 45px; pointer-events: none; }
+      .company-title { font-size: 28px; font-weight: 900; margin-top: 15px; }
+      .bold-table th { border-radius: 0; border-bottom: 3px solid var(--primary); }
+
+      /* MINIMAL */
+      .minimal-header { display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 3px solid #000; padding-bottom: 25px; margin-bottom: 45px; }
+      .minimal-brand { display: flex; align-items: center; gap: 18px; font-weight: 900; font-size: 22px; }
+      .minimal-title { font-size: 20px; font-weight: 300; letter-spacing: 12px; text-transform: uppercase; }
+      .min-name { font-size: 20px; font-weight: 800; }
+      .min-meta { font-size: 14px; color: var(--muted); }
+
+      /* COMPACT */
+      .compact-header { padding: 25px 45px; background: #fff; }
+      .flex-row { flex-direction: row !important; align-items: center; gap: 18px; }
+      .compact-brand .c-name { font-size: 20px; font-weight: 900; }
+      .compact-brand .c-meta { font-size: 13px; color: var(--muted); }
+      .c-title { font-size: 24px; font-weight: 900; }
+      .compact-strip { padding: 15px 25px; font-size: 13px; border-radius: 8px; margin: 25px 0; }
+
+      /* CLASSIC */
+      .classic-title { font-family: 'Playfair Display', serif; font-size: 44px; font-weight: 900; margin-bottom: 5px; }
+      .classic-divider { height: 6px; border-top: 2px solid #000; border-bottom: 1px solid #000; margin: 15px 0 45px 0; }
+      .company-name-classic { font-family: 'Playfair Display', serif; font-size: 28px; font-weight: 900; margin-bottom: 8px; }
+      .client-name-classic { font-size: 18px; font-weight: 800; margin-bottom: 5px; }
+    </style>
+    <script>
+      function adjustScale() {
+        const container = document.querySelector('.page-container');
+        const width = window.innerWidth;
+        const targetWidth = 210 * 3.7795275591; 
+        if (width < targetWidth) {
+          const scale = (width - 20) / targetWidth;
+          container.style.transform = 'scale(' + scale + ')';
+          container.style.transformOrigin = 'top center';
+          container.style.width = targetWidth + 'px';
+          container.style.margin = '10px auto';
+        } else {
+          container.style.transform = 'none';
+          container.style.margin = '20px auto';
         }
-
-        @media print {
-          body { background: white; }
-          .page-container { width: 100%; height: 100%; box-shadow: none; margin: 0; padding: 15mm; }
-        }
-
-        /* UTILS */
-        .align-right { text-align: right; }
-        .row { display: flex; justify-content: space-between; }
-        .col { display: flex; flex-direction: column; }
-        
-        img.logo-img { max-width: 120px; max-height: 80px; object-fit: contain; margin-bottom: 10px; }
-        
-        table { width: 100%; border-collapse: collapse; margin-top: 20px; margin-bottom: 20px; }
-        th, td { padding: 10px; text-align: left; }
-        th.col-qty, td.col-qty { text-align: center; width: 60px; }
-        th.col-price, td.col-price { text-align: right; width: 120px; }
-        th.col-total, td.col-total { text-align: right; width: 120px; }
-        
-        .summary-section { display: flex; justify-content: space-between; margin-top: 20px; page-break-inside: avoid; }
-        .left-area { flex: 1; padding-right: 40px; }
-        .totals-area { width: 300px; }
-        .total-row { display: flex; justify-content: space-between; padding: 6px 0; }
-        .grand-total { font-weight: 700; font-size: 1.2em; border-top: 2px solid #eee; margin-top: 5px; padding-top: 10px; }
-
-        .bank-details { margin-top: 20px; font-size: 0.9em; background: #f9fafb; padding: 12px; border-radius: 4px; }
-        .bank-details .section-title { font-weight: 700; margin-bottom: 4px; font-size: 0.95em; }
-        .bank-details .info-row span { font-weight: 600; color: #666; width: 100px; display: inline-block; }
-
-        .amount-words { font-style: italic; color: #555; margin-bottom: 10px; font-size: 0.9em; }
-
-        .footer-area { margin-top: 40px; page-break-inside: avoid; }
-        .signature-wrapper { margin-bottom: 20px; height: 100px; }
-        .signature-block img { max-height: 80px; }
-        .signature-block .line { width: 200px; border-bottom: 1px solid #333; margin-top: 5px; }
-        .signature-block .label { font-size: 0.8em; margin-top: 4px; color: #555; }
-        
-        .terms { font-size: 0.85em; color: #666; margin-top: 15px; white-space: pre-wrap; }
-
-        /* --- THEME SPECIFICS --- */
-
-        /* MODERN */
-        .header-modern { display: flex; flex-direction: column; margin: -15mm -15mm 20px -15mm; padding: 15mm 15mm 20px 15mm; }
-        .header-modern .header-content { display: flex; justify-content: space-between; align-items: center; }
-        .header-modern .brand-area { display: flex; align-items: center; gap: 15px; }
-        .header-modern .company-name { font-size: 1.8em; font-weight: 700; }
-        .header-modern .invoice-title-area { text-align: right; }
-        .header-modern .invoice-badge { background: rgba(255,255,255,0.2); padding: 4px 12px; border-radius: 4px; font-weight: 600; display: inline-block; margin-bottom: 5px; }
-        .header-modern .invoice-number { font-size: 1.2em; }
-        .modern-table th { background: #f3f4f6; color: #333; font-weight: 700; text-transform: uppercase; font-size: 0.85em; }
-        .modern-table tr { border-bottom: 1px solid #eee; }
-
-        /* BOLD */
-        .header-bold .top-bar { height: 10px; margin: -15mm -15mm 20px -15mm; }
-        .header-bold .header-inner { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 30px; }
-        .header-bold .company-name { font-size: 2.5em; font-weight: 900; letter-spacing: -1px; line-height: 1; }
-        .header-bold .invoice-big-title { font-size: 4em; font-weight: 900; opacity: 0.1; line-height: 0.8; }
-        .bold-table th { padding: 12px; }
-        .bold-table tr { border-bottom: 2px solid #eee; }
-        .client-box { padding-left: 15px; }
-        .client-box .big { font-size: 1.4em; font-weight: 700; margin: 5px 0; }
-        .details-box .detail-row { display: flex; justify-content: flex-end; margin-bottom: 5px; }
-        .details-box .label { font-weight: 600; margin-right: 10px; color: #777; }
-
-        /* MINIMAL */
-        .minimal-layout { font-family: 'Inter', sans-serif; }
-        .header-minimal { display: flex; justify-content: space-between; align-items: flex-start; }
-        .header-minimal .company-name { font-weight: 700; font-size: 1.4em; }
-        .header-minimal .invoice-title { font-weight: 300; font-size: 2em; letter-spacing: 2px; color: #333; }
-        .header-minimal .invoice-ref { text-align: right; font-weight: 600; color: #777; }
-        .separator-line { height: 1px; background: #eee; margin: 20px 0; }
-        .minimal-table th { border-bottom: 1px solid #333; padding-bottom: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; font-size: 0.8em; }
-        .minimal-table td { padding: 15px 10px; }
-
-        /* COMPACT */
-        .compact-layout { font-size: 0.9em; }
-        .header-compact { margin-bottom: 15px; padding-bottom: 15px; }
-        .header-compact .company-name { font-weight: 700; font-size: 1.4em; text-align: right; }
-        .header-compact .invoice-title { font-weight: 900; font-size: 1.8em; }
-        .header-compact .meta-bar { background: #f9fafb; padding: 10px; display: flex; justify-content: space-between; border-radius: 4px; border: 1px solid #eee; }
-        .compact-table th { font-size: 0.85em; text-transform: uppercase;  }
-        .compact-table td { padding: 8px 10px; }
-        
-        /* CLASSIC */
-        .header-classic { text-align: center; }
-        .header-classic .company-name { font-family: 'Playfair Display', serif; font-size: 2.2em; color: #222; margin: 10px 0; }
-        .divider-double { border-top: 1px solid #333; border-bottom: 1px solid #333; height: 3px; margin: 20px 0; }
-        .invoice-title-block { margin: 20px 0; text-align: center; }
-        .invoice-title-block .invoice-title { font-size: 1.4em; font-weight: 600; letter-spacing: 3px; border: 1px solid #333; display: inline-block; padding: 8px 30px; margin-bottom: 10px; }
-        .bill-to-section .label { font-weight: 700; font-size: 0.8em; color: #666; margin-bottom: 4px; }
-        .bill-to-section .customer-name { font-size: 1.2em; font-weight: 700; }
-        .classic-table th { border-bottom: 2px solid #333; font-family: 'Playfair Display', serif; font-weight: 700; }
-        .classic-table td { border-bottom: 1px solid #eee; }
-        .classic-footer-line { text-align: center; margin-top: 30px; font-style: italic; color: #777; font-family: 'Playfair Display', serif; }
-
-      </style>
-    </head>
-    <body>
-      <div class="page-container">
-        ${contentHtml}
-      </div>
-    </body>
+      }
+      window.onload = adjustScale;
+      window.onresize = adjustScale;
+    </script>
+  </head>
+  <body>
+    <div class="page-container">
+      ${layoutHtml}
+      ${totalsHtml}
+    </div>
+  </body>
   </html>`;
 }
 
-// --- Utils ---
-
-function getThemeFor(tpl, brand) {
-  // Helper to adjust color brightness
+function getThemeColors(tpl, primary) {
   const shade = (col, amt) => {
     let usePound = false;
-    if (col[0] == "#") {
-      col = col.slice(1);
-      usePound = true;
-    }
+    if (col[0] == "#") { col = col.slice(1); usePound = true; }
     let num = parseInt(col, 16);
-    let r = (num >> 16) + amt;
-    if (r > 255) r = 255;
-    else if (r < 0) r = 0;
-    let b = ((num >> 8) & 0x00FF) + amt;
-    if (b > 255) b = 255;
-    else if (b < 0) b = 0;
-    let g = (num & 0x0000FF) + amt;
-    if (g > 255) g = 255;
-    else if (g < 0) g = 0;
-    return (usePound ? "#" : "") + (g | (b << 8) | (r << 16)).toString(16);
+    if (isNaN(num)) return col;
+    let r = (num >> 16) + amt; r = Math.min(255, Math.max(0, r));
+    let g = ((num >> 8) & 0x00FF) + amt; g = Math.min(255, Math.max(0, g));
+    let b = (num & 0x0000FF) + amt; b = Math.min(255, Math.max(0, b));
+    return (usePound ? "#" : "") + (b | (g << 8) | (r << 16)).toString(16).padStart(6, '0');
   };
 
   switch (tpl) {
-    case 'modern': return { primary: brand, accent: shade(brand, -20), headerText: '#ffffff' };
-    case 'bold': return { primary: brand, accent: '#e5e7eb' };
-    case 'compact': return { primary: brand };
-    default: return { primary: brand };
+    case 'modern': return { primary, accent: shade(primary, -30) };
+    case 'bold': return { primary, accent: '#E5E7EB' };
+    case 'minimal': return { primary: '#111827', accent: '#6B7280' };
+    case 'compact': return { primary, accent: shade(primary, -20) };
+    default: return { primary, accent: shade(primary, -20) };
   }
 }
 
-// Map currency symbol to common currency name; default to symbol if unknown
 function currencyNameForSymbol(sym) {
   const s = String(sym || '').trim();
   switch (s) {
@@ -560,43 +485,22 @@ function currencyNameForSymbol(sym) {
 }
 
 function amountToWordsWithCurrencyNameOnly(amount, currencySymbol) {
-  const n = Math.abs(Number(amount || 0));
-  const whole = Math.floor(n);
-  const words = numberToWords(whole);
-  const cname = currencyNameForSymbol(currencySymbol);
-  return `${words} ${cname} Only`;
+  const n = Math.floor(Math.abs(Number(amount || 0)));
+  if (n === 0) return 'Zero ' + currencyNameForSymbol(currencySymbol) + ' Only';
+  return numberToWords(n) + ' ' + currencyNameForSymbol(currencySymbol) + ' Only';
 }
 
 function numberToWords(num) {
-  // Simple implementation for demo purposes
-  // In prod, use a robust library
-  num = Math.floor(Math.abs(Number(num || 0)));
-  if (num === 0) return 'Zero';
-
-  const a = ['', 'One ', 'Two ', 'Three ', 'Four ', 'Five ', 'Six ', 'Seven ', 'Eight ', 'Nine ', 'Ten ', 'Eleven ', 'Twelve ', 'Thirteen ', 'Fourteen ', 'Fifteen ', 'Sixteen ', 'Seventeen ', 'Eighteen ', 'Nineteen '];
-  const b = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
-
-  const inWords = (n) => {
-    if ((n = n.toString()).length > 9) return 'overflow';
-    let n_array = ('000000000' + n).substr(-9).match(/^(\d{2})(\d{2})(\d{2})(\d{1})(\d{2})$/);
-    if (!n_array) return;
-    let str = '';
-    str += (n_array[1] != 0) ? (a[Number(n_array[1])] || b[n_array[1][0]] + ' ' + a[n_array[1][1]]) + 'Crore ' : '';
-    str += (n_array[2] != 0) ? (a[Number(n_array[2])] || b[n_array[2][0]] + ' ' + a[n_array[2][1]]) + 'Lakh ' : '';
-    // Simplified standard mapping
-    return convertThreeDigits(n);
-  };
-
-  // Better custom recursive function for standard billions/millions
   const ones = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'];
   const tens = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
   const scales = ['', 'Thousand', 'Million', 'Billion', 'Trillion'];
 
   let words = '';
   let scaleIndex = 0;
+  let n = num;
 
-  while (num > 0) {
-    let chunk = num % 1000;
+  while (n > 0) {
+    let chunk = n % 1000;
     if (chunk > 0) {
       let chunkStr = '';
       if (chunk >= 100) {
@@ -612,10 +516,8 @@ function numberToWords(num) {
       }
       words = chunkStr + scales[scaleIndex] + ' ' + words;
     }
-    num = Math.floor(num / 1000);
+    n = Math.floor(n / 1000);
     scaleIndex++;
   }
   return words.trim();
 }
-
-function convertThreeDigits(n) { return '...'; } // Stub not used, logic inline above

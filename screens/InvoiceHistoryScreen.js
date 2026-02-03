@@ -11,7 +11,7 @@ import * as FileSystemLegacy from 'expo-file-system/legacy';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import { WebView } from 'react-native-webview';
-import { buildInvoiceHtml } from '../utils/invoiceHtml';
+import { buildInvoiceHtml, buildReceiptHtml } from '../utils/invoiceHtml';
 
 const InvoiceHistoryScreen = ({ navigation, route }) => {
   const [loading, setLoading] = useState(true);
@@ -131,22 +131,23 @@ const InvoiceHistoryScreen = ({ navigation, route }) => {
 
   const toDataUrl = async (rawUri) => {
     const uri = resolveAssetUri(rawUri);
-    if (!uri) return '';
+    if (!uri || typeof uri !== 'string') return '';
     if (uri.startsWith('data:')) return uri;
     try {
+      const ext = (uri.split(/[#?]/)[0].split('.').pop() || '').toLowerCase();
+      const mime = ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : (ext === 'jpg' || ext === 'jpeg') ? 'image/jpeg' : 'image/png';
+
       if (uri.startsWith('file:')) {
         const base64 = await FileSystemLegacy.readAsStringAsync(uri, { encoding: 'base64' });
-        // best-effort mime
-        const ext = (uri.split('?')[0].split('#')[0].split('.').pop() || '').toLowerCase();
-        const mime = ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : (ext === 'jpg' || ext === 'jpeg') ? 'image/jpeg' : 'image/*';
         return `data:${mime};base64,${base64}`;
       } else {
-        const tmp = `${FileSystem.cacheDirectory}img-${Date.now()}`;
+        const tmp = `${FileSystem.cacheDirectory}img-${Date.now()}.${ext || 'png'}`;
         const dl = await FileSystemLegacy.downloadAsync(uri, tmp);
         const base64 = await FileSystemLegacy.readAsStringAsync(dl.uri, { encoding: 'base64' });
-        return `data:image/*;base64,${base64}`;
+        return `data:${mime};base64,${base64}`;
       }
-    } catch (_e) {
+    } catch (err) {
+      console.warn('[toDataUrl] Failed:', err.message);
       return uri;
     }
   };
@@ -237,76 +238,7 @@ const InvoiceHistoryScreen = ({ navigation, route }) => {
     }
   };
 
-  const buildReceiptHtml = (opts) => {
-    const { company = {}, invoiceNumber, customer = {}, amountPaid = 0, receiptNumber, receiptDate, currencySymbol = '₦', brandColor = '#16a34a' } = opts || {};
-    const name = company?.companyName || company?.name || 'Your Company';
-    const address = company?.address || '';
-    const email = company?.email || '';
-    const phone = company?.phoneNumber || '';
-    const logo = company?.logo || '';
-    const signature = company?.signature || '';
-    const custName = customer?.name || '';
-    const custAddr = customer?.address || '';
-    const custContact = customer?.contact || '';
-    const safe = (s) => (s == null ? '' : String(s));
-    const escapeHtml = (s) => safe(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', '\'': '&#39;' }[c]));
-    return `<!DOCTYPE html><html><head><meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Receipt ${escapeHtml(receiptNumber || '')}</title>
-    <style>
-      body{font-family:Arial,Helvetica,sans-serif;background:#f6f7fb;color:#111;margin:0;padding:0}
-      .page{max-width:860px;margin:0 auto;padding:24px}
-      .card{background:#fff;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden}
-      .header{display:flex;justify-content:space-between;align-items:center;padding:16px 24px;border-bottom:1px solid #e5e7eb}
-      .title{font-size:22px;font-weight:700;color:${brandColor}}
-      .paid{background:${brandColor};color:#fff;padding:4px 8px;border-radius:999px;font-size:12px;margin-left:8px}
-      .logo{height:48px}
-      .section{padding:16px 24px}
-      .row{display:flex;gap:12px}
-      .label{font-size:12px;color:#6b7280;margin-bottom:4px}
-      .text{font-size:14px;color:#111}
-      .meta{font-size:13px;color:#374151}
-      .hint{font-size:12px;color:#6b7280;padding:0 24px 16px}
-      .signature{width:140px;height:70px;object-fit:contain;margin-top:8px}
-    </style>
-    </head><body>
-      <div class="page"><div class="card">
-        <div class="header">
-          <div style="display:flex;align-items:center;gap:12px">
-            ${logo ? `<img src="${logo}" class="logo" />` : ''}
-            <div>
-              <div class="title">RECEIPT <span class="paid">PAID</span></div>
-              <div class="meta">Receipt: ${escapeHtml(receiptNumber || '')}</div>
-              <div class="meta">Invoice: ${escapeHtml(invoiceNumber || '')}</div>
-              <div class="meta">Date: ${escapeHtml(receiptDate || '')}</div>
-            </div>
-          </div>
-          <div style="text-align:right">
-            <div class="text">${escapeHtml(name)}</div>
-            ${address ? `<div class="meta">${escapeHtml(address)}</div>` : ''}
-            ${email ? `<div class="meta">Email: ${escapeHtml(email)}</div>` : ''}
-            ${phone ? `<div class="meta">Phone: ${escapeHtml(phone)}</div>` : ''}
-          </div>
-        </div>
-        <div class="section">
-          <div class="row">
-            <div style="flex:1">
-              <div class="label">Received from</div>
-              <div class="text">${escapeHtml(custName)}</div>
-              <div class="meta">${escapeHtml(custAddr)}</div>
-              <div class="meta">${escapeHtml(custContact)}</div>
-            </div>
-            <div style="flex:1;text-align:right">
-              <div class="label">Amount Paid</div>
-              <div class="text" style="font-size:18px;font-weight:700">${escapeHtml(currencySymbol)}${Number(amountPaid || 0).toFixed(2)}</div>
-            </div>
-          </div>
-        </div>
-        ${signature ? `<div class="section"><div class="label">Authorized Signature</div><img src="${signature}" class="signature"/></div>` : ''}
-        <div class="hint">This receipt acknowledges payment for the above invoice.</div>
-      </div></div>
-    </body></html>`;
-  };
+  // buildReceiptHtml is now imported from utils/invoiceHtml
 
   const openReceiptPreview = async (item) => {
     try {
@@ -318,13 +250,31 @@ const InvoiceHistoryScreen = ({ navigation, route }) => {
       const currencySymbol = resolveCurrencySymbol(item, company);
       const receiptDate = dayjs().format('YYYY-MM-DD');
       const html = buildReceiptHtml({
-        company: { ...company, logo: resolvedLogo, signature: resolvedSignature },
-        invoiceNumber: item.invoiceNumber,
+        company: {
+          name: company?.companyName,
+          address: company?.address,
+          email: company?.email,
+          phone: company?.phoneNumber,
+          bankName: company?.bankName,
+          accountName: company?.bankAccountName,
+          accountNumber: company?.bankAccountNumber,
+          logo: resolvedLogo,
+          signature: resolvedSignature,
+          brandColor: company?.brandColor,
+          termsAndConditions: company?.termsAndConditions,
+        },
+        invoice: {
+          customerName: item?.customer?.name,
+          customerAddress: item?.customer?.address,
+          customerContact: item?.customer?.contact,
+          invoiceNumber: item.invoiceNumber,
+        },
+        items: item.items || [], // Ensure items are passed
         receiptNumber: `RCT-${company?.companyId || 'LOCAL'}-${Date.now()}`,
         receiptDate,
-        customer: item.customer || {},
         amountPaid: Number(item.grandTotal || 0),
         currencySymbol,
+        template: company?.receiptTemplate || 'classic',
         brandColor: company.brandColor || '#16a34a',
       });
       setPreviewTitle(`${item.invoiceNumber} — Receipt Preview (PAID)`);

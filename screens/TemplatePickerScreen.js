@@ -517,38 +517,29 @@ export default function TemplatePickerScreen({ navigation }) {
     if (previewVisible) {
       (async () => {
         try {
-          const guessMime = (u) => {
-            const ext = (u || '').split('?')[0].split('#')[0].split('.').pop()?.toLowerCase() || '';
-            if (ext === 'jpg' || ext === 'jpeg') return 'image/jpeg';
-            if (ext === 'png') return 'image/png';
-            if (ext === 'gif') return 'image/gif';
-            if (ext === 'webp') return 'image/webp';
-            return 'image/*';
-          };
-
           const toDataUrl = async (uri) => {
-            if (!uri) return '';
+            if (!uri || typeof uri !== 'string') return '';
             if (uri.startsWith('data:')) return uri;
             try {
               if (Platform.OS === 'web') {
-                return uri; // Web can usually handle URLs, or we'd need fetch->blob logic
+                return uri;
               } else {
+                const ext = (uri.split(/[#?]/)[0].split('.').pop() || '').toLowerCase();
+                const mime = ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : (ext === 'jpg' || ext === 'jpeg') ? 'image/jpeg' : 'image/png';
+
                 if (uri.startsWith('file:')) {
                   const base64 = await FileSystemLegacy.readAsStringAsync(uri, { encoding: 'base64' });
-                  const mime = guessMime(uri);
                   return `data:${mime};base64,${base64}`;
                 } else {
-                  // Remote URL? Download to cache first
-                  const tmp = `${FileSystem.cacheDirectory}img-${Date.now()}`;
+                  const tmp = `${FileSystem.cacheDirectory}img-${Date.now()}.${ext || 'png'}`;
                   const dl = await FileSystemLegacy.downloadAsync(uri, tmp);
                   const base64 = await FileSystemLegacy.readAsStringAsync(dl.uri, { encoding: 'base64' });
-                  const mime = guessMime(uri);
                   return `data:${mime};base64,${base64}`;
                 }
               }
             } catch (err) {
-              console.warn('[Preview] Image load failed:', err);
-              return '';
+              console.warn('[toDataUrl] Failed:', err.message);
+              return uri;
             }
           };
 
