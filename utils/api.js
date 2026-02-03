@@ -42,7 +42,8 @@ export async function updateCompany(payload) {
   // Backward-compatible: allow updateCompany(companyId, payload)
   let bodyPayload = payload;
   if (typeof payload === 'string') {
-    bodyPayload = { companyId: payload };
+    const data = arguments.length > 1 ? arguments[1] : {};
+    bodyPayload = { ...data, companyId: payload };
   } else if (payload && typeof payload === 'object' && !payload.companyId && arguments.length > 1) {
     const companyId = arguments[0];
     const data = arguments[1];

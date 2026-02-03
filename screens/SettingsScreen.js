@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, Alert, TextInput, ScrollView, RefreshControl } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, Alert, TextInput, ScrollView, RefreshControl, Image } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as ImagePicker from 'expo-image-picker';
 import { Colors } from '../constants/Colors';
 import { Fonts } from '../constants/Fonts';
 import { Spacing } from '../constants/Spacing';
@@ -20,6 +21,14 @@ const SettingsScreen = ({ navigation }) => {
   const [currencySymbol, setCurrencySymbol] = useState('');
   const [saving, setSaving] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+
+  // New state for branding
+  const [logo, setLogo] = useState(null);
+  const [signature, setSignature] = useState(null);
+  const [showAdvanced, setShowAdvanced] = useState(false);
+
+  // Local state for company object
+  const [company, setCompany] = useState(null);
 
   const symbolToCode = (sym) => {
     switch (String(sym || '').trim()) {
@@ -44,6 +53,9 @@ const SettingsScreen = ({ navigation }) => {
     setAccountNumber(c?.bankAccountNumber || c?.accountNumber || '');
     setCountry(c?.country || '');
     setCurrencySymbol(c?.currencySymbol || '$');
+
+    setLogo(c?.logo || null);
+    setSignature(c?.signature || null);
   };
 
   useEffect(() => {
@@ -64,7 +76,28 @@ const SettingsScreen = ({ navigation }) => {
     } catch (_) { }
   };
 
-  // ... (onRefresh, handleLogout same as before) 
+  const pickImage = async (type) => {
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: type === 'logo' ? [1, 1] : [2, 1], // square for logo, wide for signature
+        quality: 0.5,
+        base64: true,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const uri = result.assets[0].uri;
+        const base64 = result.assets[0].base64;
+        const dataUrl = `data:image/jpeg;base64,${base64}`;
+        if (type === 'logo') setLogo(dataUrl);
+        else setSignature(dataUrl);
+      }
+    } catch (e) {
+      Alert.alert('Error', 'Could not pick image');
+    }
+  };
+
   const onRefresh = async () => {
     setRefreshing(true);
     try {
@@ -92,7 +125,7 @@ const SettingsScreen = ({ navigation }) => {
     setSaving(true);
     try {
       const payload = {
-        companyId: company.companyId,
+        companyId: String(company.companyId).trim(),
         name,
         address,
         email,
@@ -105,6 +138,8 @@ const SettingsScreen = ({ navigation }) => {
         country: String(country || '').trim() || undefined,
         currencySymbol,
         currencyCode: symbolToCode(currencySymbol),
+        logo,
+        signature
       };
 
       const res = await updateCompany(payload);
@@ -135,6 +170,8 @@ const SettingsScreen = ({ navigation }) => {
           country: payload.country || '',
           currencySymbol: payload.currencySymbol,
           currencyCode: payload.currencyCode,
+          logo: serverCompany?.logo || logo,
+          signature: serverCompany?.signature || signature
         };
 
         await AsyncStorage.setItem('companyData', JSON.stringify(updated));
@@ -161,8 +198,9 @@ const SettingsScreen = ({ navigation }) => {
       </View>
 
       <ScrollView contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Company Details</Text>
+        {/* Section 1: Company Information */}
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Company Profile</Text>
           <View style={styles.formRow}>
             <Text style={styles.label}>Company Name</Text>
             <TextInput style={styles.input} value={name} onChangeText={setName} placeholder="Company Name" />
@@ -179,9 +217,11 @@ const SettingsScreen = ({ navigation }) => {
             <Text style={styles.label}>Phone Number</Text>
             <TextInput style={styles.input} value={phone} onChangeText={setPhone} placeholder="Phone Number" keyboardType="phone-pad" />
           </View>
+        </View>
 
-          <View style={{ height: 1, backgroundColor: Colors.border, marginVertical: 12 }} />
-          <Text style={styles.sectionTitle}>Bank Details</Text>
+        {/* Section 2: Bank Details */}
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Bank Details</Text>
           <View style={styles.formRow}>
             <Text style={styles.label}>Bank Name</Text>
             <TextInput style={styles.input} value={bankName} onChangeText={setBankName} placeholder="e.g. Chase Bank" />
@@ -194,9 +234,11 @@ const SettingsScreen = ({ navigation }) => {
             <Text style={styles.label}>Account Number</Text>
             <TextInput style={styles.input} value={accountNumber} onChangeText={setAccountNumber} placeholder="Account Number" keyboardType="numeric" />
           </View>
+        </View>
 
-          <View style={{ height: 1, backgroundColor: Colors.border, marginVertical: 12 }} />
-          <Text style={styles.sectionTitle}>Global Settings</Text>
+        {/* Section 3: Global Settings */}
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Global Settings (Currency & Location)</Text>
           <View style={styles.formRow}>
             <Text style={styles.label}>Country</Text>
             <TextInput
@@ -230,87 +272,165 @@ const SettingsScreen = ({ navigation }) => {
           </View>
         </View>
 
-        {/* Actions */}
-        <View style={{ gap: 12 }}>
-          <TouchableOpacity style={[styles.saveBtn, saving && { opacity: 0.7 }]} disabled={saving} onPress={handleSave}>
-            <Text style={styles.saveBtnText}>{saving ? 'Saving…' : 'Edit Profile (Save Changes)'}</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity style={[styles.actionButton, styles.logoutButton]} onPress={handleLogout}>
-            <Text style={[styles.actionText, styles.logoutText]}>Logout</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Advanced Options */}
-        <TouchableOpacity
-          style={[styles.actionButton, { marginTop: 20 }]}
-          onPress={() => setShowAdvanced(!showAdvanced)}
-        >
-          <Text style={styles.actionText}>{showAdvanced ? 'Hide Advanced Options' : 'Show Advanced Options'}</Text>
-        </TouchableOpacity>
-
+        {/* Section 4: Advanced Options (Hidden by default) */}
         {showAdvanced && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Branding Images</Text>
+          <View style={[styles.card, { borderColor: Colors.primary, borderWidth: 1 }]}>
+            <Text style={styles.cardTitle}>Advanced Options: Branding</Text>
+            <Text style={styles.helperText}>Upload your official assets for documents.</Text>
 
-            <View style={styles.formRow}>
+            <View style={[styles.formRow, { marginTop: 15 }]}>
               <Text style={styles.label}>Company Logo</Text>
               {logo ? (
-                <View style={{ alignItems: 'center', marginBottom: 10 }}>
+                <View style={{ alignItems: 'center', marginBottom: 12, borderWidth: 1, borderColor: '#eee', borderRadius: 8, padding: 8 }}>
                   <Image source={{ uri: logo }} style={{ width: 100, height: 100, resizeMode: 'contain', marginBottom: 8 }} />
-                  <TouchableOpacity onPress={() => setLogo(null)}><Text style={{ color: Colors.error }}>Remove Logo</Text></TouchableOpacity>
+                  <TouchableOpacity onPress={() => setLogo(null)}><Text style={{ color: Colors.error, fontWeight: '500' }}>Remove Logo</Text></TouchableOpacity>
                 </View>
               ) : null}
               <TouchableOpacity style={styles.uploadBtn} onPress={() => pickImage('logo')}>
-                <Text style={styles.uploadBtnText}>{logo ? 'Change Logo' : 'Upload Logo'}</Text>
+                <Text style={styles.uploadBtnText}>{logo ? 'Change Logo' : 'Click to Upload Logo'}</Text>
               </TouchableOpacity>
             </View>
 
-            <View style={{ height: 1, backgroundColor: Colors.border, marginVertical: 12 }} />
+            <View style={{ height: 1, backgroundColor: Colors.border, marginVertical: 15 }} />
 
             <View style={styles.formRow}>
               <Text style={styles.label}>Signature</Text>
               {signature ? (
-                <View style={{ alignItems: 'center', marginBottom: 10 }}>
+                <View style={{ alignItems: 'center', marginBottom: 12, borderWidth: 1, borderColor: '#eee', borderRadius: 8, padding: 8 }}>
                   <Image source={{ uri: signature }} style={{ width: 150, height: 80, resizeMode: 'contain', marginBottom: 8 }} />
-                  <TouchableOpacity onPress={() => setSignature(null)}><Text style={{ color: Colors.error }}>Remove Signature</Text></TouchableOpacity>
+                  <TouchableOpacity onPress={() => setSignature(null)}><Text style={{ color: Colors.error, fontWeight: '500' }}>Remove Signature</Text></TouchableOpacity>
                 </View>
               ) : null}
               <TouchableOpacity style={styles.uploadBtn} onPress={() => pickImage('signature')}>
-                <Text style={styles.uploadBtnText}>{signature ? 'Change Signature' : 'Upload Signature'}</Text>
+                <Text style={styles.uploadBtnText}>{signature ? 'Change Signature' : 'Click to Upload Signature'}</Text>
               </TouchableOpacity>
             </View>
           </View>
         )}
+
+        {/* Primary Actions: The 3 Requested Buttons */}
+        <View style={styles.actionGroup}>
+          {/* Button 1: Edit/Save Profile */}
+          <TouchableOpacity
+            style={[styles.primaryBtn, saving && { opacity: 0.8 }]}
+            disabled={saving}
+            onPress={handleSave}
+          >
+            <Text style={styles.primaryBtnText}>{saving ? 'Saving...' : "Edit Company's Profile"}</Text>
+          </TouchableOpacity>
+
+          {/* Button 2: Advanced Options Toggle */}
+          <TouchableOpacity
+            style={styles.secondaryBtn}
+            onPress={() => setShowAdvanced(!showAdvanced)}
+          >
+            <Text style={styles.secondaryBtnText}>
+              {showAdvanced ? 'Hide Advanced Options' : 'Advance Option'}
+            </Text>
+          </TouchableOpacity>
+
+          {/* Button 3: Logout */}
+          <TouchableOpacity
+            style={styles.destructiveBtn}
+            onPress={handleLogout}
+          >
+            <Text style={styles.destructiveBtnText}>Logout</Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={{ height: 40 }} />
       </ScrollView>
     </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
+  container: { flex: 1, backgroundColor: '#f5f7fa' },
   header: { backgroundColor: Colors.primary, paddingTop: Spacing.md, paddingBottom: Spacing.xl, paddingHorizontal: Spacing.lg },
   backButton: { alignSelf: 'flex-start', marginBottom: Spacing.md },
   backButtonText: { color: Colors.white, fontSize: Fonts.sizes.md, fontWeight: Fonts.weights.medium },
   title: { fontSize: Fonts.sizes.title, fontWeight: Fonts.weights.bold, color: Colors.white, marginBottom: Spacing.sm },
   subtitle: { fontSize: Fonts.sizes.md, color: Colors.white, opacity: 0.9 },
+
   content: { padding: Spacing.lg },
-  section: { backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border, borderRadius: 8, padding: Spacing.lg, marginBottom: Spacing.lg },
-  sectionTitle: { fontSize: Fonts.sizes.md, fontWeight: Fonts.weights.semiBold, color: Colors.text, marginBottom: Spacing.sm },
-  formRow: { marginBottom: Spacing.md },
-  label: { color: Colors.textSecondary, marginBottom: 6 },
-  input: { backgroundColor: Colors.white, borderWidth: 1, borderColor: Colors.border, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, color: Colors.text },
-  chip: { paddingVertical: 8, paddingHorizontal: 12, borderRadius: 999, borderWidth: 1, borderColor: Colors.border, marginRight: 8, marginBottom: 8 },
+
+  card: {
+    backgroundColor: Colors.white,
+    borderRadius: 12,
+    padding: Spacing.lg,
+    marginBottom: Spacing.lg,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  cardTitle: { fontSize: 18, fontWeight: '700', color: Colors.text, marginBottom: 12 },
+  helperText: { fontSize: 13, color: Colors.textSecondary, marginBottom: 8 },
+
+  formRow: { marginBottom: 16 },
+  label: { color: Colors.textSecondary, fontSize: 14, marginBottom: 6, fontWeight: '500' },
+  input: {
+    backgroundColor: '#fafafa',
+    borderWidth: 1,
+    borderColor: '#e1e4e8',
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    color: Colors.text,
+    fontSize: 16
+  },
+
+  chip: { paddingVertical: 8, paddingHorizontal: 16, borderRadius: 20, borderWidth: 1, borderColor: '#e1e4e8', backgroundColor: '#fff' },
   chipActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
-  chipText: { color: Colors.textSecondary },
-  saveBtn: { backgroundColor: Colors.success, borderRadius: 8, paddingVertical: 12, alignItems: 'center', marginTop: Spacing.sm },
-  saveBtnText: { color: Colors.white, fontWeight: Fonts.weights.semiBold },
-  actionButton: { backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border, borderRadius: 8, padding: Spacing.lg, marginBottom: Spacing.md },
-  actionText: { fontSize: Fonts.sizes.md, color: Colors.text, fontWeight: Fonts.weights.semiBold },
-  logoutButton: { backgroundColor: Colors.white, borderColor: Colors.primary },
-  logoutText: { color: Colors.primary },
-  uploadBtn: { backgroundColor: Colors.white, borderWidth: 1, borderColor: Colors.border, borderRadius: 8, padding: 12, alignItems: 'center' },
-  uploadBtnText: { color: Colors.text, fontWeight: '500' },
+  chipText: { color: Colors.textSecondary, fontWeight: '500' },
+
+  uploadBtn: {
+    backgroundColor: '#f0f9ff',
+    borderWidth: 1,
+    borderColor: '#bae6fd',
+    borderStyle: 'dashed',
+    borderRadius: 8,
+    padding: 16,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  uploadBtnText: { color: '#0284c7', fontWeight: '600', fontSize: 15 },
+
+  // Action Buttons
+  actionGroup: { gap: 16, marginTop: 10, paddingBottom: 40 },
+
+  primaryBtn: {
+    backgroundColor: Colors.primary,
+    borderRadius: 10,
+    paddingVertical: 16,
+    alignItems: 'center',
+    shadowColor: Colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4
+  },
+  primaryBtnText: { color: Colors.white, fontWeight: 'bold', fontSize: 16, letterSpacing: 0.5 },
+
+  secondaryBtn: {
+    backgroundColor: 'transparent',
+    borderWidth: 2,
+    borderColor: Colors.primary,
+    borderRadius: 10,
+    paddingVertical: 14,
+    alignItems: 'center'
+  },
+  secondaryBtnText: { color: Colors.primary, fontWeight: '700', fontSize: 16 },
+
+  destructiveBtn: {
+    backgroundColor: '#fee2e2',
+    borderRadius: 10,
+    paddingVertical: 14,
+    alignItems: 'center',
+    marginTop: 10
+  },
+  destructiveBtnText: { color: '#dc2626', fontWeight: '700', fontSize: 16 },
 });
 
 export default SettingsScreen;
