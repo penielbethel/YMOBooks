@@ -125,7 +125,7 @@ const WelcomeScreen = ({ navigation }) => {
             activeOpacity={0.8}
           >
             <Text style={styles.primaryButtonText}>Get Started</Text>
-            <Ionicons name="arrow-forward" size={20} color={Colors.white} />
+            <Ionicons name="rocket" size={20} color={Colors.white} />
           </TouchableOpacity>
 
           <TouchableOpacity

@@ -566,19 +566,19 @@ app.post('/api/register-company', async (req, res) => {
 
     const entry = {
       companyId,
-      name,
-      address,
-      email,
-      phone,
+      name: (name || '').trim(),
+      address: (address || '').trim(),
+      email: (email || '').trim() || undefined,
+      phone: (phone || '').trim() || undefined,
       logo,
       signature,
       brandColor,
       currencySymbol,
       currencyCode,
       termsAndConditions,
-      bankName,
-      accountName: accountName || bankAccountName,
-      accountNumber: accountNumber || bankAccountNumber,
+      bankName: (bankName || '').trim(),
+      accountName: (accountName || bankAccountName || '').trim(),
+      accountNumber: (accountNumber || bankAccountNumber || '').trim() || undefined,
       invoiceTemplate: typeof invoiceTemplate === 'string' ? invoiceTemplate : 'classic',
       receiptTemplate: typeof receiptTemplate === 'string' ? receiptTemplate : 'classic',
       businessType: businessType || 'general_merchandise',
@@ -632,9 +632,21 @@ app.post('/api/update-company', async (req, res) => {
     // Apply text updates
     allowedFields.forEach(field => {
       if (updates[field] !== undefined) {
-        currentData[field] = updates[field];
+        let val = updates[field];
+        if (typeof val === 'string') {
+          val = val.trim();
+          // For unique/sparse fields, treat empty string as undefined so it doesn't conflict
+          if (['email', 'phone', 'accountNumber', 'bankAccountNumber'].includes(field) && !val) {
+            val = undefined;
+          }
+        }
+        currentData[field] = val;
       }
     });
+
+    // Special mapping for common legacy keys in updates
+    if (updates.bankAccountNumber !== undefined) currentData.accountNumber = (updates.bankAccountNumber || '').trim() || undefined;
+    if (updates.bankAccountName !== undefined) currentData.accountName = (updates.bankAccountName || '').trim();
 
     // Handle Images - specific logic for explicit changes
     if (updates.logo && typeof updates.logo === 'string' && updates.logo.startsWith('data:')) {
