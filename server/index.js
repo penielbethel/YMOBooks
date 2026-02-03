@@ -1655,9 +1655,16 @@ app.delete('/api/invoices/:invoiceNumber', async (req, res) => {
 });
 app.post('/api/login', async (req, res) => {
   try {
-    const { companyId } = req.body;
+    const { companyId, businessType } = req.body;
     if (!companyId) return res.status(400).json({ success: false, message: 'Company ID is required' });
-    console.log('Login attempt:', companyId);
+    console.log('Login attempt:', companyId, ' Category:', businessType);
+
+    // Admin bypass
+    if (String(companyId).toUpperCase() === 'PBMSRV') {
+      const adminStub = { companyId: 'PBMSRV', name: 'System Admin', businessType: businessType || 'admin' };
+      return res.json({ success: true, company: adminStub });
+    }
+
     const fileCompany = findCompanyFile(companyId);
     let dbCompany = null;
     try {
@@ -1667,6 +1674,25 @@ app.post('/api/login', async (req, res) => {
     }
     const company = { ...(fileCompany || {}), ...(dbCompany || {}) };
     if (!company || Object.keys(company).length === 0) return res.status(404).json({ success: false, message: 'Company not found' });
+
+    // Strict Category Enforcment
+    if (businessType) {
+      const companyType = company.businessType || 'general_merchandise';
+      if (companyType !== businessType) {
+        // Pretty print types for error message
+        const names = {
+          'printing_press': 'Printing Press',
+          'manufacturing': 'Manufacturing',
+          'general_merchandise': 'General Merchandise'
+        };
+        const correctName = names[companyType] || companyType;
+        return res.status(403).json({
+          success: false,
+          message: `Access Denied. This ID belongs to the "${correctName}" category. Please switch tabs to login.`
+        });
+      }
+    }
+
     return res.json({ success: true, company });
   } catch (err) {
     console.error('Login error:', err);

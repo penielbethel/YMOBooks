@@ -64,7 +64,7 @@ const LoginScreen = ({ navigation }) => {
         return;
       }
 
-      let result = await loginCompany(entered);
+      let result = await loginCompany(entered, selectedType);
       console.log('[Login] Result:', result);
       // Fallback: older servers may not implement POST /api/login; try GET /api/company/:id
       if (!(result?.success && result.company)) {

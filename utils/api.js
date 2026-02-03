@@ -24,11 +24,11 @@ export async function registerCompany(payload) {
   return res.json();
 }
 
-export async function loginCompany(companyId) {
+export async function loginCompany(companyId, businessType) {
   const res = await fetch(`${Config.API_BASE_URL}/api/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ companyId }),
+    body: JSON.stringify({ companyId, businessType }),
   });
   return res.json();
 }
