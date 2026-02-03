@@ -23,17 +23,21 @@ const WRITABLE_ROOT = process.env.GENERATED_ROOT || (process.env.VERCEL ? '/tmp'
 let GENERATED_DIR = path.join(WRITABLE_ROOT, 'generated');
 let INVOICES_DIR = path.join(GENERATED_DIR, 'invoices');
 let RECEIPTS_DIR = path.join(GENERATED_DIR, 'receipts');
+let BRANDING_DIR = path.join(GENERATED_DIR, 'branding');
 try {
   fs.mkdirSync(INVOICES_DIR, { recursive: true });
   fs.mkdirSync(RECEIPTS_DIR, { recursive: true });
+  fs.mkdirSync(BRANDING_DIR, { recursive: true });
 } catch (e) {
   console.warn('Failed to create generated directories at', GENERATED_DIR, '→ falling back to /tmp:', e.message);
   GENERATED_DIR = path.join('/tmp', 'generated');
   INVOICES_DIR = path.join(GENERATED_DIR, 'invoices');
   RECEIPTS_DIR = path.join(GENERATED_DIR, 'receipts');
+  BRANDING_DIR = path.join(GENERATED_DIR, 'branding');
   try {
     fs.mkdirSync(INVOICES_DIR, { recursive: true });
     fs.mkdirSync(RECEIPTS_DIR, { recursive: true });
+    fs.mkdirSync(BRANDING_DIR, { recursive: true });
   } catch (e2) {
     console.error('Failed to initialize writable generated directories:', e2.message);
   }
@@ -160,22 +164,28 @@ function parseDataUrl(dataUrl) {
 async function optimizeImageDataUrl(dataUrl, kind = 'logo') {
   try {
     const lib = await ensureSharp();
-    if (!lib) return dataUrl; // skip if sharp missing
     const parsed = parseDataUrl(dataUrl);
     if (!parsed) return dataUrl;
-    const max = kind === 'signature' ? { width: 600, height: 220 } : { width: 512, height: 512 };
-    let pipeline = lib(parsed.buffer).rotate();
-    pipeline = pipeline.resize({ ...max, fit: 'inside', withoutEnlargement: true });
-    // Use PNG to preserve transparency and ensure pdfkit compatibility
-    const out = await pipeline.png({ compressionLevel: 9, palette: true }).toBuffer();
-    const outDataUrl = `data:image/png;base64,${out.toString('base64')}`;
-    // Only return optimized if significantly smaller or if original was not png
-    if (out.length < parsed.buffer.length * 0.98 || !/^data:image\/png/i.test(dataUrl)) {
-      return outDataUrl;
+
+    let buffer = parsed.buffer;
+    if (lib) {
+      const max = kind === 'signature' ? { width: 600, height: 220 } : { width: 512, height: 512 };
+      let pipeline = lib(parsed.buffer).rotate();
+      pipeline = pipeline.resize({ ...max, fit: 'inside', withoutEnlargement: true });
+      buffer = await pipeline.png({ compressionLevel: 9, palette: true }).toBuffer();
     }
-    return dataUrl;
+
+    // Save to file instead of returning base64 to keep DB small and fetch fast
+    const filename = `${kind}-${Date.now()}-${Math.floor(Math.random() * 1000)}.png`;
+    const fullPath = path.join(BRANDING_DIR, filename);
+    fs.writeFileSync(fullPath, buffer);
+
+    // Return the URL that can be used by the client
+    const port = process.env.PORT || 3000;
+    // We try to return a path relative to /files
+    return `/files/branding/${filename}`;
   } catch (e) {
-    console.warn('Image optimization failed; using original:', e.message);
+    console.warn('Image optimization/save failed:', e.message);
     return dataUrl;
   }
 }
@@ -416,6 +426,17 @@ function dataUrlToBuffer(dataUrl) {
   } catch (_) {
     return null;
   }
+}
+
+function resolveImageSource(val) {
+  if (!val || typeof val !== 'string') return null;
+  if (val.startsWith('data:')) return dataUrlToBuffer(val);
+  if (val.startsWith('/files/')) {
+    const relative = val.replace('/files/', '');
+    const full = path.join(GENERATED_DIR, relative);
+    if (fs.existsSync(full)) return full;
+  }
+  return null;
 }
 function numberToWords(num) {
   const ones = ['Zero', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine'];
@@ -721,9 +742,9 @@ function drawInvoiceByTemplate(doc, company, invNo, invoiceDate, dueDate, custom
     doc.rect(rightX, boxY, colWidth, boxH).stroke('#dddddd');
     doc.restore();
     try {
-      const logoBuf = dataUrlToBuffer(company.logo);
-      if (logoBuf) {
-        doc.image(logoBuf, rightX + 10, boxY + 10, { width: 64 });
+      const logoSource = resolveImageSource(company.logo);
+      if (logoSource) {
+        doc.image(logoSource, rightX + 10, boxY + 10, { width: 64 });
       }
     } catch (_) { }
     let infoY = boxY + 10;
@@ -757,12 +778,12 @@ function drawInvoiceByTemplate(doc, company, invNo, invoiceDate, dueDate, custom
     doc.text(`Invoice Date: ${dayjs(invoiceDate || undefined).isValid() ? dayjs(invoiceDate).format('YYYY-MM-DD') : dayjs().format('YYYY-MM-DD')}`, { align: 'right' });
     if (dueDate) doc.text(`Due Date: ${dueDate}`, { align: 'right' });
     try {
-      const logoBuf = dataUrlToBuffer(company.logo);
-      if (logoBuf) {
+      const logoSource = resolveImageSource(company.logo);
+      if (logoSource) {
         const imgWidth = 60;
         const x = doc.page.width - doc.page.margins.right - imgWidth;
         const y = doc.page.margins.top + 24;
-        doc.image(logoBuf, x, y, { width: imgWidth });
+        doc.image(logoSource, x, y, { width: imgWidth });
       }
     } catch (_) { }
     doc.moveDown(0.5);
@@ -863,11 +884,11 @@ function drawInvoiceByTemplate(doc, company, invNo, invoiceDate, dueDate, custom
   );
   // Signature block
   try {
-    const sigBuf = dataUrlToBuffer(company.signature);
-    if (sigBuf) {
+    const sigSource = resolveImageSource(company.signature);
+    if (sigSource) {
       doc.moveDown(1);
       doc.fontSize(12).fillColor('#333').text('Authorized Signature');
-      doc.image(sigBuf, doc.page.margins.left, doc.y + 4, { width: 120 });
+      doc.image(sigSource, doc.page.margins.left, doc.y + 4, { width: 120 });
     }
   } catch (_) { }
 
@@ -924,12 +945,12 @@ function drawReceiptByTemplate(doc, company, rctNo, receiptDate, invoiceNumber, 
 
   // Logo
   try {
-    const logoBuf = dataUrlToBuffer(company.logo);
-    if (logoBuf) {
+    const logoSource = resolveImageSource(company.logo);
+    if (logoSource) {
       const imgWidth = 60;
       const x = doc.page.width - doc.page.margins.right - imgWidth;
       const y = doc.page.margins.top + 24;
-      doc.image(logoBuf, x, y, { width: imgWidth });
+      doc.image(logoSource, x, y, { width: imgWidth });
     }
   } catch (_) { }
 
