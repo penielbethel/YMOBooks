@@ -629,6 +629,10 @@ app.post('/api/update-company', async (req, res) => {
       const mergedUpdate = { ...(existing || {}), ...(fileExisting || {}), ...update };
       // Ensure we don't set undefined keys
       Object.keys(mergedUpdate).forEach((k) => mergedUpdate[k] === undefined && delete mergedUpdate[k]);
+      // Remove immutable MongoDB fields to prevent "modifying _id" error
+      delete mergedUpdate._id;
+      delete mergedUpdate.__v;
+
       // Upsert to guarantee DB persistence if company exists only in file fallback
       company = await Company.findOneAndUpdate(
         { companyId },
