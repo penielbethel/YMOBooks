@@ -325,8 +325,11 @@ const ExpenseSchema = new mongoose.Schema(
 const Expense = mongoose.model('Expense', ExpenseSchema);
 
 // Helpers
-async function generateCompanyId(name) {
-  const prefix = (name || 'CMP').replace(/[^a-zA-Z0-9]/g, '').slice(0, 3).toUpperCase();
+async function generateCompanyId(name, businessType) {
+  let prefix = 'PBM/GM';
+  if (businessType === 'printing_press') prefix = 'PBM/PP';
+  else if (businessType === 'manufacturing') prefix = 'PBM/MC';
+
   let candidate;
   let existsDb = null;
   let existsFile = null;
@@ -525,7 +528,7 @@ app.post('/api/register-company', async (req, res) => {
       }
     }
 
-    const companyId = await generateCompanyId(name);
+    const companyId = await generateCompanyId(name, businessType);
     // Optimize images when provided as data URLs
     if (typeof logo === 'string' && logo.startsWith('data:')) {
       logo = await optimizeImageDataUrl(logo, 'logo');
