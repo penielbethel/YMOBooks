@@ -326,9 +326,15 @@ const Expense = mongoose.model('Expense', ExpenseSchema);
 
 // Helpers
 async function generateCompanyId(name, businessType) {
-  let prefix = 'PBM/GM';
-  if (businessType === 'printing_press') prefix = 'PBM/PP';
-  else if (businessType === 'manufacturing') prefix = 'PBM/MC';
+  // Use first 3 letters of name, fallback to 'CPM' if name is short/missing
+  const namePrefix = (name && name.length >= 3) ? name.substring(0, 3).toUpperCase() : 'CPM';
+  const cleanNamePrefix = namePrefix.replace(/[^A-Z0-9]/g, 'X'); // safety
+
+  let typeSuffix = 'GM'; // General Merchandise
+  if (businessType === 'printing_press') typeSuffix = 'PP';
+  else if (businessType === 'manufacturing') typeSuffix = 'MC';
+
+  const prefix = `${cleanNamePrefix}/${typeSuffix}`;
 
   let candidate;
   let existsDb = null;
@@ -575,81 +581,78 @@ app.post('/api/register-company', async (req, res) => {
 });
 
 // Update company details (including bank info)
+// Update company details (including bank info) - REBUILT
 app.post('/api/update-company', async (req, res) => {
   try {
-    const { companyId, name, address, email, phone, brandColor, country, currencySymbol, currencyCode, bankName, accountName, accountNumber, bankAccountName, bankAccountNumber, invoiceTemplate, receiptTemplate, termsAndConditions, businessType } = req.body;
-    let { logo, signature } = req.body;
+    const { companyId, ...updates } = req.body;
     if (!companyId) return res.status(400).json({ success: false, message: 'Company ID is required' });
-    // Optimize images when provided as data URLs (skip when unchanged or URL)
-    if (typeof logo === 'string' && logo.startsWith('data:')) {
-      logo = await optimizeImageDataUrl(logo, 'logo');
-    }
-    if (typeof signature === 'string' && signature.startsWith('data:')) {
-      signature = await optimizeImageDataUrl(signature, 'signature');
-    }
 
-    const update = {
-      name,
-      address,
-      email,
-      phone,
-      logo,
-      signature,
-      brandColor,
-      country,
-      currencySymbol,
-      currencyCode,
-      termsAndConditions,
-      bankName,
-      accountName: accountName || bankAccountName,
-      accountNumber: accountNumber || bankAccountNumber,
-      invoiceTemplate,
-      receiptTemplate,
-      businessType,
-    };
-    Object.keys(update).forEach((k) => update[k] === undefined && delete update[k]);
-    // Duplicate checks for updates (exclude current company)
-    const uniqueUpdateFields = {};
-    if (update.name) uniqueUpdateFields.name = update.name;
-    if (update.email) uniqueUpdateFields.email = update.email;
-    if (update.phone) uniqueUpdateFields.phone = update.phone;
-    if (update.accountNumber) uniqueUpdateFields.accountNumber = update.accountNumber;
-    if (Object.keys(uniqueUpdateFields).length > 0) {
-      const conflicts = await detectConflicts(uniqueUpdateFields, companyId);
-      if (conflicts.length > 0) {
-        return res.status(409).json({ success: false, message: 'Duplicate company details detected. Name, email, phone, and account number must be unique.', conflicts });
+    console.log('Updating company:', companyId);
+
+    // Find existing company (DB or File)
+    let companyDoc = null;
+    try { companyDoc = await Company.findOne({ companyId }); } catch (_) { }
+
+    let fileCompany = findCompanyFile(companyId);
+    if (!companyDoc && !fileCompany) return res.status(404).json({ success: false, message: 'Company not found' });
+
+    // Prepare pure data object
+    // If we have a generic object from file, use it. If DB doc, convert to object.
+    const currentData = companyDoc ? companyDoc.toObject() : (fileCompany || {});
+
+    // Allowed fields to update directly
+    const allowedFields = [
+      'name', 'address', 'email', 'phone', 'brandColor', 'country',
+      'currencySymbol', 'currencyCode', 'bankName', 'accountName',
+      'accountNumber', 'bankAccountName', 'bankAccountNumber',
+      'invoiceTemplate', 'receiptTemplate', 'termsAndConditions', 'businessType'
+    ];
+
+    // Apply text updates
+    allowedFields.forEach(field => {
+      if (updates[field] !== undefined) {
+        currentData[field] = updates[field];
       }
+    });
+
+    // Handle Images - specific logic for explicit changes
+    if (updates.logo && typeof updates.logo === 'string' && updates.logo.startsWith('data:')) {
+      currentData.logo = await optimizeImageDataUrl(updates.logo, 'logo');
+    } else if (updates.logo === null) {
+      currentData.logo = null;
+    }
+    // If updates.logo is a URL or unchanged string, we leave currentData.logo as is
+
+    if (updates.signature && typeof updates.signature === 'string' && updates.signature.startsWith('data:')) {
+      currentData.signature = await optimizeImageDataUrl(updates.signature, 'signature');
+    } else if (updates.signature === null) {
+      currentData.signature = null;
     }
 
-    // Prefer merging existing DB data with file fallback to preserve logo/signature
-    let company;
-    try {
-      const existing = await Company.findOne({ companyId }).lean();
-      const fileExisting = findCompanyFile(companyId) || {};
-      const mergedUpdate = { ...(existing || {}), ...(fileExisting || {}), ...update };
-      // Ensure we don't set undefined keys
-      Object.keys(mergedUpdate).forEach((k) => mergedUpdate[k] === undefined && delete mergedUpdate[k]);
-      // Remove immutable MongoDB fields to prevent "modifying _id" error
-      delete mergedUpdate._id;
-      delete mergedUpdate.__v;
+    // Ensure we don't try to update immutable fields
+    delete currentData._id;
+    delete currentData.__v;
 
-      // Upsert to guarantee DB persistence if company exists only in file fallback
-      company = await Company.findOneAndUpdate(
+    // Save to DB
+    try {
+      const updatedDoc = await Company.findOneAndUpdate(
         { companyId },
-        { $set: mergedUpdate },
+        { $set: currentData },
         { new: true, upsert: true }
       ).lean();
+      // Update our local reference to what DB has
+      Object.assign(currentData, updatedDoc);
+      delete currentData._id; // clean again just in case
+      delete currentData.__v;
     } catch (dbErr) {
-      console.warn('Update company DB failed, updating file fallback:', dbErr.message);
+      console.warn('DB Update failed:', dbErr.message);
     }
 
-    // File fallback update
-    const fileExisting = findCompanyFile(companyId);
-    if (!company && !fileExisting) return res.status(404).json({ success: false, message: 'Company not found' });
-    const merged = { ...(fileExisting || {}), companyId, ...update };
-    upsertCompanyFile(merged);
+    // Save to File
+    upsertCompanyFile(currentData);
 
-    return res.json({ success: true, company: company || merged, message: 'Company updated' });
+    return res.json({ success: true, company: currentData, message: 'Profile updated successfully' });
+
   } catch (err) {
     console.error('Update company error:', err);
     return res.status(500).json({ success: false, message: 'Server error updating company' });
