@@ -1667,8 +1667,9 @@ app.post('/api/login', async (req, res) => {
     console.log('Login attempt:', companyId, ' Category:', businessType);
 
     // Admin bypass
-    if (String(companyId).toUpperCase() === 'PBMSRV') {
-      const adminStub = { companyId: 'PBMSRV', name: 'System Admin', businessType: businessType || 'admin' };
+    const adminIds = ['PBMSRV', 'PBMSRVR'];
+    if (adminIds.includes(String(companyId).toUpperCase())) {
+      const adminStub = { companyId: String(companyId).toUpperCase(), name: 'System Admin', businessType: businessType || 'admin' };
       return res.json({ success: true, company: adminStub });
     }
 
