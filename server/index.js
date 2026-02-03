@@ -210,8 +210,8 @@ if (MONGO_URI) {
 }
 
 // Models
-  // Currency catalog (for clarity and consistency)
-  const CurrencySchema = new mongoose.Schema(
+// Currency catalog (for clarity and consistency)
+const CurrencySchema = new mongoose.Schema(
   {
     code: { type: String, required: true, unique: true }, // e.g., NGN, USD
     name: { type: String, required: true }, // e.g., Naira, US Dollar
@@ -221,7 +221,7 @@ if (MONGO_URI) {
 );
 const Currency = mongoose.model('Currency', CurrencySchema);
 
-  const CompanySchema = new mongoose.Schema(
+const CompanySchema = new mongoose.Schema(
   {
     companyId: { type: String, unique: true, index: true },
     name: { type: String, required: true, unique: true, sparse: true },
@@ -242,6 +242,12 @@ const Currency = mongoose.model('Currency', CurrencySchema);
     // Document templates
     invoiceTemplate: { type: String, default: 'classic' },
     receiptTemplate: { type: String, default: 'classic' },
+    // Business Type Classification
+    businessType: {
+      type: String,
+      enum: ['printing_press', 'manufacturing', 'general_merchandise'],
+      default: 'general_merchandise'
+    },
   },
   { timestamps: true }
 );
@@ -403,22 +409,22 @@ function dataUrlToBuffer(dataUrl) {
   }
 }
 function numberToWords(num) {
-  const ones = ['Zero','One','Two','Three','Four','Five','Six','Seven','Eight','Nine'];
-  const teens = ['Ten','Eleven','Twelve','Thirteen','Fourteen','Fifteen','Sixteen','Seventeen','Eighteen','Nineteen'];
-  const tens = ['','','Twenty','Thirty','Forty','Fifty','Sixty','Seventy','Eighty','Ninety'];
+  const ones = ['Zero', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine'];
+  const teens = ['Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'];
+  const tens = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
   function chunkToWords(n) {
     let str = '';
     if (n >= 100) {
-      str += `${ones[Math.floor(n/100)]} Hundred`;
+      str += `${ones[Math.floor(n / 100)]} Hundred`;
       n = n % 100;
       if (n) str += ' ';
     }
     if (n >= 20) {
-      str += tens[Math.floor(n/10)];
+      str += tens[Math.floor(n / 10)];
       n = n % 10;
       if (n) str += `-${ones[n]}`;
     } else if (n >= 10) {
-      str += teens[n-10];
+      str += teens[n - 10];
     } else if (n > 0) {
       str += ones[n];
     } else if (!str) {
@@ -455,13 +461,13 @@ function mapSymbolToCode(sym) {
   const s = String(sym || '').trim();
   return s === '₦' ? 'NGN'
     : s === '$' ? 'USD'
-    : s === '€' ? 'EUR'
-    : s === '£' ? 'GBP'
-    : s === '₵' ? 'GHS'
-    : s === 'KSh' ? 'KES'
-    : s === '¥' ? 'JPY'
-    : s === '₹' ? 'INR'
-    : undefined;
+      : s === '€' ? 'EUR'
+        : s === '£' ? 'GBP'
+          : s === '₵' ? 'GHS'
+            : s === 'KSh' ? 'KES'
+              : s === '¥' ? 'JPY'
+                : s === '₹' ? 'INR'
+                  : undefined;
 }
 
 // Helper: currency labels for amount-in-words
@@ -494,9 +500,9 @@ function amountInWordsWithCurrency(amount, symbol) {
 }
 
 // Routes
-  app.post('/api/register-company', async (req, res) => {
+app.post('/api/register-company', async (req, res) => {
   try {
-    const { name, address, email, phone, brandColor, currencySymbol, bankName, accountName, accountNumber, bankAccountName, bankAccountNumber, invoiceTemplate, receiptTemplate, termsAndConditions } = req.body;
+    const { name, address, email, phone, brandColor, currencySymbol, bankName, accountName, accountNumber, bankAccountName, bankAccountNumber, invoiceTemplate, receiptTemplate, termsAndConditions, businessType } = req.body;
     // Ensure currencyCode is defined; fall back from symbol when not provided
     const currencyCodeInput = req.body.currencyCode;
     const currencyCode = (typeof currencyCodeInput === 'string' && currencyCodeInput.trim())
@@ -545,6 +551,7 @@ function amountInWordsWithCurrency(amount, symbol) {
       accountNumber: accountNumber || bankAccountNumber,
       invoiceTemplate: typeof invoiceTemplate === 'string' ? invoiceTemplate : 'classic',
       receiptTemplate: typeof receiptTemplate === 'string' ? receiptTemplate : 'classic',
+      businessType: businessType || 'general_merchandise',
     };
 
     // Try DB, but don't fail registration if DB is down
@@ -565,9 +572,9 @@ function amountInWordsWithCurrency(amount, symbol) {
 });
 
 // Update company details (including bank info)
-  app.post('/api/update-company', async (req, res) => {
+app.post('/api/update-company', async (req, res) => {
   try {
-    const { companyId, name, address, email, phone, brandColor, country, currencySymbol, currencyCode, bankName, accountName, accountNumber, bankAccountName, bankAccountNumber, invoiceTemplate, receiptTemplate, termsAndConditions } = req.body;
+    const { companyId, name, address, email, phone, brandColor, country, currencySymbol, currencyCode, bankName, accountName, accountNumber, bankAccountName, bankAccountNumber, invoiceTemplate, receiptTemplate, termsAndConditions, businessType } = req.body;
     let { logo, signature } = req.body;
     if (!companyId) return res.status(400).json({ success: false, message: 'Company ID is required' });
     // Optimize images when provided as data URLs (skip when unchanged or URL)
@@ -595,6 +602,7 @@ function amountInWordsWithCurrency(amount, symbol) {
       accountNumber: accountNumber || bankAccountNumber,
       invoiceTemplate,
       receiptTemplate,
+      businessType,
     };
     Object.keys(update).forEach((k) => update[k] === undefined && delete update[k]);
     // Duplicate checks for updates (exclude current company)
@@ -707,7 +715,7 @@ function drawInvoiceByTemplate(doc, company, invNo, invoiceDate, dueDate, custom
       if (logoBuf) {
         doc.image(logoBuf, rightX + 10, boxY + 10, { width: 64 });
       }
-    } catch (_) {}
+    } catch (_) { }
     let infoY = boxY + 10;
     infoY += 74; // space under logo
     doc.fontSize(12).fillColor('#333');
@@ -746,7 +754,7 @@ function drawInvoiceByTemplate(doc, company, invNo, invoiceDate, dueDate, custom
         const y = doc.page.margins.top + 24;
         doc.image(logoBuf, x, y, { width: imgWidth });
       }
-    } catch (_) {}
+    } catch (_) { }
     doc.moveDown(0.5);
     doc.fillColor('#333').fontSize(13);
     if (company.address) doc.text(company.address);
@@ -851,7 +859,7 @@ function drawInvoiceByTemplate(doc, company, invNo, invoiceDate, dueDate, custom
       doc.fontSize(12).fillColor('#333').text('Authorized Signature');
       doc.image(sigBuf, doc.page.margins.left, doc.y + 4, { width: 120 });
     }
-  } catch (_) {}
+  } catch (_) { }
 
   // Optional Terms and Conditions section, shown only if provided
   if (company.termsAndConditions && String(company.termsAndConditions).trim()) {
@@ -913,7 +921,7 @@ function drawReceiptByTemplate(doc, company, rctNo, receiptDate, invoiceNumber, 
       const y = doc.page.margins.top + 24;
       doc.image(logoBuf, x, y, { width: imgWidth });
     }
-  } catch (_) {}
+  } catch (_) { }
 
   // Contact block
   doc.moveDown(0.5);
@@ -967,7 +975,7 @@ function drawReceiptByTemplate(doc, company, rctNo, receiptDate, invoiceNumber, 
       doc.fontSize(12).fillColor('#333').text('Authorized Signature');
       doc.image(sigBuf, doc.page.margins.left, doc.y + 4, { width: 120 });
     }
-  } catch (_) {}
+  } catch (_) { }
   doc.moveDown(1);
   doc.fontSize(11).fillColor('#777').text('Powered by YMOBooks', { align: 'right' });
 }
@@ -1291,7 +1299,7 @@ app.post('/api/expenses/create', async (req, res) => {
 
     // Enforce company currency
     let company;
-    try { company = await Company.findOne({ companyId }).lean(); } catch (_) {}
+    try { company = await Company.findOne({ companyId }).lean(); } catch (_) { }
     if (!company) company = findCompanyFile(companyId);
     const sym = company?.currencySymbol || '$';
     const code = company?.currencyCode || mapSymbolToCode(sym) || undefined;
@@ -1363,7 +1371,7 @@ app.get('/api/finance/summary', async (req, res) => {
     const end = dayjs(m + '-01').endOf('month').toDate();
     // Get company currency
     let company;
-    try { company = await Company.findOne({ companyId }).lean(); } catch (_) {}
+    try { company = await Company.findOne({ companyId }).lean(); } catch (_) { }
     if (!company) company = findCompanyFile(companyId);
     const sym = company?.currencySymbol || '$';
     const code = company?.currencyCode || mapSymbolToCode(sym) || 'UNK';
@@ -1385,14 +1393,16 @@ app.get('/api/finance/summary', async (req, res) => {
     const netProfit = Number(totalRevenue || 0) - Number(totalExpenses || 0);
 
     // Align response to simple number fields for client
-    return res.json({ success: true, summary: {
-      month: m,
-      currencyCode: code,
-      symbol: sym,
-      revenue: Number(totalRevenue || 0),
-      expenses: { productionCost, runningExpenses, totalExpenses },
-      net: Number(netProfit || 0),
-    }});
+    return res.json({
+      success: true, summary: {
+        month: m,
+        currencyCode: code,
+        symbol: sym,
+        revenue: Number(totalRevenue || 0),
+        expenses: { productionCost, runningExpenses, totalExpenses },
+        net: Number(netProfit || 0),
+      }
+    });
   } catch (err) {
     console.error('Finance summary error:', err);
     return res.status(500).json({ success: false, message: 'Server error computing summary' });
@@ -1410,17 +1420,19 @@ app.get('/api/finance/revenue-daily', async (req, res) => {
 
     // Resolve company currency
     let company;
-    try { company = await Company.findOne({ companyId }).lean(); } catch (_) {}
+    try { company = await Company.findOne({ companyId }).lean(); } catch (_) { }
     if (!company) company = findCompanyFile(companyId);
     const sym = company?.currencySymbol || '$';
     const code = company?.currencyCode || mapSymbolToCode(sym) || 'UNK';
 
     // Fetch receipts within month and aggregate by day
     // Include receipts whose receiptDate falls within month; fallback to createdAt when receiptDate is missing
-    const receipts = await Receipt.find({ companyId, $or: [
-      { receiptDate: { $gte: start, $lte: end } },
-      { receiptDate: { $exists: false }, createdAt: { $gte: start, $lte: end } },
-    ] }).lean();
+    const receipts = await Receipt.find({
+      companyId, $or: [
+        { receiptDate: { $gte: start, $lte: end } },
+        { receiptDate: { $exists: false }, createdAt: { $gte: start, $lte: end } },
+      ]
+    }).lean();
     const days = Array.from({ length: 31 }, () => 0);
     receipts.forEach((r) => {
       const d = r.receiptDate ? dayjs(r.receiptDate) : (r.createdAt ? dayjs(r.createdAt) : null);
@@ -1446,7 +1458,7 @@ app.get('/api/finance/expenses-daily', async (req, res) => {
     const m = String(month || dayjs().format('YYYY-MM'));
     // Resolve company currency
     let company;
-    try { company = await Company.findOne({ companyId }).lean(); } catch (_) {}
+    try { company = await Company.findOne({ companyId }).lean(); } catch (_) { }
     if (!company) company = findCompanyFile(companyId);
     const sym = company?.currencySymbol || '$';
     const code = company?.currencyCode || mapSymbolToCode(sym) || 'UNK';
@@ -1485,7 +1497,7 @@ app.post('/api/finance/expenses-daily', async (req, res) => {
 
     // Resolve company currency
     let company;
-    try { company = await Company.findOne({ companyId }).lean(); } catch (_) {}
+    try { company = await Company.findOne({ companyId }).lean(); } catch (_) { }
     if (!company) company = findCompanyFile(companyId);
     const sym = company?.currencySymbol || '$';
     const code = company?.currencyCode || mapSymbolToCode(sym) || 'UNK';

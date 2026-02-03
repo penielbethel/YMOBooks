@@ -27,6 +27,7 @@ import { registerCompany, updateCompany, fetchCompany } from '../utils/api';
 
 const CompanyRegistrationScreen = ({ navigation, route }) => {
   const mode = route?.params?.mode === 'edit' ? 'edit' : 'register';
+  const businessTypeParam = route?.params?.businessType || 'general_merchandise';
   const [formData, setFormData] = useState({
     companyName: '',
     address: '',
@@ -36,7 +37,8 @@ const CompanyRegistrationScreen = ({ navigation, route }) => {
     signature: null,
     bankAccountNumber: '',
     bankAccountName: '',
-    bankName: ''
+    bankName: '',
+    businessType: businessTypeParam,
   });
 
   const [loading, setLoading] = useState(false);
@@ -65,7 +67,8 @@ const CompanyRegistrationScreen = ({ navigation, route }) => {
             signature: existing.signature || null,
             bankAccountNumber: existing.bankAccountNumber || '',
             bankAccountName: existing.bankAccountName || '',
-            bankName: existing.bankName || ''
+            bankName: existing.bankName || '',
+            businessType: existing.businessType || businessTypeParam,
           }));
           // Then, fetch authoritative record from backend and prefer its values
           if (existing.companyId) {
@@ -84,12 +87,13 @@ const CompanyRegistrationScreen = ({ navigation, route }) => {
                   bankAccountNumber: c.accountNumber || prev.bankAccountNumber,
                   bankAccountName: c.accountName || prev.bankAccountName,
                   bankName: c.bankName || prev.bankName,
+                  businessType: c.businessType || prev.businessType,
                 }));
               }
-            } catch {}
+            } catch { }
           }
         }
-      } catch {}
+      } catch { }
     };
     if (mode === 'edit') loadExisting();
   }, [mode]);
@@ -138,7 +142,7 @@ const CompanyRegistrationScreen = ({ navigation, route }) => {
         { compress: 0.7, format: ImageManipulator.SaveFormat.PNG, base64: true }
       );
       if (result?.base64) return `data:image/png;base64,${result.base64}`;
-    } catch {}
+    } catch { }
     try {
       const fileUri = await ensureFileUriFromInput(input, kind);
       if (!fileUri) return null;
@@ -152,7 +156,7 @@ const CompanyRegistrationScreen = ({ navigation, route }) => {
   const pickImage = async (type) => {
     try {
       const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      
+
       if (permissionResult.granted === false) {
         Alert.alert('Permission Required', 'Permission to access camera roll is required!');
         return;
@@ -212,7 +216,7 @@ const CompanyRegistrationScreen = ({ navigation, route }) => {
       Alert.alert('Validation Error', 'Phone number is required');
       return false;
     }
-    
+
     // Email validation
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(formData.email)) {
@@ -267,6 +271,7 @@ const CompanyRegistrationScreen = ({ navigation, route }) => {
         accountNumber: formData.bankAccountNumber,
         accountName: formData.bankAccountName,
         bankName: formData.bankName,
+        businessType: formData.businessType,
       };
       const storedExisting = await AsyncStorage.getItem('companyData');
       const existing = storedExisting ? JSON.parse(storedExisting) : null;
@@ -283,7 +288,7 @@ const CompanyRegistrationScreen = ({ navigation, route }) => {
               try {
                 const refetch = await fetchCompany(existing.companyId);
                 if (refetch?.company) server = refetch.company;
-              } catch (_) {}
+              } catch (_) { }
             }
 
             const normalized = {
@@ -376,270 +381,270 @@ const CompanyRegistrationScreen = ({ navigation, route }) => {
     try {
       await Clipboard.setStringAsync(generatedCompanyId);
       Alert.alert('Copied', 'Company ID copied to clipboard');
-    } catch {}
+    } catch { }
   };
 
   return (
     <>
-    <SafeAreaView style={styles.container}>
-      <KeyboardAvoidingView 
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.keyboardView}
-      >
-        <ScrollView 
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
+      <SafeAreaView style={styles.container}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.keyboardView}
         >
-          {/* Header */}
-          <View style={styles.header}>
-            <TouchableOpacity 
-              style={styles.backButton}
-              onPress={() => navigation.goBack()}
-            >
-              <Text style={styles.backButtonText}>← Back</Text>
-            </TouchableOpacity>
-            <Text style={styles.title}>{mode === 'edit' ? "Edit your Company's Details" : 'Register Your Company'}</Text>
-            <Text style={styles.subtitle}>
-              {mode === 'edit' ? 'Update your profile information and logo' : 'Set up your company profile to create professional documents'}
-            </Text>
-          </View>
-
-          {/* Form */}
-          <View style={styles.formContainer}>
-            {/* Company Name */}
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Company Name *</Text>
-              <TextInput
-                style={styles.input}
-                value={formData.companyName}
-                onChangeText={(text) => updateFormData('companyName', text)}
-                placeholder="Enter your company name"
-                placeholderTextColor={Colors.textSecondary}
-                editable={true}
-              />
-              {mode === 'edit' && (
-                <Text style={styles.helperText}>Ensure the new name is unique.</Text>
-              )}
-            </View>
-
-            {/* Company Logo */}
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Company Logo</Text>
-              <TouchableOpacity 
-                style={styles.imagePickerButton}
-                onPress={() => pickImage('logo')}
+          <ScrollView
+            contentContainerStyle={styles.scrollContent}
+            showsVerticalScrollIndicator={false}
+          >
+            {/* Header */}
+            <View style={styles.header}>
+              <TouchableOpacity
+                style={styles.backButton}
+                onPress={() => navigation.goBack()}
               >
-                {formData.logo ? (
-                  <Image source={{ uri: formData.logo }} style={styles.logoPreview} />
-                ) : (
-                  <View style={styles.imagePlaceholder}>
-                    <Text style={styles.imagePlaceholderText}>📷</Text>
-                    <Text style={styles.imagePlaceholderLabel}>Tap to select logo</Text>
-                  </View>
-                )}
+                <Text style={styles.backButtonText}>← Back</Text>
               </TouchableOpacity>
-            </View>
-
-            {/* Address */}
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Address *</Text>
-              <TextInput
-                style={[styles.input, styles.textArea]}
-                value={formData.address}
-                onChangeText={(text) => updateFormData('address', text)}
-                placeholder="Enter your company address"
-                placeholderTextColor={Colors.textSecondary}
-                multiline
-                numberOfLines={3}
-              />
-            </View>
-
-            {/* Email */}
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Email *</Text>
-              <TextInput
-                style={styles.input}
-                value={formData.email}
-                onChangeText={(text) => updateFormData('email', text)}
-                placeholder="Enter your email address"
-                placeholderTextColor={Colors.textSecondary}
-                keyboardType="email-address"
-                autoCapitalize="none"
-              />
-            </View>
-
-            {/* Phone Number */}
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Phone Number *</Text>
-              <TextInput
-                style={styles.input}
-                value={formData.phoneNumber}
-                onChangeText={(text) => updateFormData('phoneNumber', text)}
-                placeholder="Enter your phone number"
-                placeholderTextColor={Colors.textSecondary}
-                keyboardType="phone-pad"
-              />
-            </View>
-
-            {/* Bank Details */}
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Bank Name</Text>
-              <TextInput
-                style={styles.input}
-                value={formData.bankName}
-                onChangeText={(text) => updateFormData('bankName', text)}
-                placeholder="Enter your bank name"
-                placeholderTextColor={Colors.textSecondary}
-              />
-            </View>
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Account Name</Text>
-              <TextInput
-                style={styles.input}
-                value={formData.bankAccountName}
-                onChangeText={(text) => updateFormData('bankAccountName', text)}
-                placeholder="Enter your account name"
-                placeholderTextColor={Colors.textSecondary}
-              />
-            </View>
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Account Number</Text>
-              <TextInput
-                style={styles.input}
-                value={formData.bankAccountNumber}
-                onChangeText={(text) => updateFormData('bankAccountNumber', text)}
-                placeholder="Enter your account number"
-                placeholderTextColor={Colors.textSecondary}
-                keyboardType="number-pad"
-              />
-            </View>
-
-            {/* Signature */}
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>{mode === 'edit' ? 'Signature' : 'Register Your Signature'}</Text>
-              <Text style={styles.helperText}>
-                Create an electronic signature to be used across invoices, receipts, and documents.
+              <Text style={styles.title}>{mode === 'edit' ? "Edit your Company's Details" : 'Register Your Company'}</Text>
+              <Text style={styles.subtitle}>
+                {mode === 'edit' ? 'Update your profile information and logo' : 'Set up your company profile to create professional documents'}
               </Text>
-              {formData.signature ? (
-                <View style={{ alignItems: 'center' }}>
-                  <Image source={{ uri: formData.signature }} style={styles.signaturePreview} />
-                  <TouchableOpacity
-                    style={[styles.imagePickerButton, { marginTop: Spacing.sm }]}
-                    onPress={() => setSignatureModalVisible(true)}
-                  >
-                    <Text style={styles.imagePlaceholderLabel}>Re-sign</Text>
-                  </TouchableOpacity>
-                </View>
-              ) : (
+            </View>
+
+            {/* Form */}
+            <View style={styles.formContainer}>
+              {/* Company Name */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Company Name *</Text>
+                <TextInput
+                  style={styles.input}
+                  value={formData.companyName}
+                  onChangeText={(text) => updateFormData('companyName', text)}
+                  placeholder="Enter your company name"
+                  placeholderTextColor={Colors.textSecondary}
+                  editable={true}
+                />
+                {mode === 'edit' && (
+                  <Text style={styles.helperText}>Ensure the new name is unique.</Text>
+                )}
+              </View>
+
+              {/* Company Logo */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Company Logo</Text>
                 <TouchableOpacity
                   style={styles.imagePickerButton}
-                  onPress={() => setSignatureModalVisible(true)}
+                  onPress={() => pickImage('logo')}
                 >
-                  <View style={styles.imagePlaceholder}>
-                    <Text style={styles.imagePlaceholderText}>✍️</Text>
-                    <Text style={styles.imagePlaceholderLabel}>{mode === 'edit' ? 'Tap to add or update signature' : 'Tap to register signature'}</Text>
-                  </View>
+                  {formData.logo ? (
+                    <Image source={{ uri: formData.logo }} style={styles.logoPreview} />
+                  ) : (
+                    <View style={styles.imagePlaceholder}>
+                      <Text style={styles.imagePlaceholderText}>📷</Text>
+                      <Text style={styles.imagePlaceholderLabel}>Tap to select logo</Text>
+                    </View>
+                  )}
                 </TouchableOpacity>
-              )}
-            </View>
+              </View>
 
-            {/* Submit Button */}
-            <TouchableOpacity 
-              style={[styles.submitButton, loading && styles.submitButtonDisabled]}
-              onPress={handleSubmit}
-              disabled={loading}
-            >
-              <Text style={styles.submitButtonText}>
-                {loading ? (mode === 'edit' ? 'Saving...' : 'Registering...') : (mode === 'edit' ? 'Save Changes' : 'Complete Registration')}
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
-    {/* Signature Modal */}
-    <Modal
-      visible={signatureModalVisible}
-      animationType="slide"
-      transparent={false}
-      onRequestClose={() => setSignatureModalVisible(false)}
-    >
-      <SafeAreaView style={{ flex: 1, backgroundColor: Colors.background }}>
-        <View style={{ flex: 1, padding: Spacing.lg }}>
-          <Text style={{ fontSize: Fonts.sizes.header, fontWeight: Fonts.weights.bold, marginBottom: Spacing.md }}>
-            Draw Your Signature
-          </Text>
-          <Text style={{ color: Colors.textSecondary, marginBottom: Spacing.md }}>
-            Use a stylus or your finger to sign in the area below. Your signature will be saved to your profile and used on generated documents.
-          </Text>
-          <View style={{ flex: 1, backgroundColor: Colors.white, borderWidth: 1, borderColor: Colors.border, borderRadius: 8 }}>
-            <SignatureCanvas
-              onOK={async (sig) => {
-                // sig is a base64 data URL; recompress for smaller payload
-                const compact = await compressToDataUrl(sig, 'signature');
-                updateFormData('signature', compact || sig);
-                setSignatureModalVisible(false);
-                Alert.alert('Signature Saved', 'Your electronic signature has been captured.');
-              }}
-              onEmpty={() => {
-                Alert.alert('No Signature', 'Please draw your signature before saving.');
-              }}
-              descriptionText="Sign here"
-              clearText="Clear"
-              confirmText="Save Signature"
-              webStyle=".m-signature-pad--footer {box-shadow: none;}"
-              backgroundColor={Colors.white}
-            />
-          </View>
-          <TouchableOpacity style={[styles.submitButton, { marginTop: Spacing.lg }]} onPress={() => setSignatureModalVisible(false)}>
-            <Text style={styles.submitButtonText}>Cancel</Text>
-          </TouchableOpacity>
-        </View>
+              {/* Address */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Address *</Text>
+                <TextInput
+                  style={[styles.input, styles.textArea]}
+                  value={formData.address}
+                  onChangeText={(text) => updateFormData('address', text)}
+                  placeholder="Enter your company address"
+                  placeholderTextColor={Colors.textSecondary}
+                  multiline
+                  numberOfLines={3}
+                />
+              </View>
+
+              {/* Email */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Email *</Text>
+                <TextInput
+                  style={styles.input}
+                  value={formData.email}
+                  onChangeText={(text) => updateFormData('email', text)}
+                  placeholder="Enter your email address"
+                  placeholderTextColor={Colors.textSecondary}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                />
+              </View>
+
+              {/* Phone Number */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Phone Number *</Text>
+                <TextInput
+                  style={styles.input}
+                  value={formData.phoneNumber}
+                  onChangeText={(text) => updateFormData('phoneNumber', text)}
+                  placeholder="Enter your phone number"
+                  placeholderTextColor={Colors.textSecondary}
+                  keyboardType="phone-pad"
+                />
+              </View>
+
+              {/* Bank Details */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Bank Name</Text>
+                <TextInput
+                  style={styles.input}
+                  value={formData.bankName}
+                  onChangeText={(text) => updateFormData('bankName', text)}
+                  placeholder="Enter your bank name"
+                  placeholderTextColor={Colors.textSecondary}
+                />
+              </View>
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Account Name</Text>
+                <TextInput
+                  style={styles.input}
+                  value={formData.bankAccountName}
+                  onChangeText={(text) => updateFormData('bankAccountName', text)}
+                  placeholder="Enter your account name"
+                  placeholderTextColor={Colors.textSecondary}
+                />
+              </View>
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Account Number</Text>
+                <TextInput
+                  style={styles.input}
+                  value={formData.bankAccountNumber}
+                  onChangeText={(text) => updateFormData('bankAccountNumber', text)}
+                  placeholder="Enter your account number"
+                  placeholderTextColor={Colors.textSecondary}
+                  keyboardType="number-pad"
+                />
+              </View>
+
+              {/* Signature */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>{mode === 'edit' ? 'Signature' : 'Register Your Signature'}</Text>
+                <Text style={styles.helperText}>
+                  Create an electronic signature to be used across invoices, receipts, and documents.
+                </Text>
+                {formData.signature ? (
+                  <View style={{ alignItems: 'center' }}>
+                    <Image source={{ uri: formData.signature }} style={styles.signaturePreview} />
+                    <TouchableOpacity
+                      style={[styles.imagePickerButton, { marginTop: Spacing.sm }]}
+                      onPress={() => setSignatureModalVisible(true)}
+                    >
+                      <Text style={styles.imagePlaceholderLabel}>Re-sign</Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  <TouchableOpacity
+                    style={styles.imagePickerButton}
+                    onPress={() => setSignatureModalVisible(true)}
+                  >
+                    <View style={styles.imagePlaceholder}>
+                      <Text style={styles.imagePlaceholderText}>✍️</Text>
+                      <Text style={styles.imagePlaceholderLabel}>{mode === 'edit' ? 'Tap to add or update signature' : 'Tap to register signature'}</Text>
+                    </View>
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              {/* Submit Button */}
+              <TouchableOpacity
+                style={[styles.submitButton, loading && styles.submitButtonDisabled]}
+                onPress={handleSubmit}
+                disabled={loading}
+              >
+                <Text style={styles.submitButtonText}>
+                  {loading ? (mode === 'edit' ? 'Saving...' : 'Registering...') : (mode === 'edit' ? 'Save Changes' : 'Complete Registration')}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </ScrollView>
+        </KeyboardAvoidingView>
       </SafeAreaView>
-    </Modal>
-    {mode !== 'edit' && (
-    <Modal
-      visible={progressVisible}
-      animationType="fade"
-      transparent
-      onRequestClose={() => {}}
-    >
-      <View style={styles.modalOverlay}>
-        <View style={styles.progressCard}>
-          <Text style={styles.progressTitle}>Kindly wait, while we onboard your Company's Details</Text>
-          <View style={styles.progressBarOuter}>
-            <View style={[styles.progressBarInner, { width: `${Math.round(progressPercent)}%` }]} />
-          </View>
-          <Text style={styles.progressPercent}>{Math.round(progressPercent)}%</Text>
-        </View>
-      </View>
-    </Modal>
-    )}
-    {mode !== 'edit' && (
-    <Modal
-      visible={successModalVisible}
-      animationType="slide"
-      transparent
-      onRequestClose={() => setSuccessModalVisible(false)}
-    >
-      <View style={styles.modalOverlay}>
-        <View style={styles.modalCard}>
-          <Text style={styles.modalTitle}>Registration Successful</Text>
-          <Text style={styles.modalMessage}>Your Company ID</Text>
-          <Text style={styles.modalId}>{generatedCompanyId}</Text>
-          <Text style={styles.modalHint}>Keep and save this ID. You’ll need it to log in.</Text>
-          <View style={styles.modalActions}>
-            <TouchableOpacity style={styles.copyButton} onPress={copyCompanyId}>
-              <Text style={styles.copyButtonText}>Copy ID</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.continueButton} onPress={() => { setSuccessModalVisible(false); navigation.navigate('Dashboard'); }}>
-              <Text style={styles.continueButtonText}>Go to Dashboard</Text>
+      {/* Signature Modal */}
+      <Modal
+        visible={signatureModalVisible}
+        animationType="slide"
+        transparent={false}
+        onRequestClose={() => setSignatureModalVisible(false)}
+      >
+        <SafeAreaView style={{ flex: 1, backgroundColor: Colors.background }}>
+          <View style={{ flex: 1, padding: Spacing.lg }}>
+            <Text style={{ fontSize: Fonts.sizes.header, fontWeight: Fonts.weights.bold, marginBottom: Spacing.md }}>
+              Draw Your Signature
+            </Text>
+            <Text style={{ color: Colors.textSecondary, marginBottom: Spacing.md }}>
+              Use a stylus or your finger to sign in the area below. Your signature will be saved to your profile and used on generated documents.
+            </Text>
+            <View style={{ flex: 1, backgroundColor: Colors.white, borderWidth: 1, borderColor: Colors.border, borderRadius: 8 }}>
+              <SignatureCanvas
+                onOK={async (sig) => {
+                  // sig is a base64 data URL; recompress for smaller payload
+                  const compact = await compressToDataUrl(sig, 'signature');
+                  updateFormData('signature', compact || sig);
+                  setSignatureModalVisible(false);
+                  Alert.alert('Signature Saved', 'Your electronic signature has been captured.');
+                }}
+                onEmpty={() => {
+                  Alert.alert('No Signature', 'Please draw your signature before saving.');
+                }}
+                descriptionText="Sign here"
+                clearText="Clear"
+                confirmText="Save Signature"
+                webStyle=".m-signature-pad--footer {box-shadow: none;}"
+                backgroundColor={Colors.white}
+              />
+            </View>
+            <TouchableOpacity style={[styles.submitButton, { marginTop: Spacing.lg }]} onPress={() => setSignatureModalVisible(false)}>
+              <Text style={styles.submitButtonText}>Cancel</Text>
             </TouchableOpacity>
           </View>
-        </View>
-      </View>
-    </Modal>
-    )}
+        </SafeAreaView>
+      </Modal>
+      {mode !== 'edit' && (
+        <Modal
+          visible={progressVisible}
+          animationType="fade"
+          transparent
+          onRequestClose={() => { }}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.progressCard}>
+              <Text style={styles.progressTitle}>Kindly wait, while we onboard your Company's Details</Text>
+              <View style={styles.progressBarOuter}>
+                <View style={[styles.progressBarInner, { width: `${Math.round(progressPercent)}%` }]} />
+              </View>
+              <Text style={styles.progressPercent}>{Math.round(progressPercent)}%</Text>
+            </View>
+          </View>
+        </Modal>
+      )}
+      {mode !== 'edit' && (
+        <Modal
+          visible={successModalVisible}
+          animationType="slide"
+          transparent
+          onRequestClose={() => setSuccessModalVisible(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalCard}>
+              <Text style={styles.modalTitle}>Registration Successful</Text>
+              <Text style={styles.modalMessage}>Your Company ID</Text>
+              <Text style={styles.modalId}>{generatedCompanyId}</Text>
+              <Text style={styles.modalHint}>Keep and save this ID. You’ll need it to log in.</Text>
+              <View style={styles.modalActions}>
+                <TouchableOpacity style={styles.copyButton} onPress={copyCompanyId}>
+                  <Text style={styles.copyButtonText}>Copy ID</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.continueButton} onPress={() => { setSuccessModalVisible(false); navigation.navigate('Dashboard'); }}>
+                  <Text style={styles.continueButtonText}>Go to Dashboard</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+      )}
     </>
   );
 };

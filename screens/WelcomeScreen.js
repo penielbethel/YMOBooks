@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,7 @@ import {
   Linking,
   RefreshControl,
   Platform,
+  Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -20,7 +21,8 @@ import { Spacing } from '../constants/Spacing';
 const { width } = Dimensions.get('window');
 
 const WelcomeScreen = ({ navigation }) => {
-  const [refreshing, setRefreshing] = React.useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [businessTypeModalVisible, setBusinessTypeModalVisible] = useState(false);
 
   const features = [
     {
@@ -49,10 +51,39 @@ const WelcomeScreen = ({ navigation }) => {
     }
   ];
 
+  const businessTypes = [
+    {
+      id: 'printing_press',
+      title: 'Printing PRESS Company',
+      icon: 'print-outline',
+      description: 'For printing and publishing businesses',
+      color: '#D97706' // amber
+    },
+    {
+      id: 'manufacturing',
+      title: 'Production / Manufacturing',
+      icon: 'construct-outline',
+      description: 'For factories and production lines',
+      color: '#059669' // emerald
+    },
+    {
+      id: 'general_merchandise',
+      title: 'General Merchandise',
+      icon: 'storefront-outline',
+      description: 'For retail, wholesale, and general trading',
+      color: '#2563EB' // blue
+    }
+  ];
+
   const handleWhatsApp = () => {
     // WhatsApp direct link (Nigeria +234 for 08169114903)
     const url = 'https://wa.me/2348169114903?text=Hello%20YMOBooks%20Help%20Desk';
     Linking.openURL(url).catch(() => { });
+  };
+
+  const onSelectBusinessType = (type) => {
+    setBusinessTypeModalVisible(false);
+    navigation.navigate('CompanyRegistration', { businessType: type });
   };
 
   return (
@@ -90,7 +121,7 @@ const WelcomeScreen = ({ navigation }) => {
         <View style={styles.actionContainer}>
           <TouchableOpacity
             style={styles.primaryButton}
-            onPress={() => navigation.navigate('CompanyRegistration')}
+            onPress={() => setBusinessTypeModalVisible(true)}
             activeOpacity={0.8}
           >
             <Text style={styles.primaryButtonText}>Get Started</Text>
@@ -133,6 +164,55 @@ const WelcomeScreen = ({ navigation }) => {
       >
         <Ionicons name="logo-whatsapp" size={32} color="white" />
       </TouchableOpacity>
+
+      {/* Business Type Selection Modal */}
+      <Modal
+        visible={businessTypeModalVisible}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setBusinessTypeModalVisible(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setBusinessTypeModalVisible(false)}
+        >
+          <TouchableOpacity
+            activeOpacity={1}
+            style={styles.modalContent}
+            onPress={e => e.stopPropagation()}
+          >
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Select Business Type</Text>
+              <TouchableOpacity onPress={() => setBusinessTypeModalVisible(false)}>
+                <Ionicons name="close" size={24} color={Colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
+            <Text style={styles.modalSubtitle}>
+              Choose the category that best fits your company.
+            </Text>
+
+            <View style={styles.typeList}>
+              {businessTypes.map((type) => (
+                <TouchableOpacity
+                  key={type.id}
+                  style={styles.typeCard}
+                  onPress={() => onSelectBusinessType(type.id)}
+                >
+                  <View style={[styles.typeIconBox, { backgroundColor: type.color + '20' }]}>
+                    <Ionicons name={type.icon} size={28} color={type.color} />
+                  </View>
+                  <View style={styles.typeInfo}>
+                    <Text style={styles.typeTitle}>{type.title}</Text>
+                    <Text style={styles.typeDescription}>{type.description}</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={20} color={Colors.border} />
+                </TouchableOpacity>
+              ))}
+            </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -295,7 +375,69 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 8,
     zIndex: 100,
-  }
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: Colors.surface,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: Spacing.xl,
+    maxHeight: '80%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: Spacing.sm,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: Colors.text,
+  },
+  modalSubtitle: {
+    fontSize: 14,
+    color: Colors.textSecondary,
+    marginBottom: Spacing.lg,
+  },
+  typeList: {
+    gap: Spacing.md,
+  },
+  typeCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.white,
+    padding: Spacing.md,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    marginBottom: Spacing.xs,
+  },
+  typeIconBox: {
+    width: 50,
+    height: 50,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: Spacing.md,
+  },
+  typeInfo: {
+    flex: 1,
+  },
+  typeTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: Colors.text,
+    marginBottom: 2,
+  },
+  typeDescription: {
+    fontSize: 12,
+    color: Colors.textSecondary,
+  },
 });
 
 export default WelcomeScreen;
