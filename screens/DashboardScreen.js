@@ -59,8 +59,8 @@ const DashboardScreen = ({ navigation }) => {
             if (c) {
               const updated = { ...parsed, ...c };
               setCompanyData(updated);
-              // We don't necessarily persist back to AsyncStorage to avoid size limits, 
-              // but we cache logo separately
+              // Save back to AsyncStorage to make it permanent locally
+              await AsyncStorage.setItem('companyData', JSON.stringify(updated)).catch(() => { });
               if (c.logo) await AsyncStorage.setItem('companyLogoCache', c.logo).catch(() => { });
             }
           } catch (e) {

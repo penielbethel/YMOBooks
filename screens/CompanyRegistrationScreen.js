@@ -132,9 +132,11 @@ const CompanyRegistrationScreen = ({ navigation, route }) => {
     return input;
   };
   const compressToDataUrl = async (input, kind = 'logo') => {
+    if (!input || typeof input !== 'string') return undefined;
+    if (input.startsWith('http')) return undefined; // Already a URL
     try {
       const fileUri = await ensureFileUriFromInput(input, kind);
-      if (!fileUri) return null;
+      if (!fileUri) return undefined;
       const bounds = kind === 'signature' ? { width: 600, height: 220 } : { width: 512, height: 512 };
       const result = await ImageManipulator.manipulateAsync(
         fileUri,
@@ -145,11 +147,11 @@ const CompanyRegistrationScreen = ({ navigation, route }) => {
     } catch { }
     try {
       const fileUri = await ensureFileUriFromInput(input, kind);
-      if (!fileUri) return null;
+      if (!fileUri) return undefined;
       const base64 = await FileSystemLegacy.readAsStringAsync(fileUri, { encoding: 'base64' });
       return `data:image/png;base64,${base64}`;
     } catch {
-      return null;
+      return undefined;
     }
   };
 
@@ -263,8 +265,8 @@ const CompanyRegistrationScreen = ({ navigation, route }) => {
         email: formData.email,
         phone: formData.phoneNumber,
         // Always send compact base64 for smaller payloads
-        logo: await toCompressedData(formData.logo, 'logo'),
-        signature: await toCompressedData(formData.signature, 'signature'),
+        logo: formData.logo === null ? null : await toCompressedData(formData.logo, 'logo'),
+        signature: formData.signature === null ? null : await toCompressedData(formData.signature, 'signature'),
         // Send both modern and legacy keys so server can map reliably
         bankAccountNumber: formData.bankAccountNumber,
         bankAccountName: formData.bankAccountName,

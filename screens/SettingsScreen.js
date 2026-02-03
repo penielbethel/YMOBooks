@@ -66,13 +66,40 @@ const SettingsScreen = ({ navigation }) => {
   };
 
   useEffect(() => {
-    (async () => {
+    const init = async () => {
       try {
         const stored = await AsyncStorage.getItem('companyData');
-        const c = stored ? JSON.parse(stored) : null;
+        if (!stored) return;
+        let c = JSON.parse(stored);
+
+        // Populate initial fields
         populateFields(c);
+
+        // On-demand fetch if assets are missing but flags say they exist
+        if ((!c.logo || !c.signature) && c.companyId) {
+          if (c.hasLogo || c.hasSignature) {
+            try {
+              const fetched = await fetchCompany(c.companyId);
+              const full = fetched?.company || fetched?.data;
+              if (full) {
+                // Merge and update state
+                const merged = { ...c, ...full };
+                populateFields(merged);
+                // Save back to AsyncStorage to make it permanent locally
+                await AsyncStorage.setItem('companyData', JSON.stringify(merged)).catch(() => { });
+                // Also cache the logo for other screens
+                if (full.logo) {
+                  await AsyncStorage.setItem('companyLogoCache', full.logo).catch(() => { });
+                }
+              }
+            } catch (e) {
+              console.warn('[Settings] Failed to fetch full company details on load', e);
+            }
+          }
+        }
       } catch (_) { }
-    })();
+    };
+    init();
   }, []);
 
   const reloadCompanyData = async () => {
@@ -110,9 +137,11 @@ const SettingsScreen = ({ navigation }) => {
     return input;
   };
   const compressToDataUrl = async (input, kind = 'logo') => {
+    if (!input || typeof input !== 'string') return undefined;
+    if (input.startsWith('http')) return undefined; // Already a URL
     try {
       const fileUri = await ensureFileUriFromInput(input, kind);
-      if (!fileUri) return null;
+      if (!fileUri) return undefined;
       const bounds = kind === 'signature' ? { width: 600, height: 220 } : { width: 512, height: 512 };
       const result = await ImageManipulator.manipulateAsync(
         fileUri,
@@ -123,11 +152,11 @@ const SettingsScreen = ({ navigation }) => {
     } catch { }
     try {
       const fileUri = await ensureFileUriFromInput(input, kind);
-      if (!fileUri) return null;
+      if (!fileUri) return undefined;
       const base64 = await FileSystemLegacy.readAsStringAsync(fileUri, { encoding: 'base64' });
       return `data:image/png;base64,${base64}`;
     } catch {
-      return null;
+      return undefined;
     }
   };
 
@@ -216,8 +245,9 @@ const SettingsScreen = ({ navigation }) => {
         country: String(country || '').trim() || undefined,
         currencySymbol,
         currencyCode: symbolToCode(currencySymbol),
-        logo: await compressToDataUrl(logo, 'logo'),
-        signature: await compressToDataUrl(signature, 'signature')
+        // Use logic that preserves existing data on server if we don't have a new upload ready
+        logo: logo === null ? null : await compressToDataUrl(logo, 'logo'),
+        signature: signature === null ? null : await compressToDataUrl(signature, 'signature')
       };
 
       const res = await updateCompany(payload);
