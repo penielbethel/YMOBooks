@@ -36,16 +36,46 @@ export default function App() {
     try {
       const companyData = await AsyncStorage.getItem('companyData');
       if (companyData) {
-        setHasCompanyData(true);
-      } else {
+        // Verify against backend to support "clean sheet" resets
+        const parsed = JSON.parse(companyData);
+        let isValid = false;
+        try {
+          const ping = await pingBackend();
+          if (ping.ok) {
+            const check = await fetchCompany(parsed.companyId);
+            if (check && check.success) {
+              isValid = true;
+            }
+          } else {
+            // Offline: assume valid if we have data
+            isValid = true;
+          }
+        } catch (e) { }
+
+        if (isValid) {
+          setHasCompanyData(true);
+        } else {
+          // Backend has been wiped or ID is invalid - clear local storage
+          await AsyncStorage.removeItem('companyData');
+          // Proceed to auto-register below
+          setHasCompanyData(false); // will trigger auto-reg logic if westructure flow, but here we just fall out
+        }
+      }
+
+      const refreshedData = await AsyncStorage.getItem('companyData');
+      if (!refreshedData) {
         // Auto-register a test company on first launch to verify backend
         try {
           const ping = await pingBackend();
           if (ping.ok) {
-            const res = await registerCompany({ name: 'AutoTest Co', email: 'auto@test.local' });
+            const res = await registerCompany({
+              name: 'Auto Test',
+              email: 'auto@test.local',
+              businessType: 'general_merchandise'
+            });
             if (res?.success && res.companyId) {
               const fetched = await fetchCompany(res.companyId);
-              const c = fetched?.company || { name: 'AutoTest Co', companyId: res.companyId };
+              const c = fetched?.company || { name: 'Auto Test', companyId: res.companyId };
               const stored = {
                 companyName: c.name,
                 address: c.address || '',
@@ -62,6 +92,7 @@ export default function App() {
                 bankAccountNumber: c.accountNumber || c.bankAccountNumber || '',
                 brandColor: c.brandColor || null,
                 currencySymbol: c.currencySymbol || '$',
+                businessType: 'general_merchandise',
               };
               await AsyncStorage.setItem('companyData', JSON.stringify(stored));
               setHasCompanyData(true);
@@ -97,78 +128,78 @@ export default function App() {
           cardStyle: { backgroundColor: Colors.background }
         }}
       >
-        <Stack.Screen 
-          name="Welcome" 
+        <Stack.Screen
+          name="Welcome"
           component={WelcomeScreen}
           options={{
             animationEnabled: true,
           }}
         />
-        <Stack.Screen 
-          name="CompanyRegistration" 
+        <Stack.Screen
+          name="CompanyRegistration"
           component={CompanyRegistrationScreen}
           options={{
             animationEnabled: true,
           }}
         />
-        <Stack.Screen 
-          name="Login" 
+        <Stack.Screen
+          name="Login"
           component={LoginScreen}
           options={{
             animationEnabled: true,
           }}
         />
-        <Stack.Screen 
-          name="Dashboard" 
+        <Stack.Screen
+          name="Dashboard"
           component={DashboardScreen}
           options={{
             animationEnabled: true,
           }}
         />
-        <Stack.Screen 
-          name="Settings" 
+        <Stack.Screen
+          name="Settings"
           component={SettingsScreen}
           options={{
             animationEnabled: true,
           }}
         />
-        <Stack.Screen 
-          name="SuperAdmin" 
+        <Stack.Screen
+          name="SuperAdmin"
           component={SuperAdminScreen}
           options={{
             animationEnabled: true,
           }}
         />
-        <Stack.Screen 
-          name="CreateInvoice" 
+        <Stack.Screen
+          name="CreateInvoice"
           component={CreateInvoiceScreen}
           options={{
             animationEnabled: true,
           }}
         />
-        <Stack.Screen 
-          name="InvoiceHistory" 
+        <Stack.Screen
+          name="InvoiceHistory"
           component={InvoiceHistoryScreen}
           options={{
             animationEnabled: true,
           }}
         />
-        <Stack.Screen 
-          name="LetterheadPreview" 
+        <Stack.Screen
+          name="LetterheadPreview"
           component={LetterheadPreviewScreen}
           options={{
             animationEnabled: true,
           }}
         />
-        <Stack.Screen 
-          name="TemplatePicker" 
+        <Stack.Screen
+          name="TemplatePicker"
           component={TemplatePickerScreen}
           options={{
             animationEnabled: true,
           }}
         />
-        <Stack.Screen 
-          name="FinancialCalculator" 
+        <Stack.Screen
+          name="FinancialCalculator"
           component={FinancialCalculatorScreen}
           options={{
             animationEnabled: true,

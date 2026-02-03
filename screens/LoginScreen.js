@@ -24,9 +24,9 @@ const LoginScreen = ({ navigation }) => {
   const [selectedType, setSelectedType] = useState('general_merchandise');
 
   const businessTypes = [
-    { id: 'printing_press', label: 'Printing Press', prefix: 'PBM/PP', color: '#D97706' },
-    { id: 'manufacturing', label: 'Manufacturing', prefix: 'PBM/MC', color: '#059669' },
-    { id: 'general_merchandise', label: 'General Merchandise', prefix: 'PBM/GM', color: '#2563EB' },
+    { id: 'printing_press', label: 'Printing Press', prefix: '.../PP', color: '#D97706' },
+    { id: 'manufacturing', label: 'Manufacturing', prefix: '.../MC', color: '#059669' },
+    { id: 'general_merchandise', label: 'General Merchandise', prefix: '.../GM', color: '#2563EB' },
   ];
 
   const handleLogin = async () => {
@@ -45,11 +45,11 @@ const LoginScreen = ({ navigation }) => {
 
       // Optional: Check if ID matches selected type prefix (soft validation)
       const activeType = businessTypes.find(t => t.id === selectedType);
-      if (activeType && entered.toUpperCase().startsWith('PBM/') && !entered.toUpperCase().startsWith(activeType.prefix)) {
-        // User might be logging into wrong category, but we let it pass if valid, just a warning in real app? 
-        // For now, assume user knows what they are doing or the ID is unique enough.
-        // However, distinct account requirement suggests we should perhaps enforce it?
-        // Let's rely on the backend finding the company.
+      const suffix = activeType?.id === 'printing_press' ? '/PP' : activeType?.id === 'manufacturing' ? '/MC' : '/GM';
+
+      if (entered.includes('/') && !entered.toUpperCase().includes(suffix)) {
+        // Warn if suffix doesn't match selected tab
+        // We can be strict or loose here. Let's rely on server for final strict check.
       }
 
       // Diagnostics: check connectivity and log runtime base URL
