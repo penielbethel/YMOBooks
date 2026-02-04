@@ -13,6 +13,7 @@ import { Fonts } from '../constants/Fonts';
 import { Spacing } from '../constants/Spacing';
 import { buildInvoiceHtml } from '../utils/invoiceHtml';
 import { Ionicons } from '@expo/vector-icons';
+import { WebView } from 'react-native-webview';
 
 import SubscriptionScreen from './SubscriptionScreen';
 

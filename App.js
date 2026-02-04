@@ -17,6 +17,7 @@ import CreateInvoiceScreen from './screens/CreateInvoiceScreen';
 import InvoiceHistoryScreen from './screens/InvoiceHistoryScreen';
 import SuperAdminScreen from './screens/SuperAdminScreen';
 import FinancialCalculatorScreen from './screens/FinancialCalculatorScreen';
+import SubscriptionScreen from './screens/SubscriptionScreen';
 
 // Import constants
 import { Colors } from './constants/Colors';
@@ -205,6 +206,14 @@ export default function App() {
           component={FinancialCalculatorScreen}
           options={{
             animationEnabled: true,
+          }}
+        />
+        <Stack.Screen
+          name="Subscription"
+          component={SubscriptionScreen}
+          options={{
+            animationEnabled: true,
+            presentation: 'modal', // Make it slide up like a modal
           }}
         />
       </Stack.Navigator>
