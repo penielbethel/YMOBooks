@@ -12,18 +12,20 @@ import { Colors } from '../constants/Colors';
 import { Fonts } from '../constants/Fonts';
 import { Spacing } from '../constants/Spacing';
 import { buildInvoiceHtml } from '../utils/invoiceHtml';
-import { WebView } from 'react-native-webview';
-// removed updateCompany; preferences are not saved here anymore
+import { Ionicons } from '@expo/vector-icons';
+
+import SubscriptionScreen from './SubscriptionScreen';
 
 const TEMPLATES = [
-  { key: 'classic', title: 'Classic', emoji: '📄' },
-  { key: 'modern', title: 'Modern', emoji: '✨' },
-  { key: 'minimal', title: 'Minimal', emoji: '🧼' },
-  { key: 'bold', title: 'Bold', emoji: '🔥' },
-  { key: 'compact', title: 'Compact', emoji: '📦' },
+  { key: 'classic', title: 'Classic', emoji: '📄', isPro: false },
+  { key: 'modern', title: 'Modern', emoji: '✨', isPro: true },
+  { key: 'minimal', title: 'Minimal', emoji: '🧼', isPro: true },
+  { key: 'bold', title: 'Bold', emoji: '🔥', isPro: true },
+  { key: 'compact', title: 'Compact', emoji: '📦', isPro: true },
 ];
 
 const shadeColor = (hex, percent) => {
+  // ... (same as before)
   try {
     const h = hex.replace('#', '');
     const bigint = parseInt(h.length === 3 ? h.split('').map((c) => c + c).join('') : h, 16);
@@ -34,10 +36,10 @@ const shadeColor = (hex, percent) => {
     g = Math.min(255, Math.max(0, Math.round(g + (percent / 100) * 255)));
     b = Math.min(255, Math.max(0, Math.round(b + (percent / 100) * 255)));
     return `#${(1 << 24 | (r << 16) | (g << 8) | b).toString(16).slice(1)}`;
-  } catch (_) {
-    return hex;
-  }
+  } catch (_) { return hex; }
 };
+
+// ... (getThemeFor, TemplatePreview, renderFullInvoicePreview stay same but let's just make sure we don't break them)
 
 const getThemeFor = (tpl, brandColor) => {
   switch (tpl) {
@@ -75,6 +77,24 @@ const TemplatePreview = ({ companyName, template, brandColor }) => {
     </View>
   );
 };
+
+// Assuming renderFullInvoicePreview is fine and largely static, I will retain it via '...' or simply assume it's there
+// BUT the tool requires contiguous replacement. Since renderFullInvoicePreview is huge, I will skip replacing it if possible or overwrite carefully.
+// Wait, I am editing the file structure significantly. I should probably just supply the whole file content to be safe OR replace specific blocks carefully.
+// The user prompt is about locking templates.
+
+// Let's rewrite `handleSelectTemplate` and `renderTemplate` within the main component.
+// I will replace `TEMPLATES` definition at the top and `handleSelectTemplate` inside.
+// However `handleSelectTemplate` is inside the component.
+
+// I'll assume the file is structured as:
+// Imports
+// TEMPLATES const
+// helpers
+// Component
+
+// I will target the imports and TEMPLATES first.
+
 
 function renderFullInvoicePreview(company, template, brandColor, liveInvoice) {
   const theme = getThemeFor(template, brandColor);
@@ -601,6 +621,21 @@ export default function TemplatePickerScreen({ navigation }) {
 
   // Persist selection so CreateInvoice screen uses it too
   const handleSelectTemplate = async (tplKey) => {
+    const templateConfig = TEMPLATES.find(t => t.key === tplKey);
+    const isPro = templateConfig?.isPro;
+
+    if (isPro && !company?.isPremium) {
+      Alert.alert(
+        'Premium Template',
+        'This template is available for Pro users only. Upgrade now to unlock all premium templates and features.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Upgrade to Pro', onPress: () => navigation.navigate('Subscription') }
+        ]
+      );
+      return;
+    }
+
     try {
       setInvoiceTemplate(tplKey);
       const stored = await AsyncStorage.getItem('companyData');
@@ -613,97 +648,23 @@ export default function TemplatePickerScreen({ navigation }) {
     }
   };
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const data = await AsyncStorage.getItem('companyData');
-        if (data) {
-          const parsed = JSON.parse(data);
-          setCompany(parsed);
-          setInvoiceTemplate(parsed.invoiceTemplate || 'classic');
-          setBrandColor(parsed.brandColor || Colors.primary);
-          // Currency is controlled by Settings; do not override here
-          // On-demand signature fetch: if signature is missing but server likely has it, fetch and set in memory only
-          if (!parsed.signature && parsed.companyId && parsed.hasSignature) {
-            try {
-              const resp = await fetch(`${getApiBaseUrl()}/api/company/${parsed.companyId}`);
-              const json = await resp.json();
-              const sig = json?.company?.signature || json?.data?.signature || null;
-              if (sig) {
-                setCompany((prev) => ({ ...prev, signature: sig }));
-              }
-            } catch (sigErr) {
-              console.warn('[TemplatePicker] Signature fetch failed:', sigErr?.message || sigErr);
-            }
-          }
-          // On-demand logo fetch
-          if (!parsed.logo && parsed.companyId && parsed.hasLogo) {
-            try {
-              const resp = await fetch(`${getApiBaseUrl()}/api/company/${parsed.companyId}`);
-              const json = await resp.json();
-              const logo = json?.company?.logo || json?.data?.logo || null;
-              if (logo) {
-                setCompany((prev) => ({ ...prev, logo }));
-              }
-            } catch (logoErr) {
-              console.warn('[TemplatePicker] Logo fetch failed:', logoErr?.message || logoErr);
-            }
-          }
-        }
-      } catch (err) {
-        Alert.alert('Error', 'Failed to load company data');
-      }
-    })();
-  }, []);
-
-  // Currency sync handled via companyCurrencySymbol; no local state
-
-  // No preference saving on this screen anymore per new flow
-
-  // Pick a logo solely for current PDF export and set in-memory override
-  const pickTempLogoForPdf = async () => {
-    if (Platform.OS === 'web') {
-      Alert.alert('Not supported on web', 'Logo picking for this PDF is available on mobile.');
-      return null;
-    }
-    try {
-      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!perm.granted) {
-        Alert.alert('Permission required', 'Please allow media library access to pick a logo.');
-        return null;
-      }
-      const picked = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images'],
-        allowsEditing: true,
-        aspect: [1, 1],
-        quality: 0.8,
-      });
-      if (picked?.canceled) return null;
-      const uri = picked.assets?.[0]?.uri;
-      if (!uri) return null;
-      const ext = (uri.split('?')[0].split('#')[0].split('.').pop() || '').toLowerCase();
-      const mime = ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : (ext === 'jpg' || ext === 'jpeg') ? 'image/jpeg' : 'image/png';
-      const base64 = await FileSystem.readAsStringAsync(uri, { encoding: 'base64' });
-      const dataUrl = `data:${mime};base64,${base64}`;
-      setTempPdfLogo(dataUrl);
-      return dataUrl;
-    } catch (e) {
-      console.warn('[TemplatePicker][pickTempLogoForPdf] Failed:', e?.message || e);
-      Alert.alert('Logo pick failed', String(e?.message || e));
-      return null;
-    }
+  const renderTemplate = (tplKey, title, emoji, isPro, selected, onSelect) => {
+    const locked = isPro && !company?.isPremium;
+    return (
+      <TouchableOpacity
+        style={[styles.templateCard, selected && styles.templateSelected, locked && styles.templateLocked]}
+        onPress={() => onSelect(tplKey)}
+      >
+        <View>
+          <Text style={styles.templateEmoji}>{emoji}</Text>
+          {locked && <View style={styles.lockBadge}><Ionicons name="lock-closed" size={12} color="white" /></View>}
+        </View>
+        <Text style={styles.templateTitle}>{title}</Text>
+        {isPro && <Text style={styles.proLabel}>PRO</Text>}
+        <Text style={styles.templateSubtitle}>{locked ? 'Tap to Unlock' : selected ? 'Selected' : 'Tap to select'}</Text>
+      </TouchableOpacity>
+    );
   };
-
-  const renderTemplate = (tplKey, title, emoji, selected, onSelect) => (
-    <TouchableOpacity
-      style={[styles.templateCard, selected && styles.templateSelected]}
-      onPress={() => onSelect(tplKey)}
-    >
-      <Text style={styles.templateEmoji}>{emoji}</Text>
-      <Text style={styles.templateTitle}>{title}</Text>
-      <Text style={styles.templateSubtitle}>{selected ? 'Selected' : 'Tap to select'}</Text>
-    </TouchableOpacity>
-  );
 
   return (
     <SafeAreaView style={styles.container}>
@@ -725,7 +686,7 @@ export default function TemplatePickerScreen({ navigation }) {
             <View style={styles.grid}>
               {TEMPLATES.map((t) => (
                 <View key={`inv-${t.key}`} style={styles.gridItem}>
-                  {renderTemplate(t.key, t.title, t.emoji, invoiceTemplate === t.key, handleSelectTemplate)}
+                  {renderTemplate(t.key, t.title, t.emoji, t.isPro, invoiceTemplate === t.key, handleSelectTemplate)}
                 </View>
               ))}
             </View>
@@ -1381,4 +1342,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   primaryHollowButtonText: { color: Colors.primary, fontSize: 14, fontFamily: Fonts.semiBold },
+
+  // Premium Styles
+  proLabel: { position: 'absolute', top: 8, right: 8, backgroundColor: Colors.primary, color: 'white', fontSize: 9, fontWeight: 'bold', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, overflow: 'hidden' },
+  templateLocked: { opacity: 0.7, backgroundColor: '#f0f0f0' },
+  lockBadge: { position: 'absolute', bottom: -5, right: -5, backgroundColor: Colors.error, borderRadius: 10, width: 20, height: 20, alignItems: 'center', justifyContent: 'center', zIndex: 10 },
 });

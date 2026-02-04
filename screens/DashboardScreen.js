@@ -21,8 +21,11 @@ import { getApiBaseUrl, resolveAssetUri } from '../utils/api';
 
 const MenuItem = memo(({ item, onPress }) => (
   <TouchableOpacity style={styles.menuItem} onPress={() => onPress(item.id)}>
-    <View style={[styles.menuIcon, { backgroundColor: item.tint }]}>
-      <Ionicons name={item.icon} size={26} color={Colors.white} />
+    <View style={styles.iconWrapper}>
+      <View style={[styles.menuIcon, { backgroundColor: item.tint }]}>
+        <Ionicons name={item.icon} size={26} color={Colors.white} />
+      </View>
+      {item.isPro && <View style={styles.proBadge}><Text style={styles.proBadgeText}>PRO</Text></View>}
     </View>
     <Text style={styles.menuTitle}>{item.title}</Text>
     <Text style={styles.menuDescription}>{item.description}</Text>
@@ -104,6 +107,7 @@ const DashboardScreen = ({ navigation }) => {
       description: 'Perform financial calculations',
       icon: 'calculator-outline',
       tint: Colors.success,
+      isPro: true,
     }
   ]), []);
 
@@ -391,6 +395,26 @@ const styles = StyleSheet.create({
     fontSize: Fonts.sizes.xs,
     color: Colors.textSecondary,
     textAlign: 'center',
+  },
+  iconWrapper: {
+    position: 'relative',
+    alignItems: 'center',
+  },
+  proBadge: {
+    position: 'absolute',
+    right: -8,
+    top: -8,
+    backgroundColor: Colors.primary,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: Colors.white,
+  },
+  proBadgeText: {
+    fontSize: 9,
+    color: Colors.white,
+    fontWeight: 'bold'
   },
 
 

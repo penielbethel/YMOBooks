@@ -1,7 +1,8 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useMemo } from 'react';
 import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, SafeAreaView, Alert, KeyboardAvoidingView, Platform, Modal, ActivityIndicator } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../constants/Colors';
 import { Fonts } from '../constants/Fonts';
 import { Spacing } from '../constants/Spacing';
@@ -49,6 +50,16 @@ const CreateInvoiceScreen = ({ navigation }) => {
   const addItem = () => setItems(prev => [...prev, { ...emptyItem }]);
   const removeItem = (index) => setItems(prev => prev.filter((_, i) => i !== index));
 
+  const totalAmount = useMemo(() => {
+    return items.reduce((sum, item) => {
+      const q = parseFloat(item.qty) || 0;
+      const p = parseFloat(item.price) || 0;
+      return sum + (q * p);
+    }, 0);
+  }, [items]);
+
+  const currencySymbol = companyData?.currencySymbol || '$';
+
   const handleGenerate = async () => {
     setLoading(true);
     try {
@@ -59,33 +70,19 @@ const CreateInvoiceScreen = ({ navigation }) => {
         return;
       }
 
-      // Ensure we have logo/signature if they are missing (e.g. from optimized storage)
       let fullCompanyData = { ...companyData };
       if ((!fullCompanyData.logo || !fullCompanyData.signature) && companyData.companyId) {
         try {
-          // try cache first for logo
           if (!fullCompanyData.logo) {
             const cachedLogo = await AsyncStorage.getItem('companyLogoCache');
             if (cachedLogo) fullCompanyData.logo = cachedLogo;
           }
-
-          // if still missing either, fetch from server
           if (!fullCompanyData.logo || !fullCompanyData.signature) {
-            // Only fetch if we really need to (to avoid network delay if not needed)
-            if (companyData.hasLogo || companyData.hasSignature) { // Optimization flags from Login
-              const fetched = await import('../utils/api').then(m => m.fetchCompany(companyData.companyId));
-              if (fetched?.company) {
-                fullCompanyData = { ...fullCompanyData, ...fetched.company };
-                // Update cache for next time? Maybe not the full data to avoid storage bloat, but maybe logo cache
-                if (fetched.company.logo) {
-                  AsyncStorage.setItem('companyLogoCache', fetched.company.logo).catch(() => { });
-                }
-              }
-            } else {
-              // Even if no flags, try once just in case
-              const fetched = await import('../utils/api').then(m => m.fetchCompany(companyData.companyId));
-              if (fetched?.company) {
-                fullCompanyData = { ...fullCompanyData, ...fetched.company };
+            const fetched = await import('../utils/api').then(m => m.fetchCompany(companyData.companyId));
+            if (fetched?.company) {
+              fullCompanyData = { ...fullCompanyData, ...fetched.company };
+              if (fetched.company.logo) {
+                AsyncStorage.setItem('companyLogoCache', fetched.company.logo).catch(() => { });
               }
             }
           }
@@ -94,16 +91,12 @@ const CreateInvoiceScreen = ({ navigation }) => {
         }
       }
 
-      const companyCurrencySymbol = fullCompanyData?.currencySymbol || '$';
-
-      // Generate Local PDF for immediate preview
       const invoiceData = {
         invoiceDate: invoice.invoiceDate,
         dueDate: invoice.dueDate,
         customerName: invoice.customerName,
         customerAddress: invoice.customerAddress,
         customerContact: invoice.contact,
-        // Generate a temp number or let server assign (for local preview we use temp)
         invoiceNumber: `INV-${Date.now()}`
       };
 
@@ -113,19 +106,18 @@ const CreateInvoiceScreen = ({ navigation }) => {
         items: items.map(it => ({ description: it.description, qty: Number(it.qty || 0), price: Number(it.price || 0) })),
         template: fullCompanyData?.invoiceTemplate || 'classic',
         brandColor: fullCompanyData?.brandColor,
-        currencySymbol: companyCurrencySymbol
+        currencySymbol
       });
 
       const { uri } = await Print.printToFileAsync({ html });
       setPreviewUrl(uri);
       setPreviewVisible(true);
 
-      // Sync with server
       const payload = {
         companyId: companyData.companyId,
         template: companyData?.invoiceTemplate,
         brandColor: companyData?.brandColor,
-        currencySymbol: companyCurrencySymbol,
+        currencySymbol,
         invoiceDate: invoice.invoiceDate?.toISOString().slice(0, 10),
         dueDate: invoice.dueDate?.toISOString().slice(0, 10),
         customer: {
@@ -136,7 +128,6 @@ const CreateInvoiceScreen = ({ navigation }) => {
         items: items.map(it => ({ description: it.description, qty: Number(it.qty || 0), price: Number(it.price || 0) })),
       };
 
-      // We don't block the UI heavily for this, but we await to ensure it succeeds
       createInvoice(payload).catch(err => console.warn('Background sync failed', err));
 
     } catch (err) {
@@ -151,46 +142,32 @@ const CreateInvoiceScreen = ({ navigation }) => {
     if (!previewUrl) return;
     try {
       setDownloading(true);
-      console.log('[Download] Starting download for previewUrl:', previewUrl);
       const fileNameGuess = previewUrl.split('/').pop() || `invoice-${Date.now()}.pdf`;
       const filename = fileNameGuess.replace(/[^a-zA-Z0-9_.-]/g, '_');
       const baseDir = FileSystem.cacheDirectory || FileSystem.documentDirectory || '';
       const tempUri = `${baseDir}${filename}`;
-      console.log('[Download] tempUri:', tempUri);
       const dl = await FileSystemLegacy.downloadAsync(previewUrl, tempUri);
-      console.log('[Download] Downloaded to temp:', dl?.uri);
+
       if (Platform.OS === 'android') {
         try {
           const perm = await FileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync();
-          console.log('[Download][Android] SAF permission:', perm);
           if (perm.granted && perm.directoryUri) {
             const fileUri = await FileSystem.StorageAccessFramework.createFileAsync(perm.directoryUri, filename, 'application/pdf');
-            console.log('[Download][Android] SAF created fileUri:', fileUri);
             const base64 = await FileSystemLegacy.readAsStringAsync(dl.uri, { encoding: 'base64' });
             await FileSystem.StorageAccessFramework.writeAsStringAsync(fileUri, base64, { encoding: 'base64' });
             Alert.alert('Saved', 'Invoice PDF saved to selected folder.');
           } else {
-            console.log('[Download][Android] SAF not granted, opening from cache');
             const contentUri = await FileSystem.getContentUriAsync(dl.uri);
-            console.log('[Download][Android] contentUri:', contentUri);
             await Linking.openURL(contentUri);
           }
         } catch (e) {
-          console.warn('[Download][Android] SAF write failed:', e?.message || e);
-          try {
-            const contentUri = await FileSystem.getContentUriAsync(dl.uri);
-            console.log('[Download][Android] Fallback contentUri:', contentUri);
-            await Linking.openURL(contentUri);
-          } catch (openErr) {
-            console.error('[Download][Android] Fallback open failed:', openErr?.message || openErr);
-          }
+          const contentUri = await FileSystem.getContentUriAsync(dl.uri);
+          await Linking.openURL(contentUri);
         }
       } else {
-        console.log('[Download][iOS/Web] Opening temp file');
         await Linking.openURL(dl.uri);
       }
     } catch (e) {
-      console.error('[Download] Download failed:', e?.message || e);
       Alert.alert('Download failed', String(e?.message || 'Could not save invoice to device'));
     } finally {
       setDownloading(false);
@@ -201,107 +178,162 @@ const CreateInvoiceScreen = ({ navigation }) => {
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-          <Text style={styles.backButtonText}>← Back</Text>
+          <Ionicons name="arrow-back" size={24} color={Colors.white} />
         </TouchableOpacity>
-        <Text style={styles.title}>Create Invoice</Text>
-        <Text style={styles.subtitle}>Generate a downloadable A4 invoice</Text>
+        <View>
+          <Text style={styles.title}>New Invoice</Text>
+          <Text style={styles.subtitle}>Create professional invoice</Text>
+        </View>
       </View>
 
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
-        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-          {!!companyData?.invoiceTemplate && (
-            <View style={styles.usingTemplateBox}>
-              <Text style={styles.usingTemplateText}>
-                Using Template: {String(companyData.invoiceTemplate).charAt(0).toUpperCase() + String(companyData.invoiceTemplate).slice(1)}
-              </Text>
+        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+
+          {/* Summary Card */}
+          <View style={styles.summaryCard}>
+            <View style={styles.summaryRow}>
+              <View>
+                <Text style={styles.summaryLabel}>ESTIMATED TOTAL</Text>
+                <Text style={styles.summaryValue}>{currencySymbol}{totalAmount.toFixed(2)}</Text>
+              </View>
+              <View style={styles.iconCircle}>
+                <Ionicons name="receipt-outline" size={24} color={Colors.primary} />
+              </View>
             </View>
-          )}
-
-          <Text style={styles.sectionTitle}>Customer</Text>
-          <TextInput style={styles.input} placeholder="Name" placeholderTextColor={Colors.textSecondary} value={invoice.customerName} onChangeText={(t) => updateInvoice('customerName', t)} />
-          <TextInput style={[styles.input, styles.textArea]} placeholder="Address" placeholderTextColor={Colors.textSecondary} value={invoice.customerAddress} onChangeText={(t) => updateInvoice('customerAddress', t)} multiline />
-          <TextInput style={styles.input} placeholder="Email or Phone (optional)" placeholderTextColor={Colors.textSecondary} value={invoice.contact} onChangeText={(t) => updateInvoice('contact', t)} />
-
-          <Text style={styles.sectionTitle}>Invoice Details</Text>
-          <View style={styles.dateRow}>
-            <TouchableOpacity style={[styles.input, styles.dateInput]} onPress={() => setShowInvoiceDatePicker(true)}>
-              <Text style={styles.dateText}>Issuance Date: {invoice.invoiceDate?.toISOString().slice(0, 10)}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={[styles.input, styles.dateInput]} onPress={() => setShowDueDatePicker(true)}>
-              <Text style={styles.dateText}>Due Date: {invoice.dueDate?.toISOString().slice(0, 10)}</Text>
-            </TouchableOpacity>
+            {!!companyData?.invoiceTemplate && (
+              <View style={styles.templateBadge}>
+                <Text style={styles.templateText}>Template: {companyData.invoiceTemplate.toUpperCase()}</Text>
+              </View>
+            )}
           </View>
-          {showInvoiceDatePicker && (
-            <DateTimePicker value={invoice.invoiceDate || new Date()} mode="date" display="default" onChange={(e, d) => { setShowInvoiceDatePicker(false); if (d) updateInvoice('invoiceDate', d); }} />
-          )}
-          {showDueDatePicker && (
-            <DateTimePicker value={invoice.dueDate || new Date()} mode="date" display="default" onChange={(e, d) => { setShowDueDatePicker(false); if (d) updateInvoice('dueDate', d); }} />
-          )}
 
-          <Text style={styles.sectionTitle}>Items</Text>
-          {items.map((it, idx) => (
-            <View key={idx} style={styles.itemRow}>
-              <TextInput style={[styles.input, styles.itemDesc]} placeholder="Description" placeholderTextColor={Colors.textSecondary} value={it.description} onChangeText={(t) => updateItem(idx, 'description', t)} />
-              <TextInput style={[styles.input, styles.itemQty]} placeholder="Qty" placeholderTextColor={Colors.textSecondary} keyboardType="number-pad" value={it.qty} onChangeText={(t) => updateItem(idx, 'qty', t)} />
-              <TextInput style={[styles.input, styles.itemPrice]} placeholder="Price" placeholderTextColor={Colors.textSecondary} keyboardType="decimal-pad" value={it.price} onChangeText={(t) => updateItem(idx, 'price', t)} />
-              <TouchableOpacity style={styles.removeButton} onPress={() => removeItem(idx)}>
-                <Text style={styles.removeButtonText}>✕</Text>
+          {/* Section: Customer */}
+          <View style={styles.sectionCard}>
+            <View style={styles.sectionHeader}>
+              <Ionicons name="person-outline" size={20} color={Colors.primary} />
+              <Text style={styles.sectionTitle}>Customer Details</Text>
+            </View>
+            <TextInput style={styles.input} placeholder="Client Name" placeholderTextColor={Colors.textSecondary} value={invoice.customerName} onChangeText={(t) => updateInvoice('customerName', t)} />
+            <TextInput style={[styles.input, styles.textArea]} placeholder="Billing Address" placeholderTextColor={Colors.textSecondary} value={invoice.customerAddress} onChangeText={(t) => updateInvoice('customerAddress', t)} multiline />
+            <TextInput style={styles.input} placeholder="Contact (Email/Phone)" placeholderTextColor={Colors.textSecondary} value={invoice.contact} onChangeText={(t) => updateInvoice('contact', t)} />
+          </View>
+
+          {/* Section: Dates */}
+          <View style={styles.sectionCard}>
+            <View style={styles.sectionHeader}>
+              <Ionicons name="calendar-outline" size={20} color={Colors.primary} />
+              <Text style={styles.sectionTitle}>Key Dates</Text>
+            </View>
+            <View style={styles.dateRow}>
+              <TouchableOpacity style={styles.dateField} onPress={() => setShowInvoiceDatePicker(true)}>
+                <Text style={styles.dateLabel}>Issued Date</Text>
+                <Text style={styles.dateValue}>{invoice.invoiceDate?.toLocaleDateString()}</Text>
+                <Ionicons name="chevron-down" size={16} color={Colors.textSecondary} style={{ position: 'absolute', right: 10, bottom: 12 }} />
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.dateField} onPress={() => setShowDueDatePicker(true)}>
+                <Text style={styles.dateLabel}>Due Date</Text>
+                <Text style={styles.dateValue}>{invoice.dueDate?.toLocaleDateString()}</Text>
+                <Ionicons name="chevron-down" size={16} color={Colors.textSecondary} style={{ position: 'absolute', right: 10, bottom: 12 }} />
               </TouchableOpacity>
             </View>
-          ))}
-          <TouchableOpacity style={styles.addButton} onPress={addItem}><Text style={styles.addButtonText}>+ Add Item</Text></TouchableOpacity>
-          <TouchableOpacity style={[styles.generateButton, loading && styles.generateButtonDisabled]} disabled={loading} onPress={handleGenerate}>
-            <Text style={styles.generateButtonText}>{loading ? 'Generating...' : 'Generate Invoice'}</Text>
-          </TouchableOpacity>
+            {showInvoiceDatePicker && (
+              <DateTimePicker value={invoice.invoiceDate || new Date()} mode="date" display="default" onChange={(e, d) => { setShowInvoiceDatePicker(false); if (d) updateInvoice('invoiceDate', d); }} />
+            )}
+            {showDueDatePicker && (
+              <DateTimePicker value={invoice.dueDate || new Date()} mode="date" display="default" onChange={(e, d) => { setShowDueDatePicker(false); if (d) updateInvoice('dueDate', d); }} />
+            )}
+          </View>
+
+          {/* Section: Items */}
+          <View style={styles.sectionCard}>
+            <View style={styles.sectionHeader}>
+              <Ionicons name="list-outline" size={20} color={Colors.primary} />
+              <Text style={styles.sectionTitle}>Line Items</Text>
+            </View>
+
+            {items.map((it, idx) => (
+              <View key={idx} style={styles.itemContainer}>
+                <View style={styles.itemHeaderRow}>
+                  <Text style={styles.itemIndex}>#{idx + 1}</Text>
+                  <TouchableOpacity onPress={() => removeItem(idx)}>
+                    <Ionicons name="trash-outline" size={18} color={Colors.error} />
+                  </TouchableOpacity>
+                </View>
+                <TextInput style={styles.inputS} placeholder="Item Description" placeholderTextColor={Colors.textSecondary} value={it.description} onChangeText={(t) => updateItem(idx, 'description', t)} />
+                <View style={styles.itemRowInputs}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.miniLabel}>Qty</Text>
+                    <TextInput style={styles.inputS} keyboardType="numeric" value={it.qty} onChangeText={(t) => updateItem(idx, 'qty', t)} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.miniLabel}>Price</Text>
+                    <TextInput style={styles.inputS} keyboardType="numeric" value={it.price} onChangeText={(t) => updateItem(idx, 'price', t)} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.miniLabel}>Total</Text>
+                    <Text style={styles.rowTotal}>{currencySymbol}{((parseFloat(it.qty) || 0) * (parseFloat(it.price) || 0)).toFixed(2)}</Text>
+                  </View>
+                </View>
+              </View>
+            ))}
+
+            <TouchableOpacity style={styles.addItemBtn} onPress={addItem}>
+              <Ionicons name="add-circle-outline" size={20} color={Colors.primary} />
+              <Text style={styles.addItemText}>Add Another Item</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={{ height: 100 }} />
         </ScrollView>
+
+        <View style={styles.footerActions}>
+          <TouchableOpacity style={[styles.generateButton, loading && styles.disabledBtn]} disabled={loading} onPress={handleGenerate}>
+            {loading ? <ActivityIndicator color="#fff" /> : (
+              <>
+                <Ionicons name="document-text-outline" size={20} color="#fff" style={{ marginRight: 8 }} />
+                <Text style={styles.generateButtonText}>Generate Invoice</Text>
+              </>
+            )}
+          </TouchableOpacity>
+        </View>
       </KeyboardAvoidingView>
 
       {/* Preview Modal */}
       <Modal visible={!!previewVisible} animationType="slide" onRequestClose={() => setPreviewVisible(false)}>
-        <SafeAreaView style={styles.container}>
-          <View style={styles.header}>
-            <TouchableOpacity style={styles.backButton} onPress={() => setPreviewVisible(false)}>
-              <Text style={styles.backButtonText}>← Close</Text>
+        <SafeAreaView style={styles.previewContainer}>
+          <View style={styles.previewHeader}>
+            <TouchableOpacity style={styles.closePreviewBtn} onPress={() => setPreviewVisible(false)}>
+              <Ionicons name="close" size={24} color={Colors.text} />
             </TouchableOpacity>
-            <Text style={styles.title}>Invoice Preview</Text>
-            <Text style={styles.subtitle}>Review, then Download or Print</Text>
+            <Text style={styles.previewTitle}>Preview</Text>
+            <View style={{ width: 24 }} />
           </View>
-          <View style={styles.previewBody}>
+
+          <View style={styles.webviewContainer}>
             {previewUrl ? (
               <WebView
                 ref={webviewRef}
                 source={{ uri: previewUrl }}
                 startInLoadingState
-                renderLoading={() => (
-                  <View style={styles.previewLoading}>
-                    <ActivityIndicator size="large" color={Colors.primary} />
-                    <Text style={styles.loadingHint}>Loading preview…</Text>
-                  </View>
-                )}
-                style={styles.webview}
+                renderLoading={() => <ActivityIndicator size="large" color={Colors.primary} style={{ position: 'absolute', alignSelf: 'center', top: '40%' }} />}
+                style={{ flex: 1 }}
               />
             ) : (
-              <View style={styles.previewLoading}>
-                <ActivityIndicator size="large" color={Colors.primary} />
-              </View>
+              <ActivityIndicator size="large" color={Colors.primary} />
             )}
           </View>
-          <View style={styles.previewActions}>
-            <TouchableOpacity style={[styles.actionBtn, styles.downloadBtn, downloading && { opacity: 0.6 }]} disabled={downloading} onPress={handleDownload}>
-              <Text style={styles.actionText}>{downloading ? 'Downloading…' : 'Download'}</Text>
+
+          <View style={styles.previewFooter}>
+            <TouchableOpacity style={[styles.pActionBtn, styles.pDownloadBtn]} disabled={downloading} onPress={handleDownload}>
+              {downloading ? <ActivityIndicator color="#fff" /> : <Ionicons name="download-outline" size={20} color="#fff" />}
+              <Text style={styles.pActionText}>{downloading ? 'Saving...' : 'Download PDF'}</Text>
             </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.actionBtn, styles.printBtn]}
-              onPress={() => {
-                try {
-                  // Attempt in-webview print
-                  webviewRef.current?.injectJavaScript('window.print(); true;');
-                } catch (_) {
-                  if (previewUrl) Linking.openURL(previewUrl);
-                }
-              }}
-            >
-              <Text style={styles.actionText}>Print</Text>
+            <TouchableOpacity style={[styles.pActionBtn, styles.pPrintBtn]} onPress={() => {
+              try { webviewRef.current?.injectJavaScript('window.print(); true;'); }
+              catch (_) { if (previewUrl) Linking.openURL(previewUrl); }
+            }}>
+              <Ionicons name="print-outline" size={20} color={Colors.primary} />
+              <Text style={[styles.pActionText, { color: Colors.primary }]}>Print</Text>
             </TouchableOpacity>
           </View>
         </SafeAreaView>
@@ -311,41 +343,131 @@ const CreateInvoiceScreen = ({ navigation }) => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
-  header: { backgroundColor: Colors.primary, paddingTop: Spacing.md, paddingBottom: Spacing.xl, paddingHorizontal: Spacing.lg },
-  backButton: { alignSelf: 'flex-start', marginBottom: Spacing.md },
-  backButtonText: { color: Colors.white, fontSize: Fonts.sizes.md, fontWeight: Fonts.weights.medium },
-  title: { fontSize: Fonts.sizes.title, fontWeight: Fonts.weights.bold, color: Colors.white, marginBottom: Spacing.sm },
-  subtitle: { fontSize: Fonts.sizes.md, color: Colors.white, opacity: 0.9 },
-  content: { padding: Spacing.lg, paddingBottom: Spacing.xl },
-  usingTemplateBox: { backgroundColor: Colors.white, borderColor: Colors.border, borderWidth: 1, borderRadius: 8, padding: Spacing.md, marginTop: Spacing.md },
-  usingTemplateText: { color: Colors.textSecondary },
-  sectionTitle: { fontSize: Fonts.sizes.lg, fontWeight: Fonts.weights.semiBold, color: Colors.text, marginTop: Spacing.lg, marginBottom: Spacing.sm },
-  input: { backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border, borderRadius: 8, paddingHorizontal: Spacing.md, paddingVertical: Spacing.md, fontSize: Fonts.sizes.md, color: Colors.text, marginBottom: Spacing.sm },
+  container: { flex: 1, backgroundColor: '#F8FAFC' },
+  header: {
+    backgroundColor: Colors.primary,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingTop: Platform.OS === 'android' ? 40 : 20,
+    paddingBottom: 20,
+    paddingHorizontal: 20,
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 5
+  },
+  backButton: { marginRight: 15, padding: 5 },
+  title: { fontSize: 20, fontWeight: 'bold', color: Colors.white },
+  subtitle: { fontSize: 13, color: 'rgba(255,255,255,0.8)' },
+
+  content: { padding: 20, paddingBottom: 40 },
+
+  summaryCard: {
+    backgroundColor: Colors.white,
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 20,
+    shadowColor: Colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+    elevation: 5,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.03)'
+  },
+  summaryRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  summaryLabel: { fontSize: 11, fontWeight: '700', color: Colors.textSecondary, letterSpacing: 1 },
+  summaryValue: { fontSize: 32, fontWeight: '800', color: Colors.text, marginTop: 4 },
+  iconCircle: { width: 48, height: 48, borderRadius: 24, backgroundColor: '#EFF6FF', alignItems: 'center', justifyContent: 'center' },
+  templateBadge: { backgroundColor: '#F1F5F9', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6, alignSelf: 'flex-start', marginTop: 10 },
+  templateText: { fontSize: 10, color: Colors.textSecondary, fontWeight: '600' },
+
+  sectionCard: {
+    backgroundColor: Colors.white,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowRadius: 5,
+    elevation: 2
+  },
+  sectionHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 16, paddingBottom: 10, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
+  sectionTitle: { fontSize: 15, fontWeight: '700', color: Colors.text, marginLeft: 8 },
+
+  input: {
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 14,
+    color: Colors.text,
+    marginBottom: 12
+  },
+  inputS: {
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 8,
+    padding: 10,
+    fontSize: 13,
+    color: Colors.text,
+    marginBottom: 8
+  },
   textArea: { height: 80, textAlignVertical: 'top' },
-  dateRow: { flexDirection: 'row', gap: 8 },
-  dateInput: { flex: 1 },
-  dateText: { color: Colors.text, fontSize: Fonts.sizes.md },
-  itemRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  itemDesc: { flex: 2 },
-  itemQty: { flex: 0.7 },
-  itemPrice: { flex: 1 },
-  removeButton: { marginLeft: 8, backgroundColor: Colors.white, borderWidth: 1, borderColor: Colors.error, borderRadius: 6, paddingHorizontal: 10, paddingVertical: 8 },
-  removeButtonText: { color: Colors.error, fontWeight: Fonts.weights.bold },
-  addButton: { backgroundColor: Colors.white, borderColor: Colors.secondary, borderWidth: 1, borderRadius: 8, padding: Spacing.md, alignSelf: 'flex-start', marginVertical: Spacing.sm },
-  addButtonText: { color: Colors.secondary, fontWeight: Fonts.weights.semiBold },
-  generateButton: { backgroundColor: Colors.primary, paddingVertical: Spacing.lg, borderRadius: 8, alignItems: 'center', marginTop: Spacing.lg },
-  generateButtonDisabled: { opacity: 0.6 },
-  generateButtonText: { color: Colors.white, fontSize: Fonts.sizes.lg, fontWeight: Fonts.weights.bold },
-  previewBody: { flex: 1, backgroundColor: Colors.background },
-  webview: { flex: 1 },
-  previewLoading: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  loadingHint: { marginTop: Spacing.sm, color: Colors.textSecondary },
-  previewActions: { flexDirection: 'row', gap: 12, padding: Spacing.md, backgroundColor: Colors.white, borderTopWidth: 1, borderTopColor: Colors.border, justifyContent: 'flex-end' },
-  actionBtn: { paddingVertical: Spacing.md, paddingHorizontal: Spacing.lg, borderRadius: 8 },
-  downloadBtn: { backgroundColor: Colors.secondary },
-  printBtn: { backgroundColor: Colors.primary },
-  actionText: { color: Colors.white, fontWeight: Fonts.weights.bold },
+
+  dateRow: { flexDirection: 'row', gap: 12 },
+  dateField: { flex: 1, backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 8, padding: 12, position: 'relative' },
+  dateLabel: { fontSize: 11, color: Colors.textSecondary, marginBottom: 4 },
+  dateValue: { fontSize: 14, fontWeight: '600', color: Colors.text },
+
+  itemContainer: { backgroundColor: '#FAFAFA', padding: 12, borderRadius: 8, marginBottom: 12, borderLeftWidth: 3, borderLeftColor: Colors.primary },
+  itemHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
+  itemIndex: { fontSize: 12, fontWeight: '700', color: Colors.textSecondary },
+  itemRowInputs: { flexDirection: 'row', gap: 10 },
+  miniLabel: { fontSize: 10, color: Colors.textSecondary, marginBottom: 2 },
+  rowTotal: { fontSize: 14, fontWeight: '700', color: Colors.text, marginTop: 10 },
+
+  addItemBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 12, borderStyle: 'dashed', borderWidth: 1, borderColor: Colors.primary, borderRadius: 8, marginTop: 8 },
+  addItemText: { color: Colors.primary, fontWeight: '600', marginLeft: 6 },
+
+  footerActions: {
+    padding: 20,
+    backgroundColor: Colors.white,
+    borderTopWidth: 1,
+    borderTopColor: '#E2E8F0',
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0
+  },
+  generateButton: {
+    backgroundColor: Colors.primary,
+    paddingVertical: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    shadowColor: Colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4
+  },
+  disabledBtn: { opacity: 0.7 },
+  generateButtonText: { color: Colors.white, fontSize: 16, fontWeight: 'bold' },
+
+  previewContainer: { flex: 1, backgroundColor: Colors.white },
+  previewHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
+  closePreviewBtn: { padding: 4 },
+  previewTitle: { fontSize: 16, fontWeight: '700' },
+  webviewContainer: { flex: 1, backgroundColor: '#F1F5F9' },
+  previewFooter: { flexDirection: 'row', padding: 16, gap: 12, borderTopWidth: 1, borderTopColor: '#E2E8F0' },
+  pActionBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyItems: 'center', justifyContent: 'center', padding: 14, borderRadius: 10 },
+  pDownloadBtn: { backgroundColor: Colors.primary },
+  pPrintBtn: { backgroundColor: '#EFF6FF' },
+  pActionText: { marginLeft: 8, fontWeight: '600', color: '#fff' },
 });
 
 export default CreateInvoiceScreen;

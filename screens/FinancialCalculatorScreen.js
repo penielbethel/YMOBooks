@@ -1,32 +1,85 @@
-import React, { useEffect, useMemo, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, ScrollView, TextInput, Alert, ActivityIndicator, RefreshControl } from 'react-native';
+import React, { useEffect, useMemo, useState, useCallback, memo } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, ScrollView, TextInput, Alert, ActivityIndicator, RefreshControl, Platform, KeyboardAvoidingView } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import dayjs from 'dayjs';
+import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../constants/Colors';
 import { Fonts } from '../constants/Fonts';
 import { Spacing } from '../constants/Spacing';
 import { fetchRevenueDaily, fetchExpensesDaily, saveExpenseDaily, deleteExpenses } from '../utils/api';
 
+// --- Sub-components extracted outside to prevent re-render focus loss ---
+
+const Section = memo(({ title, children, icon }) => (
+  <View style={styles.section}>
+    <View style={styles.sectionHeader}>
+      {icon && <Ionicons name={icon} size={20} color={Colors.primary} style={{ marginRight: 8 }} />}
+      <Text style={styles.sectionTitle}>{title}</Text>
+    </View>
+    <View style={styles.divider} />
+    {children}
+  </View>
+));
+
+const SummaryRow = memo(({ label, value, isNet }) => (
+  <View style={styles.summaryRow}>
+    <Text style={styles.summaryLabel}>{label}</Text>
+    <Text style={[styles.summaryValue, isNet && { color: value.includes('-') ? Colors.error : Colors.success }]}>{value}</Text>
+  </View>
+));
+
+const DailyRow = memo(({ index, dayName, expenseValue, revenueValue, currency, onExpenseChange, onSave }) => {
+  return (
+    <View style={styles.dailyRow}>
+      <View style={{ flex: 1 }}>
+        <Text style={styles.dateDayText}>Day {index + 1}</Text>
+        <Text style={styles.dayNameText}>{dayName}</Text>
+      </View>
+
+      <View style={{ flex: 1.2 }}>
+        <TextInput
+          style={styles.dailyInput}
+          placeholder="0"
+          placeholderTextColor={Colors.textSecondary}
+          keyboardType="numeric"
+          value={expenseValue}
+          onChangeText={(t) => onExpenseChange(index, t)}
+          returnKeyType="done"
+          selectTextOnFocus
+        />
+      </View>
+
+      <TouchableOpacity style={styles.miniSaveBtn} onPress={() => onSave(index)}>
+        <Ionicons name="save-outline" size={16} color={Colors.white} />
+      </TouchableOpacity>
+
+      <View style={{ flex: 1, alignItems: 'flex-end' }}>
+        <Text style={styles.dailyRevenueText}>
+          {currency}{Number(revenueValue || 0).toLocaleString()}
+        </Text>
+      </View>
+    </View>
+  );
+});
+
+// --- Main Screen ---
+
 const FinancialCalculatorScreen = ({ navigation }) => {
   const [companyData, setCompanyData] = useState(null);
   const [month, setMonth] = useState(dayjs().format('YYYY-MM'));
   const [loading, setLoading] = useState(true);
-  // Profit & Loss — daily hooked to server
+
   const [year, setYear] = useState(dayjs().year());
   const [revenueDaily, setRevenueDaily] = useState(Array.from({ length: 31 }, () => 0));
   const [expensesDaily, setExpensesDaily] = useState(Array.from({ length: 31 }, () => 0));
   const [expensesDailyInput, setExpensesDailyInput] = useState(Array.from({ length: 31 }, () => '0'));
+
   const [refreshing, setRefreshing] = useState(false);
   const [toast, setToast] = useState({ visible: false, message: '', type: 'success' });
   const [busy, setBusy] = useState({ visible: false, message: '' });
 
-  const showBusy = useCallback((message) => {
-    setBusy({ visible: true, message });
-  }, []);
-
-  const hideBusy = useCallback(() => {
-    setBusy({ visible: false, message: '' });
-  }, []);
+  const showBusy = useCallback((message) => setBusy({ visible: true, message }), []);
+  const hideBusy = useCallback(() => setBusy({ visible: false, message: '' }), []);
 
   useEffect(() => {
     (async () => {
@@ -34,14 +87,9 @@ const FinancialCalculatorScreen = ({ navigation }) => {
         const stored = await AsyncStorage.getItem('companyData');
         const c = stored ? JSON.parse(stored) : null;
         setCompanyData(c);
-        // Currency is enforced by server/company settings
-      } catch (_) {}
+      } catch (_) { }
     })();
   }, []);
-
-  // Removed AsyncStorage P&L persistence; expenses are stored in DB per day.
-
-  // Removed auto-save timers and related cleanup per request
 
   const loadData = useCallback(async () => {
     if (!companyData?.companyId) return;
@@ -79,69 +127,63 @@ const FinancialCalculatorScreen = ({ navigation }) => {
 
   const showToast = useCallback((message, type = 'success') => {
     setToast({ visible: true, message, type });
-    setTimeout(() => {
-      setToast((t) => ({ ...t, visible: false }));
-    }, 2000);
+    setTimeout(() => setToast((t) => ({ ...t, visible: false })), 2000);
   }, []);
 
   const monthsOptions = useMemo(() => {
     const arr = [];
     const start = dayjs(month);
-    for (let i = 0; i < 12; i++) {
+    for (let i = 0; i < 6; i++) { // Limit to 6 recent months for cleaner UI
       const m = start.subtract(i, 'month');
-      arr.push({ key: m.format('YYYY-MM'), label: m.format('MMMM YYYY') });
+      arr.push({ key: m.format('YYYY-MM'), label: m.format('MMM YYYY') });
     }
     return arr;
   }, [month]);
 
-  const daysInSelectedMonth = 31; // Fixed 31 days per requirement
+  const daysInSelectedMonth = 31;
   const currency = companyData?.currencySymbol || '$';
 
-  // Real calendar day names for the selected month
   const dayNamesForMonth = useMemo(() => {
     const base = dayjs(month);
     const dim = base.daysInMonth();
     return Array.from({ length: 31 }, (_, i) => {
       const dayNum = i + 1;
-      return dayNum <= dim ? base.date(dayNum).format('dddd') : '-';
+      return dayNum <= dim ? base.date(dayNum).format('ddd') : '-';
     });
   }, [month]);
 
-  const updateDailyExpenseInput = (dayIndex, text) => {
-    // Do not sanitize: keep typing free and uninterrupted
+  const updateDailyExpenseInput = useCallback((dayIndex, text) => {
     setExpensesDailyInput((prev) => {
       const next = [...prev];
-      next[dayIndex] = String(text ?? '');
+      next[dayIndex] = text;
       return next;
     });
-  };
+  }, []);
 
-  const persistDailyExpense = async (dayIndex) => {
+  const persistDailyExpense = useCallback(async (dayIndex) => {
     if (!companyData?.companyId) return;
     const valText = expensesDailyInput?.[dayIndex] ?? '0';
     const num = parseFloat(valText);
     const safe = isNaN(num) ? 0 : num;
     try {
-      showBusy('Please wait while we save your entry...');
+      showBusy('Saving...');
       const oldVal = Number(expensesDaily?.[dayIndex] || 0);
       await saveExpenseDaily(companyData.companyId, month, dayIndex + 1, safe);
-      // Update local numeric array without overriding user's current typed string
       setExpensesDaily((prev) => {
         const next = [...prev];
         next[dayIndex] = safe;
         return next;
       });
       if (dayjs(month).year() === year) {
-        const delta = safe - oldVal;
-        setAnnualTotals((prev) => ({ ...prev, exp: prev.exp + delta }));
+        setAnnualTotals((prev) => ({ ...prev, exp: prev.exp + (safe - oldVal) }));
       }
-      showToast('Saved entry', 'success');
+      showToast('Saved', 'success');
     } catch (_) {
       Alert.alert('Error', 'Failed to save entry');
     } finally {
       hideBusy();
     }
-  };
+  }, [companyData, month, expensesDaily, expensesDailyInput, year, showBusy, hideBusy, showToast]);
 
   const monthlyTotals = useMemo(() => {
     const exp = (expensesDailyInput || []).reduce((a, b) => a + (parseFloat(b) || 0), 0);
@@ -155,7 +197,6 @@ const FinancialCalculatorScreen = ({ navigation }) => {
     if (!companyData?.companyId) return;
     let exp = 0;
     let rev = 0;
-    // Iterate Jan..Dec for selected year
     for (let m = 0; m < 12; m++) {
       const key = dayjs(`${year}-01`).add(m, 'month').format('YYYY-MM');
       try {
@@ -169,7 +210,7 @@ const FinancialCalculatorScreen = ({ navigation }) => {
         if (expRes?.success && Array.isArray(expRes.days)) {
           exp += expRes.days.reduce((a, b) => a + Number(b || 0), 0);
         }
-      } catch (_) {}
+      } catch (_) { }
     }
     setAnnualTotals({ exp, rev });
   }, [companyData, year]);
@@ -178,261 +219,304 @@ const FinancialCalculatorScreen = ({ navigation }) => {
     computeAnnualTotals();
   }, [computeAnnualTotals]);
 
-  const finalAnnualNet = useMemo(() => {
-    return annualTotals.rev - annualTotals.exp;
-  }, [annualTotals]);
-
-  // Removed old expense create form; daily expenses are edited inline and saved to server.
-
-  const Section = ({ title, children }) => (
-    <View style={styles.section}>
-      <Text style={styles.sectionTitle}>{title}</Text>
-      <View style={styles.divider} />
-      {children}
-    </View>
-  );
-
-  const SummaryRow = ({ label, value }) => (
-    <View style={styles.summaryRow}>
-      <Text style={styles.summaryLabel}>{label}</Text>
-      <Text style={styles.summaryValue}>{value}</Text>
-    </View>
-  );
+  const finalAnnualNet = useMemo(() => annualTotals.rev - annualTotals.exp, [annualTotals]);
 
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-          <Text style={styles.backButtonText}>← Back</Text>
+          <Ionicons name="arrow-back" size={24} color={Colors.white} />
         </TouchableOpacity>
-        <Text style={styles.title}>Financial Calculator</Text>
-        <Text style={styles.subtitle}>Monthly Profit and Loss</Text>
+        <View>
+          <Text style={styles.title}>Financials</Text>
+          <Text style={styles.subtitle}>Profit & Loss Calculator</Text>
+        </View>
       </View>
 
       {loading ? (
-        <View style={styles.loadingBox}><ActivityIndicator color={Colors.primary} /></View>
+        <View style={styles.loadingBox}><ActivityIndicator size="large" color={Colors.primary} /></View>
       ) : (
-        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="always"
-          keyboardDismissMode="none"
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); try { await loadData(); await computeAnnualTotals(); } finally { setRefreshing(false); } }} />}
-        >
-          <Section title="Select Month">
-            <View style={styles.monthsRow}>
-              {monthsOptions.map((m) => (
-                <TouchableOpacity
-                  key={m.key}
-                  style={[styles.monthChip, month === m.key && styles.monthChipActive]}
-                  onPress={() => setMonth(m.key)}
-                >
-                  <Text style={[styles.monthChipText, month === m.key && { color: Colors.white }]}>{m.label}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </Section>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
+          <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await loadData(); await computeAnnualTotals(); setRefreshing(false); }} />}
+          >
+            {/* Month Selector */}
+            <Section title="Select Period" icon="calendar">
+              <View style={styles.monthsRow}>
+                {monthsOptions.map((m) => (
+                  <TouchableOpacity
+                    key={m.key}
+                    style={[styles.monthChip, month === m.key && styles.monthChipActive]}
+                    onPress={() => setMonth(m.key)}
+                  >
+                    <Text style={[styles.monthChipText, month === m.key && { color: Colors.white }]}>{m.label}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 10 }}>
+                <Ionicons name="information-circle-outline" size={16} color={Colors.secondary} />
+                <Text style={styles.infoText}>Revenue is automatically tracked from generated receipts.</Text>
+              </View>
+            </Section>
 
-          {/* Streamlined UI: Daily grid with server-linked revenue and expenses */}
+            {/* Daily Entries Grid */}
+            <Section title={`Daily Ledger: ${dayjs(month).format('MMMM')}`} icon="list">
+              <View style={styles.dailyGridHeader}>
+                <Text style={[styles.dailyHeaderCell, { flex: 1 }]}>Day</Text>
+                <Text style={[styles.dailyHeaderCell, { flex: 1.2 }]}>Expense Input</Text>
+                <View style={{ width: 32 }} />
+                <Text style={[styles.dailyHeaderCell, { flex: 1, textAlign: 'right' }]}>Revenue</Text>
+              </View>
 
-          {/* Profit & Loss — Manual Entry (Card 1) */}
-          <Section title="Profit & Loss (Manual Entry)">
-            <Text style={styles.sectionSubtitle}>Select Year</Text>
-            <View style={styles.monthsRow}>
-              {[year - 1, year, year + 1].map((y) => (
-                <TouchableOpacity key={y} style={[styles.monthChip, year === y && styles.monthChipActive]} onPress={() => setYear(y)}>
-                  <Text style={[styles.monthChipText, year === y && { color: Colors.white }]}>{y}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-
-            <Text style={styles.sectionSubtitle}>Daily Entries for {dayjs(month).format('MMMM YYYY')}</Text>
-            <View style={styles.dailyGridHeader}>
-              <Text style={[styles.dailyHeaderCell, { flex: 0.6 }]}>Day</Text>
-              <Text style={[styles.dailyHeaderCell, { flex: 1, textAlign: 'right' }]}>Expenses ({currency})</Text>
-              <Text style={[styles.dailyHeaderCell, { flex: 1, textAlign: 'right' }]}>Revenue ({currency})</Text>
-            </View>
-            {Array.from({ length: daysInSelectedMonth }).map((_, i) => (
-              <View key={i} style={styles.dailyRow}>
-                <Text style={[styles.dailyCell, { flex: 1 }]}>{`Day ${i + 1} (${dayNamesForMonth[i]})`}</Text>
-                <TextInput
-                  style={[styles.input, styles.dailyInput]}
-                  placeholder="0"
-                  placeholderTextColor={Colors.textSecondary}
-                  keyboardType="decimal-pad"
-                  value={String(expensesDailyInput?.[i] ?? '')}
-                  onChangeText={(t) => updateDailyExpenseInput(i, t)}
-                  blurOnSubmit={false}
-                  returnKeyType="done"
+              {Array.from({ length: daysInSelectedMonth }).map((_, i) => (
+                <DailyRow
+                  key={i}
+                  index={i}
+                  dayName={dayNamesForMonth[i]}
+                  expenseValue={expensesDailyInput?.[i] || ''}
+                  revenueValue={revenueDaily?.[i] || 0}
+                  currency={currency}
+                  onExpenseChange={updateDailyExpenseInput}
+                  onSave={persistDailyExpense}
                 />
-                <TouchableOpacity
-                  style={styles.entrySaveButton}
-                  onPress={() => persistDailyExpense(i)}
-                >
-                  <Text style={styles.entrySaveText}>Save Entry</Text>
-                </TouchableOpacity>
-                <Text style={[styles.dailyCell, { flex: 1, textAlign: 'right' }]}>
-                  {`${currency}${Number(revenueDaily?.[i] || 0).toLocaleString()}`}
+              ))}
+
+              <View style={styles.divider} />
+              <Text style={styles.sectionSubtitle}>Monthly Summary</Text>
+              <SummaryRow label={`Total Expenses`} value={`${currency}${Number(monthlyTotals.exp).toLocaleString()}`} />
+              <SummaryRow label={`Total Revenue`} value={`${currency}${Number(monthlyTotals.rev).toLocaleString()}`} />
+              <SummaryRow label={`Net Profit/Loss`} value={`${currency}${Number(monthlyTotals.net).toLocaleString()}`} isNet />
+
+              <TouchableOpacity style={styles.purgeButton} onPress={() => {
+                Alert.alert('Clear Month?', 'This will optimize the database by removing zero-value expense records for this month.', [
+                  { text: 'Cancel', style: 'cancel' },
+                  {
+                    text: 'Optimize', onPress: async () => {
+                      await deleteExpenses(companyData.companyId, month);
+                      loadData();
+                      showToast('Optimized', 'success');
+                    }
+                  }
+                ]);
+              }}>
+                <Text style={styles.purgeText}>Optimize Database Records</Text>
+              </TouchableOpacity>
+            </Section>
+
+            {/* Annual Summary */}
+            <Section title={`Annual Overview: ${year}`} icon="stats-chart">
+              <View style={styles.yearSelector}>
+                <TouchableOpacity onPress={() => setYear(year - 1)}><Ionicons name="chevron-back" size={20} color={Colors.text} /></TouchableOpacity>
+                <Text style={styles.yearText}>{year}</Text>
+                <TouchableOpacity onPress={() => setYear(year + 1)}><Ionicons name="chevron-forward" size={20} color={Colors.text} /></TouchableOpacity>
+              </View>
+
+              <SummaryRow label={`Annual Expenses`} value={`${currency}${Number(annualTotals.exp).toLocaleString()}`} />
+              <SummaryRow label={`Annual Revenue`} value={`${currency}${Number(annualTotals.rev).toLocaleString()}`} />
+              <SummaryRow label={`Annual Net Profit`} value={`${currency}${Number(finalAnnualNet).toLocaleString()}`} isNet />
+
+              <View style={[styles.conclusionBox, finalAnnualNet >= 0 ? styles.conclusionGood : styles.conclusionBad]}>
+                <Ionicons name={finalAnnualNet >= 0 ? "trending-up" : "trending-down"} size={24} color={finalAnnualNet >= 0 ? Colors.success : Colors.error} />
+                <Text style={[styles.conclusionText, { color: finalAnnualNet >= 0 ? Colors.success : Colors.error }]}>
+                  {finalAnnualNet > 0 ? 'Business is profitable.' : finalAnnualNet < 0 ? 'Operating at a loss.' : 'Break-even.'}
                 </Text>
               </View>
-            ))}
-            <View style={styles.divider} />
-            <Text style={styles.sectionSubtitle}>Monthly Totals</Text>
-            <SummaryRow label={`Expenses (${currency})`} value={`${currency}${Number(monthlyTotals.exp).toLocaleString()}`} />
-            <SummaryRow label={`Revenue (${currency})`} value={`${currency}${Number(monthlyTotals.rev).toLocaleString()}`} />
-            <SummaryRow label={`Net (${currency})`} value={`${currency}${Number(monthlyTotals.net).toLocaleString()}`} />
-            <View style={{ flexDirection: 'row', gap: 8, marginTop: Spacing.sm }}>
-              <TouchableOpacity
-                style={[styles.saveButton, { flex: 1 }]}
-                onPress={async () => {
-                  if (!companyData?.companyId) return;
-                  showBusy('Please wait while we clear the month...');
-                  try {
-                    const prevMonthExp = Number(monthlyTotals.exp || 0);
-                    const res = await deleteExpenses(companyData.companyId, month);
-                    const zeros = Array.from({ length: 31 }, () => 0);
-                    setExpensesDaily(zeros);
-                    setExpensesDailyInput(zeros.map((v) => String(v)));
-                    if (dayjs(month).year() === year) {
-                      setAnnualTotals((prev) => ({ ...prev, exp: prev.exp - prevMonthExp }));
-                    }
-                    if (res?.success) {
-                      showToast(`Cleared daily expenses for ${dayjs(month).format('MMMM YYYY')}`, 'success');
-                    } else {
-                      Alert.alert('Error', 'Failed to clear month');
-                    }
-                  } finally {
-                    hideBusy();
-                  }
-                }}
-              >
-                <Text style={styles.saveButtonText}>Clear Month</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.purgeButton, { flex: 1 }]}
-                onPress={() => {
-                  if (!companyData?.companyId) return;
-                  Alert.alert(
-                    'Confirm Purge',
-                    `Delete all expense records for ${dayjs(month).format('MMMM YYYY')}?`,
-                    [
-                      { text: 'Cancel', style: 'cancel' },
-                      {
-                        text: 'Delete',
-                        style: 'destructive',
-                        onPress: async () => {
-                          try {
-                            showBusy('Please wait while we purge this month...');
-                            const prevMonthExp = Number(monthlyTotals.exp || 0);
-                            const res = await deleteExpenses(companyData.companyId, month);
-                            const zeros = Array.from({ length: 31 }, () => 0);
-                            setExpensesDaily(zeros);
-                            setExpensesDailyInput(zeros.map((v) => String(v)));
-                            if (dayjs(month).year() === year) {
-                              setAnnualTotals((prev) => ({ ...prev, exp: prev.exp - prevMonthExp }));
-                            }
-                            if (res?.success) {
-                              const count = Number(res?.deletedCount || 0);
-                              showToast(`Purged ${count} expense${count === 1 ? '' : 's'} for ${dayjs(month).format('MMMM YYYY')}`, 'success');
-                            } else {
-                              Alert.alert('Error', 'Failed to purge expenses');
-                            }
-                          } catch (_) {
-                            Alert.alert('Error', 'Failed to purge expenses');
-                          } finally {
-                            hideBusy();
-                          }
-                        },
-                      },
-                    ]
-                  );
-                }}
-              >
-                <Text style={styles.saveButtonText}>Purge Month (DB)</Text>
-              </TouchableOpacity>
-            </View>
-          </Section>
+            </Section>
 
-          <Section title="Annual Summary">
-            <SummaryRow label={`Annual Expenses (${currency})`} value={`${currency}${Number(annualTotals.exp).toLocaleString()}`} />
-            <SummaryRow label={`Annual Revenue (${currency})`} value={`${currency}${Number(annualTotals.rev).toLocaleString()}`} />
-            <SummaryRow label={`Final Annual Net (${currency})`} value={`${currency}${Number(finalAnnualNet).toLocaleString()}`} />
-            <Text style={[styles.conclusionText, { marginTop: Spacing.sm }]}>
-              {finalAnnualNet > 0 ? 'Conclusion: The business is doing well.' : finalAnnualNet < 0 ? 'Conclusion: The business is operating at a loss.' : 'Conclusion: Break-even year.'}
-            </Text>
-          </Section>
-      </ScrollView>
+          </ScrollView>
+        </KeyboardAvoidingView>
       )}
+
       {toast.visible && (
-        <View
-          style={[
-            styles.toast,
-            toast.type === 'success' ? styles.toastSuccess : styles.toastError,
-          ]}
-        >
+        <View style={[styles.toast, toast.type === 'success' ? styles.toastSuccess : styles.toastError]}>
           <Text style={styles.toastText}>{toast.message}</Text>
         </View>
       )}
       {busy.visible && (
-        <View
-          style={[styles.toast, styles.toastInfo, { flexDirection: 'row', alignItems: 'center', gap: 8 }]}
-        >
+        <View style={styles.toast}>
           <ActivityIndicator color={Colors.white} size="small" />
-          <Text style={styles.toastText}>{busy.message}</Text>
+          <Text style={[styles.toastText, { marginLeft: 10 }]}>{busy.message}</Text>
+        </View>
+      )}
+      {companyData && !companyData.isPremium && (
+        <View style={styles.lockedOverlay}>
+          <View style={styles.lockedCard}>
+            <View style={styles.lockedIconBg}>
+              <Ionicons name="lock-closed" size={40} color={Colors.primary} />
+            </View>
+            <Text style={styles.lockedTitle}>Premium Feature</Text>
+            <Text style={styles.lockedDesc}>
+              The Financial Calculator is available for Pro users only. Track your daily expenses and revenue automatically.
+            </Text>
+            <TouchableOpacity style={styles.upgradeBtn} onPress={() => navigation.navigate('Subscription')}>
+              <Text style={styles.upgradeBtnText}>Upgrade to Pro</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.cancelLink} onPress={() => navigation.goBack()}>
+              <Text style={styles.cancelLinkText}>Go Back</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       )}
     </SafeAreaView>
   );
 };
 
-  const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
-  header: { padding: Spacing.lg },
-  backButton: { paddingVertical: 8, paddingHorizontal: 12, borderRadius: 8, backgroundColor: Colors.gray[200], alignSelf: 'flex-start' },
-  backButtonText: { color: Colors.text, fontWeight: '600' },
-  title: { fontSize: Fonts.sizes.xl, fontWeight: Fonts.weights.bold, color: Colors.text, marginTop: Spacing.sm },
-  subtitle: { fontSize: Fonts.sizes.sm, color: Colors.textSecondary },
-  scrollContent: { paddingHorizontal: Spacing.lg, paddingBottom: Spacing.xl },
-  section: { backgroundColor: Colors.surface, borderRadius: 12, padding: Spacing.lg, marginBottom: Spacing.md, shadowColor: Colors.black, shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.1, shadowRadius: 6, elevation: 3 },
-  sectionTitle: { fontSize: Fonts.sizes.lg, fontWeight: Fonts.weights.semiBold, color: Colors.text },
-  sectionSubtitle: { fontSize: Fonts.sizes.md, color: Colors.text, marginBottom: Spacing.sm },
-  divider: { height: 1, backgroundColor: Colors.gray[200], marginVertical: Spacing.sm },
-  monthsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  monthChip: { paddingVertical: 8, paddingHorizontal: 12, borderRadius: 999, borderWidth: 1, borderColor: Colors.gray[300], marginRight: 8, marginBottom: 8 },
-  monthChipActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
-  monthChipText: { color: Colors.textSecondary },
-  summaryRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8 },
-  summaryLabel: { color: Colors.textSecondary },
-  summaryValue: { color: Colors.text, fontWeight: '700' },
-  formRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: Spacing.sm },
-  formChip: { paddingVertical: 8, paddingHorizontal: 12, borderRadius: 999, borderWidth: 1, borderColor: Colors.gray[300] },
-  formChipActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
-  formChipText: { color: Colors.textSecondary },
-  input: { backgroundColor: Colors.background, borderRadius: 10, borderWidth: 1, borderColor: Colors.gray[300], paddingHorizontal: 12, paddingVertical: 10, color: Colors.text },
-  currencyRow: { alignItems: 'center' },
-  currencyChip: { paddingVertical: 8, paddingHorizontal: 12, borderRadius: 999, borderWidth: 1, borderColor: Colors.gray[300], marginRight: 8 },
-  currencyChipActive: { backgroundColor: Colors.success, borderColor: Colors.success },
-  currencyChipText: { color: Colors.textSecondary },
-  saveButton: { backgroundColor: Colors.success, paddingVertical: 14, borderRadius: 10, alignItems: 'center', marginTop: Spacing.sm, minHeight: 44, justifyContent: 'center' },
-  purgeButton: { backgroundColor: Colors.error, paddingVertical: 14, borderRadius: 10, alignItems: 'center', marginTop: Spacing.sm, minHeight: 44, justifyContent: 'center' },
-  toast: { position: 'absolute', bottom: 24, left: 16, right: 16, paddingVertical: 10, paddingHorizontal: 12, borderRadius: 8, alignItems: 'center', shadowColor: Colors.black, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.15, shadowRadius: 4, elevation: 2 },
-    toastSuccess: { backgroundColor: Colors.success },
-    toastError: { backgroundColor: Colors.error },
-    toastInfo: { backgroundColor: Colors.primary },
-    toastText: { color: Colors.white, fontWeight: '800' },
-  saveButtonDisabled: { opacity: 0.6 },
-  saveButtonText: { color: Colors.white, fontWeight: '800' },
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: '#F8FAFC' },
+  // ... existing styles ...
+
+  // Premium Lock Styles
+  lockedOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(240, 248, 255, 0.95)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 100,
+    padding: 24,
+  },
+  lockedCard: {
+    backgroundColor: Colors.white,
+    width: '100%',
+    maxWidth: 340,
+    padding: 32,
+    borderRadius: 24,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.1,
+    shadowRadius: 20,
+    elevation: 5,
+  },
+  lockedIconBg: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#FFF7ED',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
+  },
+  lockedTitle: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: Colors.text,
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  lockedDesc: {
+    fontSize: 14,
+    color: Colors.textSecondary,
+    textAlign: 'center',
+    marginBottom: 32,
+    lineHeight: 22,
+  },
+  upgradeBtn: {
+    backgroundColor: Colors.primary,
+    width: '100%',
+    paddingVertical: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginBottom: 16,
+    shadowColor: Colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  upgradeBtnText: {
+    color: 'white',
+    fontWeight: 'bold',
+    fontSize: 16,
+  },
+  cancelLink: {
+    padding: 8,
+  },
+  cancelLinkText: {
+    color: Colors.textSecondary,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+
+  header: {
+    backgroundColor: Colors.primary,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingTop: Platform.OS === 'android' ? 40 : 20,
+    paddingBottom: 20,
+    paddingHorizontal: 20,
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 5
+  },
+  backButton: { marginRight: 15 },
+  title: { fontSize: 20, fontWeight: 'bold', color: Colors.white },
+  subtitle: { fontSize: 13, color: 'rgba(255,255,255,0.8)' },
+
+  scrollContent: { padding: 16, paddingBottom: 40 },
   loadingBox: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  emptyText: { color: Colors.textSecondary },
-  expenseRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8 },
-  expenseText: { color: Colors.textSecondary },
-  expenseAmount: { color: Colors.text, fontWeight: '700' },
-  dailyGridHeader: { flexDirection: 'row', gap: 8, marginBottom: 6 },
-  dailyHeaderCell: { color: Colors.textSecondary },
-  dailyRow: { flexDirection: 'row', gap: 8, alignItems: 'center', marginBottom: 6 },
-  dailyCell: { color: Colors.textSecondary },
-    dailyInput: { flex: 1, textAlign: 'right' },
-    entrySaveButton: { backgroundColor: Colors.primary, paddingVertical: 10, paddingHorizontal: 12, borderRadius: 8, marginLeft: 8 },
-    entrySaveText: { color: Colors.white, fontWeight: '700' },
-    conclusionText: { color: Colors.text, fontWeight: '700' },
-  });
+
+  section: {
+    backgroundColor: Colors.white,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowRadius: 5,
+    elevation: 2
+  },
+  sectionHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
+  sectionTitle: { fontSize: 16, fontWeight: '700', color: Colors.text },
+  divider: { height: 1, backgroundColor: '#F1F5F9', marginBottom: 16 },
+
+  monthsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  monthChip: { paddingVertical: 6, paddingHorizontal: 12, borderRadius: 20, backgroundColor: '#F1F5F9' },
+  monthChipActive: { backgroundColor: Colors.primary },
+  monthChipText: { fontSize: 12, color: Colors.textSecondary, fontWeight: '600' },
+  infoText: { fontSize: 11, color: Colors.textSecondary, marginLeft: 6, fontStyle: 'italic' },
+
+  dailyGridHeader: { flexDirection: 'row', marginBottom: 10, paddingHorizontal: 4 },
+  dailyHeaderCell: { fontSize: 11, fontWeight: '700', color: Colors.textSecondary, textTransform: 'uppercase' },
+
+  dailyRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 10, backgroundColor: '#FAFAFA', padding: 8, borderRadius: 8 },
+  dateDayText: { fontSize: 12, fontWeight: '700', color: Colors.text },
+  dayNameText: { fontSize: 10, color: Colors.textSecondary },
+  dailyInput: {
+    backgroundColor: Colors.white,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    fontSize: 13,
+    color: Colors.text,
+    textAlign: 'right'
+  },
+  miniSaveBtn: { backgroundColor: Colors.primary, padding: 6, borderRadius: 6, marginLeft: 8 },
+  dailyRevenueText: { fontSize: 13, fontWeight: '600', color: Colors.success },
+
+  sectionSubtitle: { fontSize: 14, fontWeight: '700', color: Colors.text, marginBottom: 10, marginTop: 10 },
+  summaryRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#F8FAFC' },
+  summaryLabel: { fontSize: 13, color: Colors.textSecondary },
+  summaryValue: { fontSize: 14, fontWeight: '700', color: Colors.text },
+
+  purgeButton: { alignSelf: 'center', marginTop: 15 },
+  purgeText: { fontSize: 12, color: Colors.textSecondary, textDecorationLine: 'underline' },
+
+  yearSelector: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
+  yearText: { fontSize: 18, fontWeight: '800', marginHorizontal: 20, color: Colors.text },
+
+  conclusionBox: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 12, borderRadius: 8, marginTop: 16, gap: 10 },
+  conclusionGood: { backgroundColor: '#F0FDF4' },
+  conclusionBad: { backgroundColor: '#FEF2F2' },
+  conclusionText: { fontWeight: '700', fontSize: 14 },
+
+  toast: { position: 'absolute', bottom: 30, backgroundColor: '#333', left: 20, right: 20, padding: 12, borderRadius: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
+  toastSuccess: { backgroundColor: Colors.success },
+  toastError: { backgroundColor: Colors.error },
+  toastText: { color: Colors.white, fontWeight: 'bold', fontSize: 13 }
+});
 
 export default FinancialCalculatorScreen;
