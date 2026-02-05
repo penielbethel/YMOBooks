@@ -32,7 +32,7 @@ const SubscriptionScreen = ({ navigation }) => {
                 body: JSON.stringify({
                     companyId: companyData.companyId,
                     userEmail: companyData.email || 'customer@example.com',
-                    currency: 'USD',
+                    currency: companyData.currencyCode || 'USD',
                     amount: '5'
                 })
             });

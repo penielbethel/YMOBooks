@@ -1980,13 +1980,45 @@ const FLW_SECRET_HASH = process.env.FLW_SECRET_HASH || 'ymobooks_secure_hash'; /
 
 app.post('/api/pay/initiate', async (req, res) => {
   try {
-    const { companyId, userEmail, currency, amount } = req.body;
+    const { companyId, userEmail, currency } = req.body;
     const tx_ref = `tx-${companyId}-${Date.now()}`;
+
+    // Fixed Exchange Rates (Base $5 USD)
+    // You should update these rates periodically or fetch from a live API for accuracy
+    let paymentAmount = 5; // Default USD
+    let paymentCurrency = 'USD';
+
+    switch (currency) {
+      case 'NGN':
+        paymentAmount = 8000; // $5 * 1600 (approx)
+        paymentCurrency = 'NGN';
+        break;
+      case 'GBP':
+        paymentAmount = 4; // $5 * 0.8
+        paymentCurrency = 'GBP';
+        break;
+      case 'EUR':
+        paymentAmount = 4.60; // $5 * 0.92
+        paymentCurrency = 'EUR';
+        break;
+      case 'GHS':
+        paymentAmount = 80; // $5 * 16
+        paymentCurrency = 'GHS';
+        break;
+      case 'KES':
+        paymentAmount = 750; // $5 * 150
+        paymentCurrency = 'KES';
+        break;
+      default:
+        paymentAmount = 5;
+        paymentCurrency = 'USD';
+        break;
+    }
 
     const payload = {
       tx_ref,
-      amount: amount || '5',
-      currency: currency || 'USD',
+      amount: paymentAmount.toString(),
+      currency: paymentCurrency,
       redirect_url: 'https://ymobooks.com/payment-callback',
       customer: {
         email: userEmail,
