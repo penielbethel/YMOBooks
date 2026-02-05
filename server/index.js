@@ -619,11 +619,13 @@ app.post('/api/register-company', async (req, res) => {
     };
 
     // Try DB, but don't fail registration if DB is down
+    // Try DB; fail if DB save fails to ensure persistence
     try {
       const doc = new Company(entry);
       await doc.save();
     } catch (dbErr) {
-      console.warn('Register DB save failed, using file fallback:', dbErr.message);
+      console.error('Register DB save failed:', dbErr);
+      return res.status(500).json({ success: false, message: 'Database save failed: ' + dbErr.message });
     }
 
     upsertCompanyFile(entry);
