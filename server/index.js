@@ -344,7 +344,22 @@ const ExpenseSchema = new mongoose.Schema(
 );
 const Expense = mongoose.model('Expense', ExpenseSchema);
 
-// Helpers
+// Manufacturing: Stock Item Schema
+const StockItemSchema = new mongoose.Schema(
+  {
+    companyId: { type: String, required: true, index: true },
+    name: { type: String, required: true },
+    type: { type: String, enum: ['raw_material', 'finished_good'], default: 'raw_material' },
+    quantity: { type: Number, default: 0 },
+    unit: { type: String, default: 'units' }, // e.g. kg, pcs, liters
+    costPrice: { type: Number, default: 0 }, // Cost per unit
+    sellingPrice: { type: Number, default: 0 }, // Selling price (for finished goods)
+    minStockLevel: { type: Number, default: 0 }, // Alert level
+    description: { type: String },
+  },
+  { timestamps: true }
+);
+const StockItem = mongoose.model('StockItem', StockItemSchema);
 async function generateCompanyId(name, businessType) {
   // Use first 3 letters of name, fallback to 'CPM' if name is short/missing
   const namePrefix = (name && name.length >= 3) ? name.substring(0, 3).toUpperCase() : 'CPM';
@@ -1439,6 +1454,79 @@ app.delete('/api/expenses', async (req, res) => {
   } catch (err) {
     console.error('Delete expenses error:', err);
     return res.status(500).json({ success: false, message: 'Server error deleting expenses' });
+  }
+});
+
+// --- Manufacturing: Stock Management Endpoints ---
+
+// Create Stock Item
+app.post('/api/stock/create', async (req, res) => {
+  try {
+    const { companyId, name, type, quantity, unit, costPrice, sellingPrice, minStockLevel, description } = req.body;
+    if (!companyId || !name) return res.status(400).json({ success: false, message: 'Company ID and Name are required' });
+
+    // Enforce business type check if needed, but for now rely on frontend filtering
+    const newItem = await StockItem.create({
+      companyId,
+      name,
+      type: type || 'raw_material',
+      quantity: Number(quantity || 0),
+      unit: unit || 'units',
+      costPrice: Number(costPrice || 0),
+      sellingPrice: Number(sellingPrice || 0),
+      minStockLevel: Number(minStockLevel || 0),
+      description
+    });
+    return res.json({ success: true, item: newItem });
+  } catch (err) {
+    console.error('Create stock error:', err);
+    return res.status(500).json({ success: false, message: 'Server error creating stock item' });
+  }
+});
+
+// List Stock Items
+app.get('/api/stock', async (req, res) => {
+  try {
+    const { companyId, type } = req.query;
+    if (!companyId) return res.status(400).json({ success: false, message: 'Missing companyId' });
+
+    const query = { companyId };
+    if (type) query.type = type;
+
+    const items = await StockItem.find(query).sort({ name: 1 }).lean();
+    return res.json({ success: true, items });
+  } catch (err) {
+    console.error('List stock error:', err);
+    return res.status(500).json({ success: false, message: 'Server error fetching stock' });
+  }
+});
+
+// Update Stock Item (Edit details or adjust quantity)
+app.post('/api/stock/update', async (req, res) => {
+  try {
+    const { id, updates } = req.body;
+    if (!id || !updates) return res.status(400).json({ success: false, message: 'Item ID and updates required' });
+
+    const updated = await StockItem.findByIdAndUpdate(id, { $set: updates }, { new: true });
+    if (!updated) return res.status(404).json({ success: false, message: 'Stock item not found' });
+
+    return res.json({ success: true, item: updated });
+  } catch (err) {
+    console.error('Update stock error:', err);
+    return res.status(500).json({ success: false, message: 'Server error updating stock item' });
+  }
+});
+
+// Delete Stock Item
+app.delete('/api/stock/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const deleted = await StockItem.findByIdAndDelete(id);
+    if (!deleted) return res.status(404).json({ success: false, message: 'Stock item not found' });
+    return res.json({ success: true, id });
+  } catch (err) {
+    console.error('Delete stock error:', err);
+    return res.status(500).json({ success: false, message: 'Server error deleting stock item' });
   }
 });
 

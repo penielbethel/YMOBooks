@@ -18,6 +18,7 @@ import InvoiceHistoryScreen from './screens/InvoiceHistoryScreen';
 import SuperAdminScreen from './screens/SuperAdminScreen';
 import FinancialCalculatorScreen from './screens/FinancialCalculatorScreen';
 import SubscriptionScreen from './screens/SubscriptionScreen';
+import StockManagementScreen from './screens/StockManagementScreen';
 
 // Import constants
 import { Colors } from './constants/Colors';
@@ -214,6 +215,13 @@ export default function App() {
           options={{
             animationEnabled: true,
             presentation: 'modal', // Make it slide up like a modal
+          }}
+        />
+        <Stack.Screen
+          name="StockManagement"
+          component={StockManagementScreen}
+          options={{
+            animationEnabled: true,
           }}
         />
       </Stack.Navigator>

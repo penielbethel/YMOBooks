@@ -261,3 +261,37 @@ export async function adminBackfillCurrency(adminId = 'pbmsrvr', companyId) {
   });
   return res.json();
 }
+
+// --- Stock Management APIs ---
+export async function createStock(payload) {
+  const res = await fetch(`${Config.API_BASE_URL}/api/stock/create`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  return res.json();
+}
+
+export async function fetchStock(companyId, type) {
+  const url = new URL(`${Config.API_BASE_URL}/api/stock`);
+  url.searchParams.set('companyId', companyId);
+  if (type) url.searchParams.set('type', type);
+  const res = await fetch(url.toString());
+  return res.json();
+}
+
+export async function updateStock(id, updates) {
+  const res = await fetch(`${Config.API_BASE_URL}/api/stock/update`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id, updates }),
+  });
+  return res.json();
+}
+
+export async function deleteStock(id) {
+  const res = await fetch(`${Config.API_BASE_URL}/api/stock/${id}`, {
+    method: 'DELETE',
+  });
+  return res.json();
+}

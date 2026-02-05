@@ -86,30 +86,47 @@ const DashboardScreen = ({ navigation }) => {
     }
   }, []);
 
-  const menuItems = useMemo(() => ([
-    {
-      id: 'invoice',
-      title: 'Create Invoice',
-      description: 'Generate professional invoices',
-      icon: 'document-text-outline',
-      tint: Colors.primary,
-    },
-    {
-      id: 'history',
-      title: 'Invoice History',
-      description: 'View invoices from the last 6 months',
-      icon: 'albums-outline',
-      tint: Colors.success,
-    },
-    {
-      id: 'calculator',
-      title: 'Financial Calculator',
-      description: 'Perform financial calculations',
-      icon: 'calculator-outline',
-      tint: Colors.success,
-      isPro: true,
+  const menuItems = useMemo(() => {
+    const isManufacturing = companyData?.businessType === 'manufacturing';
+
+    const items = [
+      {
+        id: 'invoice',
+        title: 'Create Invoice',
+        description: 'Generate professional invoices',
+        icon: 'document-text-outline',
+        tint: Colors.primary,
+      },
+      {
+        id: 'history',
+        title: 'Invoice History',
+        description: 'View invoices from the last 6 months',
+        icon: 'albums-outline',
+        tint: Colors.success,
+      }
+    ];
+
+    if (isManufacturing) {
+      items.push({
+        id: 'stock',
+        title: 'Stock Manager',
+        description: 'Manage materials and products',
+        icon: 'cube-outline',
+        tint: '#F59E0B', // Amber
+        isPro: true,
+      });
+    } else {
+      items.push({
+        id: 'calculator',
+        title: 'Financial Calculator',
+        description: 'Perform financial calculations',
+        icon: 'calculator-outline',
+        tint: Colors.success,
+        isPro: true,
+      });
     }
-  ]), []);
+    return items;
+  }, [companyData]);
 
   const handleMenuPress = useCallback((itemId) => {
     switch (itemId) {
@@ -121,6 +138,9 @@ const DashboardScreen = ({ navigation }) => {
         break;
       case 'calculator':
         navigation.navigate('FinancialCalculator');
+        break;
+      case 'stock':
+        navigation.navigate('StockManagement');
         break;
       default:
         // For other features, show coming soon alert
