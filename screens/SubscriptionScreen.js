@@ -91,6 +91,22 @@ const SubscriptionScreen = ({ navigation }) => {
         }
     };
 
+    const getPriceDisplay = () => {
+        const code = companyData?.currencyCode || 'USD';
+        const symbol = companyData?.currencySymbol || '$';
+
+        let amount = '5.00';
+        switch (code) {
+            case 'NGN': amount = '8,000'; break;
+            case 'GBP': amount = '4.00'; break;
+            case 'EUR': amount = '4.60'; break;
+            case 'GHS': amount = '80.00'; break;
+            case 'KES': amount = '750'; break;
+            default: amount = '5.00'; break;
+        }
+        return `${symbol}${amount}`;
+    };
+
     return (
         <SafeAreaView style={styles.container}>
             <View style={styles.header}>
@@ -137,7 +153,7 @@ const SubscriptionScreen = ({ navigation }) => {
 
                 <View style={styles.priceContainer}>
                     <Text style={styles.priceLabel}>Total Price</Text>
-                    <Text style={styles.priceValue}>{companyData?.currencySymbol || '$'}5.00</Text>
+                    <Text style={styles.priceValue}>{getPriceDisplay()}</Text>
                 </View>
 
                 <TouchableOpacity
