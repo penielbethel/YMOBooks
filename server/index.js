@@ -1740,7 +1740,12 @@ app.post('/api/login', async (req, res) => {
     // Admin bypass
     const adminIds = ['PBMSRV', 'PBMSRVR'];
     if (adminIds.includes(String(companyId).toUpperCase())) {
-      const adminStub = { companyId: String(companyId).toUpperCase(), name: 'System Admin', businessType: businessType || 'admin' };
+      const adminStub = {
+        companyId: String(companyId).toUpperCase(),
+        name: 'System Admin',
+        businessType: businessType || 'admin',
+        isPremium: true
+      };
       return res.json({ success: true, company: adminStub });
     }
 
