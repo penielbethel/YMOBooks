@@ -1,4 +1,5 @@
-import React, { useEffect, useRef, useState, useMemo } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
+import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, SafeAreaView, Alert, KeyboardAvoidingView, Platform, Modal, ActivityIndicator } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -34,14 +35,20 @@ const CreateInvoiceScreen = ({ navigation }) => {
   const webviewRef = useRef(null);
   const [downloading, setDownloading] = useState(false);
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const stored = await AsyncStorage.getItem('companyData');
-        if (stored) setCompanyData(JSON.parse(stored));
-      } catch (_) { }
-    })();
-  }, []);
+  // Reload company data whenever screen is focused (fixing stale data issue)
+  useFocusEffect(
+    useCallback(() => {
+      (async () => {
+        try {
+          const stored = await AsyncStorage.getItem('companyData');
+          if (stored) {
+            const parsed = JSON.parse(stored);
+            setCompanyData(parsed);
+          }
+        } catch (_) { }
+      })();
+    }, [])
+  );
 
   const updateInvoice = (field, value) => setInvoice(prev => ({ ...prev, [field]: value }));
   const updateItem = (index, field, value) => {

@@ -205,13 +205,13 @@ const InvoiceHistoryScreen = ({ navigation, route }) => {
       const currencySymbol = resolveCurrencySymbol(item, company);
       const html = buildInvoiceHtml({
         company: {
-          name: company?.companyName,
+          name: company?.name || company?.companyName,
           address: company?.address,
           email: company?.email,
-          phone: company?.phoneNumber,
+          phone: company?.phone || company?.phoneNumber,
           bankName: company?.bankName,
-          accountName: company?.bankAccountName,
-          accountNumber: company?.bankAccountNumber,
+          accountName: company?.accountName || company?.bankAccountName,
+          accountNumber: company?.accountNumber || company?.bankAccountNumber,
           logo: resolvedLogo,
           signature: resolvedSignature,
         },
@@ -251,13 +251,13 @@ const InvoiceHistoryScreen = ({ navigation, route }) => {
       const receiptDate = dayjs().format('YYYY-MM-DD');
       const html = buildReceiptHtml({
         company: {
-          name: company?.companyName,
+          name: company?.name || company?.companyName,
           address: company?.address,
           email: company?.email,
-          phone: company?.phoneNumber,
+          phone: company?.phone || company?.phoneNumber,
           bankName: company?.bankName,
-          accountName: company?.bankAccountName,
-          accountNumber: company?.bankAccountNumber,
+          accountName: company?.accountName || company?.bankAccountName,
+          accountNumber: company?.accountNumber || company?.bankAccountNumber,
           logo: resolvedLogo,
           signature: resolvedSignature,
           brandColor: company?.brandColor,
