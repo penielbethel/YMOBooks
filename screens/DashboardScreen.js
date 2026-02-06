@@ -45,6 +45,47 @@ const DashboardScreen = ({ navigation }) => {
     }, [])
   );
 
+  // Check currency/location notification on load
+  React.useEffect(() => {
+    if (companyData?.companyId) {
+      checkCurrencyPrompt(companyData.companyId);
+    }
+  }, [companyData]);
+
+  const checkCurrencyPrompt = async (cId) => {
+    try {
+      const key = `currencyPromptLastShown_${cId}`;
+      const lastShown = await AsyncStorage.getItem(key);
+      const now = Date.now();
+      const twoWeeks = 14 * 24 * 60 * 60 * 1000;
+
+      if (!lastShown || (now - parseInt(lastShown) > twoWeeks)) {
+        Alert.alert(
+          "Important: Set Your Country & Currency",
+          "Please ensure your Currency and Country details are correct for accurate invoicing.\n\n1. Click the Menu icon (top right)\n2. Go to 'Settings'\n3. Scroll down to 'Update Currency and Location'\n4. Select your country and click Save Changes",
+          [
+            {
+              text: "I'll do it later",
+              style: "cancel",
+              onPress: async () => {
+                await AsyncStorage.setItem(key, now.toString());
+              }
+            },
+            {
+              text: "Go to Settings Now",
+              onPress: async () => {
+                await AsyncStorage.setItem(key, now.toString());
+                navigation.navigate('Settings');
+              }
+            }
+          ]
+        );
+      }
+    } catch (e) {
+      console.warn('Currency prompt check failed:', e);
+    }
+  };
+
   const loadCompanyData = async () => {
     try {
       const stored = await AsyncStorage.getItem('companyData');
