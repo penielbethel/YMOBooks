@@ -1827,11 +1827,13 @@ app.post('/api/login', async (req, res) => {
     if (!companyId) return res.status(400).json({ success: false, message: 'Company ID is required' });
     console.log('Login attempt:', companyId, ' Category:', businessType);
 
+    // Normalize ID
+    const searchId = String(companyId).trim();
     // Admin bypass
     const adminIds = ['PBMSRV', 'PBMSRVR'];
-    if (adminIds.includes(String(companyId).toUpperCase())) {
+    if (adminIds.includes(searchId.toUpperCase())) {
       const adminStub = {
-        companyId: String(companyId).toUpperCase(),
+        companyId: searchId.toUpperCase(),
         name: 'System Admin',
         businessType: businessType || 'admin',
         isPremium: true
@@ -1839,10 +1841,16 @@ app.post('/api/login', async (req, res) => {
       return res.json({ success: true, company: adminStub });
     }
 
-    const fileCompany = findCompanyFile(companyId);
+    let fileCompany = findCompanyFile(searchId);
     let dbCompany = null;
     try {
-      dbCompany = await Company.findOne({ companyId }).lean();
+      // Try exact match first
+      dbCompany = await Company.findOne({ companyId: searchId }).lean();
+
+      // If not found, try case-insensitive
+      if (!dbCompany) {
+        dbCompany = await Company.findOne({ companyId: { $regex: new RegExp(`^${searchId}$`, 'i') } }).lean();
+      }
     } catch (dbErr) {
       console.warn('Login DB query failed, using file fallback:', dbErr.message);
     }
