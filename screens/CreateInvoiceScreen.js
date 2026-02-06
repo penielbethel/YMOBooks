@@ -227,12 +227,12 @@ const CreateInvoiceScreen = ({ navigation }) => {
             <View style={styles.dateRow}>
               <TouchableOpacity style={styles.dateField} onPress={() => setShowInvoiceDatePicker(true)}>
                 <Text style={styles.dateLabel}>Issued Date</Text>
-                <Text style={styles.dateValue}>{invoice.invoiceDate?.toLocaleDateString()}</Text>
+                <Text style={styles.dateValue}>{invoice.invoiceDate?.toLocaleDateString('en-GB')}</Text>
                 <Ionicons name="chevron-down" size={16} color={Colors.textSecondary} style={{ position: 'absolute', right: 10, bottom: 12 }} />
               </TouchableOpacity>
               <TouchableOpacity style={styles.dateField} onPress={() => setShowDueDatePicker(true)}>
                 <Text style={styles.dateLabel}>Due Date</Text>
-                <Text style={styles.dateValue}>{invoice.dueDate?.toLocaleDateString()}</Text>
+                <Text style={styles.dateValue}>{invoice.dueDate?.toLocaleDateString('en-GB')}</Text>
                 <Ionicons name="chevron-down" size={16} color={Colors.textSecondary} style={{ position: 'absolute', right: 10, bottom: 12 }} />
               </TouchableOpacity>
             </View>

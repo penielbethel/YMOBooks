@@ -61,16 +61,9 @@ const DashboardScreen = ({ navigation }) => {
 
       if (!lastShown || (now - parseInt(lastShown) > twoWeeks)) {
         Alert.alert(
-          "Important: Set Your Country & Currency",
-          "Please ensure your Currency and Country details are correct for accurate invoicing.\n\n1. Click the Menu icon (top right)\n2. Go to 'Settings'\n3. Scroll down to 'Update Currency and Location'\n4. Select your country and click Save Changes",
+          "Action Required: Verify Currency & Location",
+          "For accurate invoicing and financial reports, you must verify your Country and Currency settings.\n\nIt is mandatory to check this every 2 weeks.\n\n1. You will be redirected to Settings.\n2. Scroll down to 'Update Currency and Location'.\n3. Confirm/Update your Country and click Save.",
           [
-            {
-              text: "I'll do it later",
-              style: "cancel",
-              onPress: async () => {
-                await AsyncStorage.setItem(key, now.toString());
-              }
-            },
             {
               text: "Go to Settings Now",
               onPress: async () => {
@@ -78,7 +71,8 @@ const DashboardScreen = ({ navigation }) => {
                 navigation.navigate('Settings');
               }
             }
-          ]
+          ],
+          { cancelable: false }
         );
       }
     } catch (e) {

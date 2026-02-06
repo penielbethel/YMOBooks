@@ -274,6 +274,28 @@ const StockManagementScreen = ({ navigation }) => {
                     keyExtractor={item => item._id}
                     contentContainerStyle={styles.listContent}
                     refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => loadStock()} />}
+                    ListHeaderComponent={() => {
+                        // Calculate summary stats
+                        const totalValue = stockItems.reduce((acc, i) => acc + ((i.quantity || 0) * (i.costPrice || 0)), 0);
+                        const lowStockCount = stockItems.filter(i => (i.quantity || 0) <= (i.minStockLevel || 0)).length;
+                        const totalItems = stockItems.reduce((acc, i) => acc + (i.quantity || 0), 0);
+
+                        return (
+                            <View style={styles.summaryContainer}>
+                                <View style={styles.summaryCard}>
+                                    <Text style={styles.summaryLabel}>Total Stock Value</Text>
+                                    <Text style={styles.summaryValueBig}>{currencySymbol}{totalValue.toFixed(2)}</Text>
+                                    <View style={styles.summaryRow}>
+                                        <Text style={styles.summarySub}>Items: {totalItems}</Text>
+                                        <Text style={styles.summarySub}>•</Text>
+                                        <Text style={[styles.summarySub, lowStockCount > 0 && { color: Colors.error, fontWeight: 'bold' }]}>
+                                            Low Stock: {lowStockCount}
+                                        </Text>
+                                    </View>
+                                </View>
+                            </View>
+                        );
+                    }}
                     ListEmptyComponent={
                         <View style={styles.emptyContainer}>
                             <Ionicons name="cube-outline" size={48} color={Colors.textSecondary} />
@@ -426,7 +448,25 @@ const styles = StyleSheet.create({
     saveBtnText: { fontWeight: '600', color: '#fff' },
 
     emptyContainer: { alignItems: 'center', marginTop: 40, opacity: 0.6 },
-    emptyText: { marginTop: 12, fontSize: 16, color: Colors.textSecondary }
+    emptyText: { marginTop: 12, fontSize: 16, color: Colors.textSecondary },
+
+    // Summary Styles
+    summaryContainer: { marginBottom: 16 },
+    summaryCard: {
+        backgroundColor: Colors.primary,
+        borderRadius: 12,
+        padding: 20,
+        alignItems: 'center',
+        shadowColor: Colors.primary,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+        elevation: 6
+    },
+    summaryLabel: { color: 'rgba(255,255,255,0.8)', fontSize: 12, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 1 },
+    summaryValueBig: { color: '#fff', fontSize: 32, fontWeight: '800', marginVertical: 4 },
+    summaryRow: { flexDirection: 'row', gap: 8, marginTop: 4 },
+    summarySub: { color: 'rgba(255,255,255,0.9)', fontSize: 13, fontWeight: '500' }
 });
 
 export default StockManagementScreen;
