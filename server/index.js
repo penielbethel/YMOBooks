@@ -191,32 +191,49 @@ async function optimizeImageDataUrl(dataUrl, kind = 'logo') {
 }
 
 // Mongo connection (optional)
-let DB_CONNECTED = false;
-if (MONGO_URI) {
-  mongoose
-    .connect(MONGO_URI, {
-      serverSelectionTimeoutMS: 8000,
-      // Use 'test' by default to align with existing Atlas DB
+// Mongo connection helper for Serverless/Vercel
+let cachedDb = null;
+
+async function connectToDatabase() {
+  if (cachedDb && mongoose.connection.readyState === 1) {
+    return cachedDb;
+  }
+
+  if (!MONGO_URI) {
+    console.warn('Skipping DB connect: MONGO_URI not set');
+    return null;
+  }
+
+  try {
+    console.log('Connecting to MongoDB...');
+    // If a connection is already in progress, await it
+    if (mongoose.connection.readyState === 2) {
+      console.log('Use existing connection promise');
+    }
+
+    // Mongoose 6+ default buffering is fine, but we explicit connect
+    cachedDb = await mongoose.connect(MONGO_URI, {
+      serverSelectionTimeoutMS: 5000,
       dbName: process.env.MONGO_DB_NAME || 'test',
-    })
-    .then(() => {
-      DB_CONNECTED = true;
-      console.log('Connected to MongoDB');
-    })
-    .catch((err) => {
-      DB_CONNECTED = false;
-      console.error('MongoDB connection error:', err.message);
+      bufferCommands: false, // Disable buffering to fail fast if not connected
     });
-  mongoose.connection.on('connected', () => {
     DB_CONNECTED = true;
-    console.log('MongoDB connection established');
-  });
-  mongoose.connection.on('disconnected', () => {
+    console.log('New MongoDB connection established');
+    return cachedDb;
+  } catch (err) {
+    console.error('MongoDB connection error:', err);
     DB_CONNECTED = false;
-    console.warn('MongoDB disconnected; file fallback may be used');
-  });
-} else {
-  console.warn('MONGO_URI not set. Running with file-based fallback storage.');
+    throw err;
+  }
+}
+
+// Attempt initial connection (optional, for warmer starts)
+connectToDatabase().catch(e => console.warn('Initial warm-up connection fail:', e.message));
+
+// Listeners
+mongoose.connection.on('connected', () => { DB_CONNECTED = true; });
+mongoose.connection.on('disconnected', () => { DB_CONNECTED = false; });
+console.warn('MONGO_URI not set. Running with file-based fallback storage.');
 }
 
 // Models
@@ -566,6 +583,9 @@ function amountInWordsWithCurrency(amount, symbol) {
 // Routes
 app.post('/api/register-company', async (req, res) => {
   try {
+    // Ensure DB is connected for serverless environment
+    await connectToDatabase();
+
     const { name, address, email, phone, brandColor, currencySymbol, bankName, accountName, accountNumber, bankAccountName, bankAccountNumber, invoiceTemplate, receiptTemplate, termsAndConditions, businessType } = req.body;
     // Ensure currencyCode is defined; fall back from symbol when not provided
     const currencyCodeInput = req.body.currencyCode;
