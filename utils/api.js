@@ -41,7 +41,7 @@ export async function loginCompany(companyId, businessType) {
 }
 
 export async function fetchCompany(companyId) {
-  const res = await fetch(`${Config.API_BASE_URL}/api/company/${companyId}`);
+  const res = await fetch(`${Config.API_BASE_URL}/api/company/${encodeURIComponent(companyId)}`);
   return res.json();
 }
 
