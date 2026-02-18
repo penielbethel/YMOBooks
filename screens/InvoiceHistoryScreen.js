@@ -1,4 +1,5 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import { View, Text, StyleSheet, TouchableOpacity, Linking, SafeAreaView, ActivityIndicator, Alert, Platform, Modal, TextInput, SectionList } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import dayjs from 'dayjs';
@@ -35,6 +36,21 @@ const InvoiceHistoryScreen = ({ navigation, route }) => {
   const [selectMode, setSelectMode] = useState(false);
   const [selectedInvoicesMap, setSelectedInvoicesMap] = useState({});
   const [bulkDeleting, setBulkDeleting] = useState(false);
+
+  // Reload company data on focus to ensure receipts have latest settings
+  useFocusEffect(
+    useCallback(() => {
+      (async () => {
+        try {
+          const stored = await AsyncStorage.getItem('companyData');
+          if (stored) {
+            const parsed = JSON.parse(stored);
+            setCompany(parsed);
+          }
+        } catch (_) { }
+      })();
+    }, [])
+  );
 
   // Persist and restore filters/search
   useEffect(() => {

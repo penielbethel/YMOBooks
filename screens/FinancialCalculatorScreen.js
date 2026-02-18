@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState, useCallback, memo } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, ScrollView, TextInput, Alert, ActivityIndicator, RefreshControl, Platform, KeyboardAvoidingView } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import dayjs from 'dayjs';
@@ -82,15 +83,17 @@ const FinancialCalculatorScreen = ({ navigation }) => {
   const showBusy = useCallback((message) => setBusy({ visible: true, message }), []);
   const hideBusy = useCallback(() => setBusy({ visible: false, message: '' }), []);
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const stored = await AsyncStorage.getItem('companyData');
-        const c = stored ? JSON.parse(stored) : null;
-        setCompanyData(c);
-      } catch (_) { }
-    })();
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      (async () => {
+        try {
+          const stored = await AsyncStorage.getItem('companyData');
+          const c = stored ? JSON.parse(stored) : null;
+          setCompanyData(c);
+        } catch (_) { }
+      })();
+    }, [])
+  );
 
   const loadData = useCallback(async () => {
     if (!companyData?.companyId) return;

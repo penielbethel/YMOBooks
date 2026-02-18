@@ -1,4 +1,5 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, ScrollView, Alert, Modal, TextInput, Image, Platform, Linking, KeyboardAvoidingView } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import * as FileSystem from 'expo-file-system';
@@ -534,6 +535,22 @@ export default function TemplatePickerScreen({ navigation, route }) {
   const [savingHtmlPdf, setSavingHtmlPdf] = useState(false);
   const [previewHtml, setPreviewHtml] = useState('');
   const [pdfReadyUri, setPdfReadyUri] = useState(null);
+
+  useFocusEffect(
+    useCallback(() => {
+      (async () => {
+        try {
+          const stored = await AsyncStorage.getItem('companyData');
+          if (stored) {
+            const parsed = JSON.parse(stored);
+            setCompany(parsed);
+          }
+        } catch (e) {
+          console.error('Failed to load company data', e);
+        }
+      })();
+    }, [])
+  );
 
   useEffect(() => {
     if (previewVisible) {
