@@ -39,7 +39,8 @@ const StockManagementScreen = ({ navigation }) => {
         costPrice: '',
         sellingPrice: '',
         minStockLevel: '',
-        description: ''
+        description: '',
+        bom: [] // { materialId: '', quantity: '' }
     });
 
     const [productionForm, setProductionForm] = useState({
@@ -189,6 +190,48 @@ const StockManagementScreen = ({ navigation }) => {
         });
     };
 
+    const selectProductForProduction = (itemId) => {
+        const item = stockItems.find(i => i._id === itemId);
+        if (!item) return;
+
+        let materials = [];
+        if (item.bom && item.bom.length > 0) {
+            // Auto-fill from BOM (initially assumes 1 unit produced if quantity empty)
+            const factor = parseFloat(productionForm.quantityProduced) || 1;
+            materials = item.bom.map(b => ({
+                materialId: b.materialId,
+                quantity: String((parseFloat(b.quantity) || 0) * factor)
+            }));
+        }
+
+        setProductionForm({
+            ...productionForm,
+            finishedGoodId: itemId,
+            materialsUsed: materials
+        });
+    };
+
+    const updateProductionQuantity = (qty) => {
+        const item = stockItems.find(i => i._id === productionForm.finishedGoodId);
+        let newMaterials = [...productionForm.materialsUsed];
+
+        if (item && item.bom && item.bom.length > 0 && qty) {
+            const factor = parseFloat(qty) || 0;
+            // Re-calculate materials from BOM if they haven't been manually adjusted?
+            // For simplicity, let's just always re-calculate if we have a BOM and quantity changes
+            newMaterials = item.bom.map(b => ({
+                materialId: b.materialId,
+                quantity: String((parseFloat(b.quantity) || 0) * factor)
+            }));
+        }
+
+        setProductionForm({
+            ...productionForm,
+            quantityProduced: qty,
+            materialsUsed: newMaterials
+        });
+    };
+
 
     const handleDelete = async (id) => {
         Alert.alert('Confirm Delete', 'Are you sure you want to delete this item?', [
@@ -226,7 +269,8 @@ const StockManagementScreen = ({ navigation }) => {
             costPrice: String(item.costPrice || 0),
             sellingPrice: String(item.sellingPrice || 0),
             minStockLevel: String(item.minStockLevel || 0),
-            description: item.description || ''
+            description: item.description || '',
+            bom: item.bom || []
         });
         setModalVisible(true);
     };
@@ -239,7 +283,8 @@ const StockManagementScreen = ({ navigation }) => {
             costPrice: '',
             sellingPrice: '',
             minStockLevel: '',
-            description: ''
+            description: '',
+            bom: []
         });
     };
 
@@ -494,6 +539,58 @@ const StockManagementScreen = ({ navigation }) => {
                                 keyboardType="numeric"
                                 placeholder="e.g. 10"
                             />
+
+                            {activeTab === 'finished_good' && (
+                                <>
+                                    <View style={styles.divider} />
+                                    <Text style={styles.sectionSubtitle}>Bill of Materials (Recipe)</Text>
+                                    <Text style={styles.helperText}>Define how much raw material is used to produce ONE unit of this product.</Text>
+
+                                    {formData.bom.map((b, idx) => {
+                                        const mat = stockItems.find(i => i._id === b.materialId);
+                                        return (
+                                            <View key={idx} style={styles.bomRow}>
+                                                <Text style={styles.bomMatName}>{mat?.name || 'Item'}</Text>
+                                                <TextInput
+                                                    style={styles.bomInput}
+                                                    value={String(b.quantity)}
+                                                    onChangeText={val => {
+                                                        const newBom = [...formData.bom];
+                                                        newBom[idx].quantity = val;
+                                                        setFormData({ ...formData, bom: newBom });
+                                                    }}
+                                                    keyboardType="numeric"
+                                                    placeholder="0"
+                                                />
+                                                <TouchableOpacity onPress={() => {
+                                                    const newBom = formData.bom.filter((_, i) => i !== idx);
+                                                    setFormData({ ...formData, bom: newBom });
+                                                }}>
+                                                    <Ionicons name="trash-outline" size={20} color={Colors.error} />
+                                                </TouchableOpacity>
+                                            </View>
+                                        );
+                                    })}
+
+                                    <Text style={[styles.label, { marginTop: 10 }]}>Add Raw Material to Recipe:</Text>
+                                    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.matScroll}>
+                                        {stockItems.filter(i => i.type === 'raw_material' && !formData.bom.find(b => b.materialId === i._id)).map(item => (
+                                            <TouchableOpacity
+                                                key={item._id}
+                                                style={styles.addMatChip}
+                                                onPress={() => {
+                                                    setFormData({
+                                                        ...formData,
+                                                        bom: [...formData.bom, { materialId: item._id, quantity: '1' }]
+                                                    });
+                                                }}
+                                            >
+                                                <Text style={styles.addMatChipText}>+ {item.name}</Text>
+                                            </TouchableOpacity>
+                                        ))}
+                                    </ScrollView>
+                                </>
+                            )}
                         </ScrollView>
                         <View style={styles.modalActions}>
                             <TouchableOpacity onPress={() => setModalVisible(false)} style={styles.cancelBtn}>
@@ -518,7 +615,7 @@ const StockManagementScreen = ({ navigation }) => {
                                     <TouchableOpacity
                                         key={item._id}
                                         style={[styles.pickerItem, productionForm.finishedGoodId === item._id && styles.pickerItemActive]}
-                                        onPress={() => setProductionForm({ ...productionForm, finishedGoodId: item._id })}
+                                        onPress={() => selectProductForProduction(item._id)}
                                     >
                                         <Text style={[styles.pickerItemText, productionForm.finishedGoodId === item._id && styles.pickerItemTextActive]}>
                                             {item.name} ({item.unit})
@@ -531,7 +628,7 @@ const StockManagementScreen = ({ navigation }) => {
                             <TextInput
                                 style={styles.input}
                                 value={productionForm.quantityProduced}
-                                onChangeText={t => setProductionForm({ ...productionForm, quantityProduced: t })}
+                                onChangeText={updateProductionQuantity}
                                 keyboardType="numeric"
                                 placeholder="0"
                             />
@@ -825,6 +922,15 @@ const styles = StyleSheet.create({
         color: Colors.primary,
         fontWeight: '600',
     },
+    // BOM Editor Styles
+    sectionSubtitle: { fontSize: 16, fontWeight: '700', color: Colors.text, marginTop: 16, marginBottom: 4 },
+    helperText: { fontSize: 12, color: Colors.textSecondary, marginBottom: 12 },
+    bomRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#f8fafc', padding: 10, borderRadius: 8, marginBottom: 8, gap: 12, borderWidth: 1, borderColor: '#e2e8f0' },
+    bomMatName: { flex: 1, fontSize: 14, color: Colors.text, fontWeight: '500' },
+    bomInput: { width: 80, backgroundColor: '#fff', borderWidth: 1, borderColor: Colors.border, borderRadius: 6, padding: 6, textAlign: 'center', fontSize: 14 },
+    matScroll: { marginTop: 8, marginBottom: 16 },
+    addMatChip: { backgroundColor: Colors.primary, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20, marginRight: 8 },
+    addMatChipText: { color: '#fff', fontSize: 12, fontWeight: 'bold' },
 });
 
 export default StockManagementScreen;
