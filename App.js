@@ -21,6 +21,7 @@ import SubscriptionScreen from './screens/SubscriptionScreen';
 import StockManagementScreen from './screens/StockManagementScreen';
 import ProfitLossScreen from './screens/ProfitLossScreen';
 import BalanceSheetScreen from './screens/BalanceSheetScreen';
+import PrintingServiceScreen from './screens/PrintingServiceScreen';
 
 // Import constants
 import { Colors } from './constants/Colors';
@@ -236,6 +237,13 @@ export default function App() {
         <Stack.Screen
           name="BalanceSheet"
           component={BalanceSheetScreen}
+          options={{
+            animationEnabled: true,
+          }}
+        />
+        <Stack.Screen
+          name="PrintingService"
+          component={PrintingServiceScreen}
           options={{
             animationEnabled: true,
           }}

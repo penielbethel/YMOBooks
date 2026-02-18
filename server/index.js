@@ -310,6 +310,7 @@ const InvoiceSchema = new mongoose.Schema(
     ],
     grandTotal: { type: Number },
     pdfPath: { type: String },
+    category: { type: String, enum: ['large_format', 'di_printing', 'dtf_prints', 'general'], default: 'general' },
   },
   { timestamps: true }
 );
@@ -339,6 +340,7 @@ const ReceiptSchema = new mongoose.Schema(
       },
     ],
     pdfPath: { type: String },
+    category: { type: String, enum: ['large_format', 'di_printing', 'dtf_prints', 'general'], default: 'general' },
   },
   { timestamps: true }
 );
@@ -1125,7 +1127,10 @@ function drawItemsTable(doc, items, { x, y, width, theme, curr, amountPaid, isMi
 // Create invoice PDF (A4, multi-page if needed)
 app.post('/api/invoice/create', async (req, res) => {
   try {
-    const { companyId, invoiceNumber, invoiceDate, dueDate, customer = {}, items = [], template, brandColor, companyOverride } = req.body;
+    const {
+      companyId, invoiceNumber, invoiceDate, dueDate, customer = {},
+      items = [], template, brandColor, companyOverride, category = 'general'
+    } = req.body;
     if (!companyId) return res.status(400).json({ success: false, message: 'companyId is required' });
     let company;
     try {
@@ -1213,6 +1218,7 @@ app.post('/api/invoice/create', async (req, res) => {
           items: persistedItems,
           grandTotal: grandTotalPersist,
           pdfPath,
+          category,
         });
       } catch (persistErr) {
         console.error('Persist invoice error:', persistErr);
@@ -1232,7 +1238,10 @@ app.post('/api/invoice/create', async (req, res) => {
 // Create receipt PDF
 app.post('/api/receipt/create', async (req, res) => {
   try {
-    const { companyId, invoiceNumber, receiptNumber, receiptDate, customer = {}, amountPaid, items = [] } = req.body;
+    const {
+      companyId, invoiceNumber, receiptNumber, receiptDate, customer = {},
+      amountPaid, items = [], category = 'general'
+    } = req.body;
     if (!companyId) return res.status(400).json({ success: false, message: 'companyId is required' });
     let company;
     try {
@@ -1247,13 +1256,15 @@ app.post('/api/receipt/create', async (req, res) => {
     let derivedCustomer = customer;
     let derivedAmount = amountPaid;
     let derivedItems = Array.isArray(items) ? items : [];
-    if ((!derivedCustomer?.name || derivedAmount == null || !derivedItems.length) && invoiceNumber) {
+    let derivedCategory = category;
+    if ((!derivedCustomer?.name || derivedAmount == null || !derivedItems.length || derivedCategory === 'general') && invoiceNumber) {
       try {
         const invDoc = await Invoice.findOne({ companyId, invoiceNumber }).lean();
         if (invDoc) {
           if (!derivedCustomer?.name) derivedCustomer = invDoc.customer || derivedCustomer;
           if (derivedAmount == null) derivedAmount = Number(invDoc.grandTotal || 0);
           if (!derivedItems.length) derivedItems = invDoc.items || [];
+          if (derivedCategory === 'general' && invDoc.category) derivedCategory = invDoc.category;
         }
       } catch (e) {
         console.warn('Lookup invoice for receipt failed:', e.message);
@@ -1294,6 +1305,7 @@ app.post('/api/receipt/create', async (req, res) => {
           items: derivedItems,
           amountPaid: Number(derivedAmount || 0),
           pdfPath,
+          category: derivedCategory,
         });
         // Mark invoice as paid when possible
         if (invoiceNumber) {
@@ -1436,7 +1448,7 @@ app.post('/api/expenses/create', async (req, res) => {
     const { companyId, month, category, amount, description } = req.body || {};
     if (!companyId) return res.status(400).json({ success: false, message: 'Missing companyId' });
     if (!month) return res.status(400).json({ success: false, message: 'Missing month (YYYY-MM)' });
-    if (!category || !['production', 'expense'].includes(String(category))) return res.status(400).json({ success: false, message: 'Invalid category' });
+    if (!category) return res.status(400).json({ success: false, message: 'Missing category' });
     const amt = Number(amount);
     if (!amt || amt <= 0) return res.status(400).json({ success: false, message: 'Amount must be positive' });
 
@@ -1509,7 +1521,7 @@ app.delete('/api/expenses', async (req, res) => {
 // Create Stock Item
 app.post('/api/stock/create', async (req, res) => {
   try {
-    const { companyId, name, type, quantity, unit, costPrice, sellingPrice, minStockLevel, description } = req.body;
+    const { companyId, name, type, quantity, unit, costPrice, sellingPrice, minStockLevel, description, bom } = req.body;
     if (!companyId || !name) return res.status(400).json({ success: false, message: 'Company ID and Name are required' });
 
     // Enforce business type check if needed, but for now rely on frontend filtering
@@ -1522,7 +1534,8 @@ app.post('/api/stock/create', async (req, res) => {
       costPrice: Number(costPrice || 0),
       sellingPrice: Number(sellingPrice || 0),
       minStockLevel: Number(minStockLevel || 0),
-      description
+      description,
+      bom: bom || []
     });
     return res.json({ success: true, item: newItem });
   } catch (err) {
@@ -1639,7 +1652,7 @@ app.get('/api/production/history', async (req, res) => {
 // Finance summary by currency for a month
 app.get('/api/finance/summary', async (req, res) => {
   try {
-    const { companyId, month } = req.query;
+    const { companyId, month, category } = req.query;
     if (!companyId) return res.status(400).json({ success: false, message: 'Missing companyId' });
     const m = String(month || dayjs().format('YYYY-MM'));
     const start = dayjs(m + '-01').startOf('month').toDate();
@@ -1652,8 +1665,13 @@ app.get('/api/finance/summary', async (req, res) => {
     const code = company?.currencyCode || mapSymbolToCode(sym) || 'UNK';
 
     // Receipts -> revenue (single currency)
-    const receipts = await Receipt.find({ companyId, receiptDate: { $gte: start, $lte: end } }).lean();
+    const receiptQuery = { companyId, receiptDate: { $gte: start, $lte: end } };
+    if (category) receiptQuery.category = category;
+
+    const receipts = await Receipt.find(receiptQuery).lean();
     const totalRevenue = receipts.reduce((sum, r) => sum + Number(r.amountPaid || 0), 0);
+    const jobCount = receipts.length;
+    const avgValue = jobCount > 0 ? totalRevenue / jobCount : 0;
 
     // Expenses (single currency)
     const expenses = await Expense.find({ companyId, month: m }).lean();
@@ -1676,6 +1694,8 @@ app.get('/api/finance/summary', async (req, res) => {
         revenue: Number(totalRevenue || 0),
         expenses: { productionCost, runningExpenses, totalExpenses },
         net: Number(netProfit || 0),
+        jobCount,
+        avgValue,
       }
     });
   } catch (err) {
@@ -1745,7 +1765,7 @@ app.get('/api/finance/balance-sheet', async (req, res) => {
 // Daily revenue totals from receipts for a given month (31 days)
 app.get('/api/finance/revenue-daily', async (req, res) => {
   try {
-    const { companyId, month } = req.query;
+    const { companyId, month, category } = req.query;
     if (!companyId) return res.status(400).json({ success: false, message: 'Missing companyId' });
     const m = String(month || dayjs().format('YYYY-MM'));
     const start = dayjs(m + '-01').startOf('month').toDate();
@@ -1760,12 +1780,15 @@ app.get('/api/finance/revenue-daily', async (req, res) => {
 
     // Fetch receipts within month and aggregate by day
     // Include receipts whose receiptDate falls within month; fallback to createdAt when receiptDate is missing
-    const receipts = await Receipt.find({
+    const receiptQuery = {
       companyId, $or: [
         { receiptDate: { $gte: start, $lte: end } },
         { receiptDate: { $exists: false }, createdAt: { $gte: start, $lte: end } },
       ]
-    }).lean();
+    };
+    if (category && category !== 'expense') receiptQuery.category = category;
+
+    const receipts = await Receipt.find(receiptQuery).lean();
     const days = Array.from({ length: 31 }, () => 0);
     receipts.forEach((r) => {
       const d = r.receiptDate ? dayjs(r.receiptDate) : (r.createdAt ? dayjs(r.createdAt) : null);

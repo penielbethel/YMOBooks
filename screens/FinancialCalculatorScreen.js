@@ -97,7 +97,7 @@ const FinancialCalculatorScreen = ({ navigation }) => {
     setLoading(true);
     try {
       const [revDailyRes, expDailyRes] = await Promise.all([
-        fetchRevenueDaily(companyData.companyId, month),
+        fetchRevenueDaily(companyData.companyId, month, activeCategory),
         fetchExpensesDaily(companyData.companyId, month, activeCategory),
       ]);
       if (revDailyRes?.success && Array.isArray(revDailyRes.days)) {
@@ -256,8 +256,8 @@ const FinancialCalculatorScreen = ({ navigation }) => {
                 ))}
               </View>
 
-              {companyData?.businessType === 'manufacturing' && (
-                <View style={styles.categoryRow}>
+              {(companyData?.businessType === 'manufacturing' || companyData?.businessType === 'printing_press') && (
+                <View style={[styles.categoryRow, { flexWrap: 'wrap' }]}>
                   <TouchableOpacity
                     style={[styles.categoryTab, activeCategory === 'expense' && styles.categoryTabActive]}
                     onPress={() => setActiveCategory('expense')}
@@ -265,22 +265,49 @@ const FinancialCalculatorScreen = ({ navigation }) => {
                     <Ionicons name="receipt-outline" size={14} color={activeCategory === 'expense' ? '#fff' : Colors.textSecondary} />
                     <Text style={[styles.categoryTabText, activeCategory === 'expense' && { color: '#fff' }]}>Operating</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.categoryTab, activeCategory === 'production' && styles.categoryTabActive]}
-                    onPress={() => setActiveCategory('production')}
-                  >
-                    <Ionicons name="construct-outline" size={14} color={activeCategory === 'production' ? '#fff' : Colors.textSecondary} />
-                    <Text style={[styles.categoryTabText, activeCategory === 'production' && { color: '#fff' }]}>Production</Text>
-                  </TouchableOpacity>
+
+                  {companyData?.businessType === 'manufacturing' ? (
+                    <TouchableOpacity
+                      style={[styles.categoryTab, activeCategory === 'production' && styles.categoryTabActive]}
+                      onPress={() => setActiveCategory('production')}
+                    >
+                      <Ionicons name="construct-outline" size={14} color={activeCategory === 'production' ? '#fff' : Colors.textSecondary} />
+                      <Text style={[styles.categoryTabText, activeCategory === 'production' && { color: '#fff' }]}>Production</Text>
+                    </TouchableOpacity>
+                  ) : (
+                    <>
+                      <TouchableOpacity
+                        style={[styles.categoryTab, activeCategory === 'large_format' && styles.categoryTabActive]}
+                        onPress={() => setActiveCategory('large_format')}
+                      >
+                        <Ionicons name="image-outline" size={14} color={activeCategory === 'large_format' ? '#fff' : Colors.textSecondary} />
+                        <Text style={[styles.categoryTabText, activeCategory === 'large_format' && { color: '#fff' }]}>Large Format</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.categoryTab, activeCategory === 'di_printing' && styles.categoryTabActive]}
+                        onPress={() => setActiveCategory('di_printing')}
+                      >
+                        <Ionicons name="print-outline" size={14} color={activeCategory === 'di_printing' ? '#fff' : Colors.textSecondary} />
+                        <Text style={[styles.categoryTabText, activeCategory === 'di_printing' && { color: '#fff' }]}>DI Printing</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.categoryTab, activeCategory === 'dtf_prints' && styles.categoryTabActive]}
+                        onPress={() => setActiveCategory('dtf_prints')}
+                      >
+                        <Ionicons name="shirt-outline" size={14} color={activeCategory === 'dtf_prints' ? '#fff' : Colors.textSecondary} />
+                        <Text style={[styles.categoryTabText, activeCategory === 'dtf_prints' && { color: '#fff' }]}>DTF Prints</Text>
+                      </TouchableOpacity>
+                    </>
+                  )}
                 </View>
               )}
 
               <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 10 }}>
                 <Ionicons name="information-circle-outline" size={16} color={Colors.secondary} />
                 <Text style={styles.infoText}>
-                  {activeCategory === 'production'
-                    ? 'Enter costs directly related to manufacturing on each day.'
-                    : 'Revenue is automatically tracked from generated receipts.'}
+                  {activeCategory === 'expense'
+                    ? 'Operating costs (Rent, Salary, etc). Revenue is tracked from receipts.'
+                    : `Enter costs specifically for ${activeCategory.replace('_', ' ')} on each day.`}
                 </Text>
               </View>
             </Section>

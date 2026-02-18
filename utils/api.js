@@ -174,18 +174,20 @@ export async function deleteExpenses(companyId, month, category) {
   return res.json();
 }
 
-export async function fetchFinanceSummary(companyId, month) {
+export async function fetchFinanceSummary(companyId, month, category) {
   const url = new URL(`${Config.API_BASE_URL}/api/finance/summary`);
   url.searchParams.set('companyId', companyId);
   if (month) url.searchParams.set('month', month);
+  if (category) url.searchParams.set('category', category);
   const res = await fetch(url.toString());
   return res.json();
 }
 
-export async function fetchRevenueDaily(companyId, month) {
+export async function fetchRevenueDaily(companyId, month, category) {
   const url = new URL(`${Config.API_BASE_URL}/api/finance/revenue-daily`);
   url.searchParams.set('companyId', companyId);
   if (month) url.searchParams.set('month', month);
+  if (category) url.searchParams.set('category', category);
   const res = await fetch(url.toString());
   return res.json();
 }

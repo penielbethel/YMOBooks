@@ -507,8 +507,9 @@ function renderFullInvoicePreview(company, template, brandColor, liveInvoice) {
   }
 }
 
-export default function TemplatePickerScreen({ navigation }) {
+export default function TemplatePickerScreen({ navigation, route }) {
   const [company, setCompany] = useState(null);
+  const [category, setCategory] = useState(route?.params?.category || 'general');
   const [invoiceTemplate, setInvoiceTemplate] = useState('classic');
   const [brandColor, setBrandColor] = useState('');
   // Currency is globally determined by company settings
@@ -732,6 +733,38 @@ export default function TemplatePickerScreen({ navigation }) {
               <TextInput style={styles.input} placeholder="Customer Address" placeholderTextColor={Colors.textSecondary} value={invoice.customerAddress} onChangeText={(t) => updateInvoice({ customerAddress: t })} />
               <TextInput style={styles.input} placeholder="Email or Phone (optional)" placeholderTextColor={Colors.textSecondary} value={invoice.customerContact} onChangeText={(t) => updateInvoice({ customerContact: t })} autoCapitalize="none" />
             </View>
+
+            {/* Section: Category (Printing Press Only) */}
+            {company?.businessType === 'printing_press' && (
+              <View style={{ marginTop: 15 }}>
+                <Text style={styles.sectionTitle}>Service Category</Text>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                  {[
+                    { id: 'general', label: 'General' },
+                    { id: 'large_format', label: 'Large Format' },
+                    { id: 'di_printing', label: 'DI Printing' },
+                    { id: 'dtf_prints', label: 'DTF Prints' },
+                  ].map((cat) => (
+                    <TouchableOpacity
+                      key={cat.id}
+                      style={{
+                        paddingHorizontal: 12,
+                        paddingVertical: 6,
+                        borderRadius: 16,
+                        backgroundColor: category === cat.id ? Colors.primary : Colors.surface,
+                        borderWidth: 1,
+                        borderColor: category === cat.id ? Colors.primary : Colors.border,
+                      }}
+                      onPress={() => setCategory(cat.id)}
+                    >
+                      <Text style={{ color: category === cat.id ? '#fff' : Colors.text, fontSize: 12, fontWeight: '600' }}>
+                        {cat.label}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+            )}
             {/* Currency is determined by company settings */}
             <View style={{ flexDirection: 'row', gap: 10, marginTop: 10 }}>
               <TouchableOpacity style={[styles.input, { flex: 1, justifyContent: 'center' }]} onPress={() => setShowInvoiceDatePicker(true)}>
@@ -1025,6 +1058,7 @@ export default function TemplatePickerScreen({ navigation }) {
                           items: items.map((it) => ({ description: it.description, qty: Number(it.qty || 0), price: Number(it.price || 0) })),
                           template: invoiceTemplate,
                           brandColor,
+                          category: category || 'general',
                           // currency set by server/company settings
                           companyOverride: {
                             name: company?.companyName,

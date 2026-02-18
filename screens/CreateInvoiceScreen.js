@@ -16,14 +16,14 @@ import * as Print from 'expo-print';
 import { buildInvoiceHtml } from '../utils/invoiceHtml';
 
 const emptyItem = { description: '', qty: '1', price: '0' };
-
-const CreateInvoiceScreen = ({ navigation }) => {
+const CreateInvoiceScreen = ({ navigation, route }) => {
   const [invoice, setInvoice] = useState({
     customerName: '',
     customerAddress: '',
     contact: '',
     invoiceDate: new Date(),
     dueDate: new Date(),
+    category: route?.params?.category || 'general'
   });
   const [items, setItems] = useState([{ ...emptyItem }]);
   const [loading, setLoading] = useState(false);
@@ -133,6 +133,7 @@ const CreateInvoiceScreen = ({ navigation }) => {
           contact: invoice.contact,
         },
         items: items.map(it => ({ description: it.description, qty: Number(it.qty || 0), price: Number(it.price || 0) })),
+        category: invoice.category,
       };
 
       createInvoice(payload).catch(err => console.warn('Background sync failed', err));
@@ -224,6 +225,42 @@ const CreateInvoiceScreen = ({ navigation }) => {
             <TextInput style={[styles.input, styles.textArea]} placeholder="Billing Address" placeholderTextColor={Colors.textSecondary} value={invoice.customerAddress} onChangeText={(t) => updateInvoice('customerAddress', t)} multiline />
             <TextInput style={styles.input} placeholder="Contact (Email/Phone)" placeholderTextColor={Colors.textSecondary} value={invoice.contact} onChangeText={(t) => updateInvoice('contact', t)} />
           </View>
+
+          {/* Section: Category (Printing Press Only) */}
+          {companyData?.businessType === 'printing_press' && (
+            <View style={styles.sectionCard}>
+              <View style={styles.sectionHeader}>
+                <Ionicons name="pricetag-outline" size={20} color={Colors.primary} />
+                <Text style={styles.sectionTitle}>Service Category</Text>
+              </View>
+              <View style={styles.categoryRow}>
+                {[
+                  { id: 'general', label: 'General' },
+                  { id: 'large_format', label: 'Large Format' },
+                  { id: 'di_printing', label: 'DI Printing' },
+                  { id: 'dtf_prints', label: 'DTF Prints' },
+                ].map((cat) => (
+                  <TouchableOpacity
+                    key={cat.id}
+                    style={[
+                      styles.categoryChip,
+                      invoice.category === cat.id && styles.activeCategoryChip,
+                    ]}
+                    onPress={() => updateInvoice('category', cat.id)}
+                  >
+                    <Text
+                      style={[
+                        styles.categoryChipText,
+                        invoice.category === cat.id && styles.activeCategoryChipText,
+                      ]}
+                    >
+                      {cat.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          )}
 
           {/* Section: Dates */}
           <View style={styles.sectionCard}>
@@ -475,6 +512,11 @@ const styles = StyleSheet.create({
   pDownloadBtn: { backgroundColor: Colors.primary },
   pPrintBtn: { backgroundColor: '#EFF6FF' },
   pActionText: { marginLeft: 8, fontWeight: '600', color: '#fff' },
+  categoryRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 4 },
+  categoryChip: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20, backgroundColor: '#F1F5F9', borderWidth: 1, borderColor: '#E2E8F0' },
+  activeCategoryChip: { backgroundColor: Colors.primary, borderColor: Colors.primary },
+  categoryChipText: { fontSize: 12, color: Colors.textSecondary, fontWeight: '600' },
+  activeCategoryChipText: { color: '#fff' },
 });
 
 export default CreateInvoiceScreen;

@@ -141,6 +141,8 @@ const DashboardScreen = ({ navigation }) => {
       }
     ];
 
+    const isPrintingPress = companyData?.businessType === 'printing_press';
+
     if (isManufacturing) {
       items.push({
         id: 'stock',
@@ -164,6 +166,36 @@ const DashboardScreen = ({ navigation }) => {
         description: 'Balance Sheet & Assets',
         icon: 'briefcase-outline',
         tint: '#6366F1', // Indigo
+        isPro: true,
+      });
+    } else if (isPrintingPress) {
+      items.push({
+        id: 'large_format',
+        title: 'Large Format',
+        description: 'Banners, Flex & Stickers',
+        icon: 'image-outline',
+        tint: '#8B5CF6', // Purple
+      });
+      items.push({
+        id: 'di_printing',
+        title: 'DI Printing',
+        description: 'DI & Small Format',
+        icon: 'print-outline',
+        tint: '#EC4899', // Pink
+      });
+      items.push({
+        id: 'dtf_prints',
+        title: 'DTF Prints',
+        description: 'DTF & Apparel Prints',
+        icon: 'shirt-outline',
+        tint: '#F97316', // Orange
+      });
+      items.push({
+        id: 'profit_loss',
+        title: 'Profit & Loss',
+        description: 'Business Profitability',
+        icon: 'bar-chart-outline',
+        tint: '#10B981', // Emerald
         isPro: true,
       });
     } else {
@@ -198,6 +230,15 @@ const DashboardScreen = ({ navigation }) => {
         break;
       case 'balance_sheet':
         navigation.navigate('BalanceSheet');
+        break;
+      case 'large_format':
+        navigation.navigate('PrintingService', { service: 'large_format' });
+        break;
+      case 'di_printing':
+        navigation.navigate('PrintingService', { service: 'di_printing' });
+        break;
+      case 'dtf_prints':
+        navigation.navigate('PrintingService', { service: 'dtf_prints' });
         break;
       default:
         // For other features, show coming soon alert
