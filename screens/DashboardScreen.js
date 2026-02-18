@@ -123,7 +123,36 @@ const DashboardScreen = ({ navigation }) => {
 
   const menuItems = useMemo(() => {
     const isManufacturing = companyData?.businessType === 'manufacturing';
+    const isPrintingPress = companyData?.businessType === 'printing_press';
 
+    // Printing Press has its own standalone framework — only show the 3 services
+    if (isPrintingPress) {
+      return [
+        {
+          id: 'large_format',
+          title: 'Large Format',
+          description: 'Banners, Flex & Stickers',
+          icon: 'image-outline',
+          tint: '#8B5CF6', // Purple
+        },
+        {
+          id: 'di_printing',
+          title: 'DI Printing',
+          description: 'DI & Small Format',
+          icon: 'print-outline',
+          tint: '#EC4899', // Pink
+        },
+        {
+          id: 'dtf_prints',
+          title: 'DTF Prints',
+          description: 'DTF & Apparel Prints',
+          icon: 'shirt-outline',
+          tint: '#F97316', // Orange
+        },
+      ];
+    }
+
+    // General Merchandise & Manufacturing share base items
     const items = [
       {
         id: 'invoice',
@@ -140,8 +169,6 @@ const DashboardScreen = ({ navigation }) => {
         tint: Colors.success,
       }
     ];
-
-    const isPrintingPress = companyData?.businessType === 'printing_press';
 
     if (isManufacturing) {
       items.push({
@@ -166,36 +193,6 @@ const DashboardScreen = ({ navigation }) => {
         description: 'Balance Sheet & Assets',
         icon: 'briefcase-outline',
         tint: '#6366F1', // Indigo
-        isPro: true,
-      });
-    } else if (isPrintingPress) {
-      items.push({
-        id: 'large_format',
-        title: 'Large Format',
-        description: 'Banners, Flex & Stickers',
-        icon: 'image-outline',
-        tint: '#8B5CF6', // Purple
-      });
-      items.push({
-        id: 'di_printing',
-        title: 'DI Printing',
-        description: 'DI & Small Format',
-        icon: 'print-outline',
-        tint: '#EC4899', // Pink
-      });
-      items.push({
-        id: 'dtf_prints',
-        title: 'DTF Prints',
-        description: 'DTF & Apparel Prints',
-        icon: 'shirt-outline',
-        tint: '#F97316', // Orange
-      });
-      items.push({
-        id: 'profit_loss',
-        title: 'Profit & Loss',
-        description: 'Business Profitability',
-        icon: 'bar-chart-outline',
-        tint: '#10B981', // Emerald
         isPro: true,
       });
     } else {

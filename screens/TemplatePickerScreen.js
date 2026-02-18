@@ -1016,6 +1016,7 @@ export default function TemplatePickerScreen({ navigation, route }) {
                                 items: items.map((it) => ({ description: it.description, qty: Number(it.qty || 0), price: Number(it.price || 0) })),
                                 template: invoiceTemplate,
                                 brandColor,
+                                category: category || 'general',
                                 currencySymbol: companyCurrencySymbol,
                                 companyOverride: {
                                   name: company?.companyName,

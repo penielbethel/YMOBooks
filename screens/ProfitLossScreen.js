@@ -19,7 +19,7 @@ import { fetchFinanceSummary } from '../utils/api';
 
 const { width } = Dimensions.get('window');
 
-const ProfitLossScreen = ({ navigation }) => {
+const ProfitLossScreen = ({ navigation, route }) => {
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [companyData, setCompanyData] = useState(null);
@@ -49,7 +49,8 @@ const ProfitLossScreen = ({ navigation }) => {
         if (!companyData?.companyId) return;
         setLoading(true);
         try {
-            const res = await fetchFinanceSummary(companyData.companyId, month);
+            const category = route?.params?.category;
+            const res = await fetchFinanceSummary(companyData.companyId, month, category);
             if (res && res.success) {
                 setSummary(res.summary);
             }
@@ -102,7 +103,7 @@ const ProfitLossScreen = ({ navigation }) => {
                 <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
                     <Ionicons name="arrow-back" size={24} color="#fff" />
                 </TouchableOpacity>
-                <Text style={styles.headerTitle}>Profit & Loss Statement</Text>
+                <Text style={styles.headerTitle}>{route?.params?.serviceTitle ? `${route.params.serviceTitle} P&L` : 'Profit & Loss Statement'}</Text>
                 <View style={{ width: 24 }} />
             </View>
 

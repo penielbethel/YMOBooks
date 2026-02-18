@@ -102,10 +102,11 @@ export async function createReceipt(payload) {
   return data;
 }
 
-export async function fetchInvoices(companyId, months = 6) {
+export async function fetchInvoices(companyId, months = 6, category) {
   const url = new URL(`${Config.API_BASE_URL}/api/invoices`);
   url.searchParams.set('companyId', companyId);
   url.searchParams.set('months', String(months));
+  if (category) url.searchParams.set('category', category);
   const res = await fetch(url.toString());
   const data = await res.json();
   if (data?.invoices) {
@@ -118,10 +119,11 @@ export async function fetchInvoices(companyId, months = 6) {
   return data;
 }
 
-export async function fetchReceipts(companyId, months = 6) {
+export async function fetchReceipts(companyId, months = 6, category) {
   const url = new URL(`${Config.API_BASE_URL}/api/receipts`);
   url.searchParams.set('companyId', companyId);
   url.searchParams.set('months', String(months));
+  if (category) url.searchParams.set('category', category);
   const res = await fetch(url.toString());
   const data = await res.json();
   if (data?.receipts) {

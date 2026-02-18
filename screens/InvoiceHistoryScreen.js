@@ -94,10 +94,11 @@ const InvoiceHistoryScreen = ({ navigation, route }) => {
           return;
         }
         setCompanyId(effectiveId);
+        const category = route?.params?.category;
         await (async () => {
           const [invRes, rctRes] = await Promise.all([
-            fetchInvoices(effectiveId, 12),
-            fetchReceipts(effectiveId, 12),
+            fetchInvoices(effectiveId, 12, category),
+            fetchReceipts(effectiveId, 12, category),
           ]);
           if (invRes?.success) {
             setInvoices(invRes.invoices || []);
@@ -124,9 +125,10 @@ const InvoiceHistoryScreen = ({ navigation, route }) => {
     if (!companyId) return;
     setRefreshing(true);
     try {
+      const category = route?.params?.category;
       const [invRes, rctRes] = await Promise.all([
-        fetchInvoices(companyId, 12),
-        fetchReceipts(companyId, 12),
+        fetchInvoices(companyId, 12, category),
+        fetchReceipts(companyId, 12, category),
       ]);
       if (invRes?.success) {
         setInvoices(invRes.invoices || []);
@@ -572,7 +574,7 @@ const InvoiceHistoryScreen = ({ navigation, route }) => {
         <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
           <Text style={styles.backButtonText}>← Back</Text>
         </TouchableOpacity>
-        <Text style={styles.title}>Invoice History</Text>
+        <Text style={styles.title}>{route?.params?.serviceTitle ? `${route.params.serviceTitle} History` : 'Invoice History'}</Text>
         <Text style={styles.subtitle}>{subtitleText}</Text>
       </View>
       {loading ? (

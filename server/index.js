@@ -1336,12 +1336,14 @@ app.post('/api/receipt/create', async (req, res) => {
 // Fetch receipts history
 app.get('/api/receipts', async (req, res) => {
   try {
-    const { companyId, months = 6 } = req.query;
+    const { companyId, months = 6, category } = req.query;
     if (!companyId) return res.status(400).json({ success: false, message: 'companyId is required' });
     const since = dayjs().subtract(Number(months), 'month').toDate();
     let list = [];
     try {
-      list = await Receipt.find({ companyId, createdAt: { $gte: since } })
+      const q = { companyId, createdAt: { $gte: since } };
+      if (category) q.category = category;
+      list = await Receipt.find(q)
         .sort({ createdAt: -1 })
         .limit(200)
         .lean();
@@ -1874,12 +1876,14 @@ app.post('/api/finance/expenses-daily', async (req, res) => {
 // Fetch invoice history for last N months (default 6)
 app.get('/api/invoices', async (req, res) => {
   try {
-    const { companyId, months = 6 } = req.query;
+    const { companyId, months = 6, category } = req.query;
     if (!companyId) return res.status(400).json({ success: false, message: 'companyId is required' });
     const since = dayjs().subtract(Number(months), 'month').toDate();
     let list = [];
     try {
-      list = await Invoice.find({ companyId, createdAt: { $gte: since } })
+      const q = { companyId, createdAt: { $gte: since } };
+      if (category) q.category = category;
+      list = await Invoice.find(q)
         .sort({ createdAt: -1 })
         .limit(200)
         .lean();
