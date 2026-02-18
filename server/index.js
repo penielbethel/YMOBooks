@@ -234,7 +234,6 @@ connectToDatabase().catch(e => console.warn('Initial warm-up connection fail:', 
 mongoose.connection.on('connected', () => { DB_CONNECTED = true; });
 mongoose.connection.on('disconnected', () => { DB_CONNECTED = false; });
 console.warn('MONGO_URI not set. Running with file-based fallback storage.');
-}
 
 // Models
 // Currency catalog (for clarity and consistency)
@@ -373,10 +372,36 @@ const StockItemSchema = new mongoose.Schema(
     sellingPrice: { type: Number, default: 0 }, // Selling price (for finished goods)
     minStockLevel: { type: Number, default: 0 }, // Alert level
     description: { type: String },
+    // Bill of Materials (for Finished Goods)
+    bom: [
+      {
+        materialId: { type: mongoose.Schema.Types.ObjectId, ref: 'StockItem' },
+        quantity: { type: Number, default: 0 }
+      }
+    ],
   },
   { timestamps: true }
 );
 const StockItem = mongoose.model('StockItem', StockItemSchema);
+
+// Manufacturing: Production Log
+const ProductionLogSchema = new mongoose.Schema(
+  {
+    companyId: { type: String, required: true, index: true },
+    finishedGoodId: { type: mongoose.Schema.Types.ObjectId, ref: 'StockItem', required: true },
+    quantityProduced: { type: Number, required: true },
+    materialsUsed: [
+      {
+        materialId: { type: mongoose.Schema.Types.ObjectId, ref: 'StockItem' },
+        quantity: { type: Number }
+      }
+    ],
+    productionDate: { type: Date, default: Date.now },
+    notes: { type: String }
+  },
+  { timestamps: true }
+);
+const ProductionLog = mongoose.model('ProductionLog', ProductionLogSchema);
 async function generateCompanyId(name, businessType) {
   // Use first 3 letters of name, fallback to 'CPM' if name is short/missing
   const namePrefix = (name && name.length >= 3) ? name.substring(0, 3).toUpperCase() : 'CPM';
@@ -1549,6 +1574,65 @@ app.delete('/api/stock/:id', async (req, res) => {
   } catch (err) {
     console.error('Delete stock error:', err);
     return res.status(500).json({ success: false, message: 'Server error deleting stock item' });
+  }
+});
+
+// Record Production
+app.post('/api/production/record', async (req, res) => {
+  try {
+    const { companyId, finishedGoodId, quantityProduced, materialsUsed, notes } = req.body;
+    if (!companyId || !finishedGoodId || !quantityProduced) {
+      return res.status(400).json({ success: false, message: 'Missing required production data' });
+    }
+
+    // 1. Record the production log
+    const log = await ProductionLog.create({
+      companyId,
+      finishedGoodId,
+      quantityProduced: Number(quantityProduced),
+      materialsUsed: materialsUsed || [],
+      notes
+    });
+
+    // 2. Update Finished Good quantity (Add)
+    await StockItem.findByIdAndUpdate(finishedGoodId, {
+      $inc: { quantity: Number(quantityProduced) }
+    });
+
+    // 3. Update Raw Materials quantities (Subtract)
+    if (materialsUsed && Array.isArray(materialsUsed)) {
+      const updates = materialsUsed.map(m =>
+        StockItem.findByIdAndUpdate(m.materialId, {
+          $inc: { quantity: -Number(m.quantity) }
+        })
+      );
+      await Promise.all(updates);
+    }
+
+    return res.json({ success: true, log });
+  } catch (err) {
+    console.error('Record production error:', err);
+    return res.status(500).json({ success: false, message: 'Server error recording production' });
+  }
+});
+
+// List Production Logs
+app.get('/api/production/history', async (req, res) => {
+  try {
+    const { companyId } = req.query;
+    if (!companyId) return res.status(400).json({ success: false, message: 'Missing companyId' });
+
+    const logs = await ProductionLog.find({ companyId })
+      .populate('finishedGoodId', 'name unit')
+      .populate('materialsUsed.materialId', 'name unit')
+      .sort({ createdAt: -1 })
+      .limit(100)
+      .lean();
+
+    return res.json({ success: true, logs });
+  } catch (err) {
+    console.error('List production history error:', err);
+    return res.status(500).json({ success: false, message: 'Server error fetching production history' });
   }
 });
 

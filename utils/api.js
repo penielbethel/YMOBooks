@@ -295,3 +295,20 @@ export async function deleteStock(id) {
   });
   return res.json();
 }
+
+// --- Manufacturing: Production APIs ---
+export async function recordProduction(payload) {
+  const res = await fetch(`${Config.API_BASE_URL}/api/production/record`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  return res.json();
+}
+
+export async function fetchProductionHistory(companyId) {
+  const url = new URL(`${Config.API_BASE_URL}/api/production/history`);
+  url.searchParams.set('companyId', companyId);
+  const res = await fetch(url.toString());
+  return res.json();
+}

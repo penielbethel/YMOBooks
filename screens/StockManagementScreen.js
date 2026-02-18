@@ -16,19 +16,21 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../constants/Colors';
-import { createStock, fetchStock, updateStock, deleteStock } from '../utils/api';
+import { createStock, fetchStock, updateStock, deleteStock, recordProduction, fetchProductionHistory } from '../utils/api';
 
 const StockManagementScreen = ({ navigation }) => {
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [companyId, setCompanyId] = useState(null);
     const [currencySymbol, setCurrencySymbol] = useState('$');
-    const [activeTab, setActiveTab] = useState('raw_material'); // 'raw_material' or 'finished_good'
+    const [activeTab, setActiveTab] = useState('raw_material'); // 'raw_material', 'finished_good', 'history'
 
     const [stockItems, setStockItems] = useState([]);
+    const [productionLogs, setProductionLogs] = useState([]);
 
     // Modal State
     const [modalVisible, setModalVisible] = useState(false);
+    const [productionModalVisible, setProductionModalVisible] = useState(false);
     const [editItem, setEditItem] = useState(null);
     const [formData, setFormData] = useState({
         name: '',
@@ -40,12 +42,25 @@ const StockManagementScreen = ({ navigation }) => {
         description: ''
     });
 
+    const [productionForm, setProductionForm] = useState({
+        finishedGoodId: '',
+        quantityProduced: '',
+        materialsUsed: [], // { materialId, quantity }
+        notes: ''
+    });
+
     useEffect(() => {
         loadCompanyAndStock();
     }, []);
 
     useEffect(() => {
-        if (companyId) loadStock();
+        if (companyId) {
+            if (activeTab === 'history') {
+                loadProductionHistory();
+            } else {
+                loadStock();
+            }
+        }
     }, [activeTab, companyId]);
 
     const loadCompanyAndStock = async () => {
@@ -55,7 +70,11 @@ const StockManagementScreen = ({ navigation }) => {
                 const parsed = JSON.parse(stored);
                 setCompanyId(parsed.companyId);
                 setCurrencySymbol(parsed.currencySymbol || '$');
-                await loadStock(parsed.companyId);
+                if (activeTab === 'history') {
+                    await loadProductionHistory(parsed.companyId);
+                } else {
+                    await loadStock(parsed.companyId);
+                }
             }
         } catch (e) {
             console.error('Failed to load company', e);
@@ -69,7 +88,7 @@ const StockManagementScreen = ({ navigation }) => {
         setRefreshing(true);
         try {
             // Fetch specifically active tab type
-            const res = await fetchStock(cId, activeTab);
+            const res = await fetchStock(cId, activeTab === 'history' ? undefined : activeTab);
             if (res && res.success) {
                 setStockItems(res.items || []);
             }
@@ -79,6 +98,22 @@ const StockManagementScreen = ({ navigation }) => {
             setRefreshing(false);
         }
     };
+
+    const loadProductionHistory = async (cId = companyId) => {
+        if (!cId) return;
+        setRefreshing(true);
+        try {
+            const res = await fetchProductionHistory(cId);
+            if (res && res.success) {
+                setProductionLogs(res.logs || []);
+            }
+        } catch (err) {
+            console.error(err);
+        } finally {
+            setRefreshing(false);
+        }
+    };
+
 
     const handleSave = async () => {
         if (!formData.name) return Alert.alert('Error', 'Item name is required');
@@ -116,6 +151,44 @@ const StockManagementScreen = ({ navigation }) => {
             setLoading(false);
         }
     };
+
+    const handleProductionSave = async () => {
+        if (!productionForm.finishedGoodId) return Alert.alert('Error', 'Finished good is required');
+        if (!productionForm.quantityProduced || Number(productionForm.quantityProduced) <= 0) {
+            return Alert.alert('Error', 'Production quantity must be greater than zero');
+        }
+
+        setLoading(true);
+        try {
+            const res = await recordProduction({
+                ...productionForm,
+                companyId
+            });
+
+            if (res && res.success) {
+                setProductionModalVisible(false);
+                resetProductionForm();
+                loadStock(); // Reload stock levels
+                Alert.alert('Success', 'Production recorded successfully');
+            } else {
+                Alert.alert('Error', res?.message || 'Failed to record production');
+            }
+        } catch (e) {
+            Alert.alert('Error', 'Network request failed');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const resetProductionForm = () => {
+        setProductionForm({
+            finishedGoodId: '',
+            quantityProduced: '',
+            materialsUsed: [],
+            notes: ''
+        });
+    };
+
 
     const handleDelete = async (id) => {
         Alert.alert('Confirm Delete', 'Are you sure you want to delete this item?', [
@@ -234,6 +307,30 @@ const StockManagementScreen = ({ navigation }) => {
         </View>
     );
 
+    const renderProductionItem = ({ item }) => (
+        <View style={styles.logCard}>
+            <View style={styles.logHeader}>
+                <Text style={styles.logTitle}>{item.finishedGoodId?.name || 'Unknown Product'}</Text>
+                <Text style={styles.logDate}>{new Date(item.productionDate).toLocaleDateString()}</Text>
+            </View>
+            <Text style={styles.logDetail}>
+                Produced: {item.quantityProduced} {item.finishedGoodId?.unit || ''}
+            </Text>
+            {item.materialsUsed && item.materialsUsed.length > 0 && (
+                <View style={styles.materialsSection}>
+                    <Text style={styles.materialsLabel}>Materials Used:</Text>
+                    {item.materialsUsed.map((m, idx) => (
+                        <Text key={idx} style={styles.materialText}>
+                            • {m.materialId?.name || 'Unknown Material'}: {m.quantity} {m.materialId?.unit || ''}
+                        </Text>
+                    ))}
+                </View>
+            )}
+            {item.notes ? <Text style={styles.logNotes}>Note: {item.notes}</Text> : null}
+        </View>
+    );
+
+
     return (
         <SafeAreaView style={styles.container}>
             <View style={styles.header}>
@@ -263,18 +360,37 @@ const StockManagementScreen = ({ navigation }) => {
                         Finished Goods
                     </Text>
                 </TouchableOpacity>
+                <TouchableOpacity
+                    style={[styles.tab, activeTab === 'history' && styles.activeTab]}
+                    onPress={() => setActiveTab('history')}
+                >
+                    <Text style={[styles.tabText, activeTab === 'history' && styles.activeTabText]}>
+                        History
+                    </Text>
+                </TouchableOpacity>
             </View>
 
-            {loading && stockItems.length === 0 ? (
+            {activeTab === 'finished_good' && (
+                <TouchableOpacity
+                    style={styles.productionBtn}
+                    onPress={() => setProductionModalVisible(true)}
+                >
+                    <Ionicons name="hammer-outline" size={20} color="#fff" />
+                    <Text style={styles.productionBtnText}>Record Production</Text>
+                </TouchableOpacity>
+            )}
+
+            {loading && (activeTab === 'history' ? productionLogs.length === 0 : stockItems.length === 0) ? (
                 <ActivityIndicator size="large" color={Colors.primary} style={{ marginTop: 20 }} />
             ) : (
                 <FlatList
-                    data={stockItems}
-                    renderItem={renderItem}
+                    data={activeTab === 'history' ? productionLogs : stockItems}
+                    renderItem={activeTab === 'history' ? renderProductionItem : renderItem}
                     keyExtractor={item => item._id}
                     contentContainerStyle={styles.listContent}
-                    refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => loadStock()} />}
+                    refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => activeTab === 'history' ? loadProductionHistory() : loadStock()} />}
                     ListHeaderComponent={() => {
+                        if (activeTab === 'history') return null;
                         // Calculate summary stats
                         const totalValue = stockItems.reduce((acc, i) => acc + ((i.quantity || 0) * (i.costPrice || 0)), 0);
                         const lowStockCount = stockItems.filter(i => (i.quantity || 0) <= (i.minStockLevel || 0)).length;
@@ -298,14 +414,17 @@ const StockManagementScreen = ({ navigation }) => {
                     }}
                     ListEmptyComponent={
                         <View style={styles.emptyContainer}>
-                            <Ionicons name="cube-outline" size={48} color={Colors.textSecondary} />
-                            <Text style={styles.emptyText}>No items found. Tap (+) to add.</Text>
+                            <Ionicons name={activeTab === 'history' ? "list-outline" : "cube-outline"} size={48} color={Colors.textSecondary} />
+                            <Text style={styles.emptyText}>
+                                {activeTab === 'history' ? "No production records yet." : "No items found. Tap (+) to add."}
+                            </Text>
                         </View>
                     }
                 />
             )}
 
             <Modal visible={modalVisible} animationType="slide" transparent={true}>
+                {/* ... existing stock modal ... */}
                 <View style={styles.modalOverlay}>
                     <View style={styles.modalContent}>
                         <Text style={styles.modalTitle}>
@@ -382,6 +501,101 @@ const StockManagementScreen = ({ navigation }) => {
                             </TouchableOpacity>
                             <TouchableOpacity onPress={handleSave} style={styles.saveBtn}>
                                 <Text style={styles.saveBtnText}>Save</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
+
+            <Modal visible={productionModalVisible} animationType="slide" transparent={true}>
+                <View style={styles.modalOverlay}>
+                    <View style={styles.productionModalContent}>
+                        <Text style={styles.modalTitle}>Record Production</Text>
+                        <ScrollView>
+                            <Text style={styles.label}>Select Product</Text>
+                            <View style={styles.pickerWrapper}>
+                                {stockItems.filter(i => i.type === 'finished_good').map(item => (
+                                    <TouchableOpacity
+                                        key={item._id}
+                                        style={[styles.pickerItem, productionForm.finishedGoodId === item._id && styles.pickerItemActive]}
+                                        onPress={() => setProductionForm({ ...productionForm, finishedGoodId: item._id })}
+                                    >
+                                        <Text style={[styles.pickerItemText, productionForm.finishedGoodId === item._id && styles.pickerItemTextActive]}>
+                                            {item.name} ({item.unit})
+                                        </Text>
+                                    </TouchableOpacity>
+                                ))}
+                            </View>
+
+                            <Text style={styles.label}>Quantity Produced</Text>
+                            <TextInput
+                                style={styles.input}
+                                value={productionForm.quantityProduced}
+                                onChangeText={t => setProductionForm({ ...productionForm, quantityProduced: t })}
+                                keyboardType="numeric"
+                                placeholder="0"
+                            />
+
+                            <Text style={styles.label}>Materials Used (Optional)</Text>
+                            <View style={styles.materialsUsageSection}>
+                                {productionForm.materialsUsed.map((m, idx) => {
+                                    const material = stockItems.find(i => i._id === m.materialId);
+                                    return (
+                                        <View key={idx} style={styles.materialUsedRow}>
+                                            <Text style={styles.materialNameText}>{material?.name || 'Item'}</Text>
+                                            <TextInput
+                                                style={styles.smallInput}
+                                                value={m.quantity}
+                                                onChangeText={qty => {
+                                                    const newMaterials = [...productionForm.materialsUsed];
+                                                    newMaterials[idx].quantity = qty;
+                                                    setProductionForm({ ...productionForm, materialsUsed: newMaterials });
+                                                }}
+                                                keyboardType="numeric"
+                                                placeholder="Qty"
+                                            />
+                                            <TouchableOpacity
+                                                onPress={() => {
+                                                    const newMaterials = productionForm.materialsUsed.filter((_, i) => i !== idx);
+                                                    setProductionForm({ ...productionForm, materialsUsed: newMaterials });
+                                                }}
+                                            >
+                                                <Ionicons name="close-circle" size={20} color={Colors.error} />
+                                            </TouchableOpacity>
+                                        </View>
+                                    );
+                                })}
+
+                                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.materialPickerScroll}>
+                                    {stockItems.filter(i => i.type === 'raw_material' && !productionForm.materialsUsed.find(m => m.materialId === i._id)).map(item => (
+                                        <TouchableOpacity
+                                            key={item._id}
+                                            style={styles.addMaterialChip}
+                                            onPress={() => {
+                                                const newMaterials = [...productionForm.materialsUsed, { materialId: item._id, quantity: '' }];
+                                                setProductionForm({ ...productionForm, materialsUsed: newMaterials });
+                                            }}
+                                        >
+                                            <Text style={styles.addMaterialChipText}>+ {item.name}</Text>
+                                        </TouchableOpacity>
+                                    ))}
+                                </ScrollView>
+                            </View>
+
+                            <Text style={styles.label}>Notes</Text>
+                            <TextInput
+                                style={styles.input}
+                                value={productionForm.notes}
+                                onChangeText={t => setProductionForm({ ...productionForm, notes: t })}
+                                placeholder="e.g. Morning batch"
+                            />
+                        </ScrollView>
+                        <View style={styles.modalActions}>
+                            <TouchableOpacity onPress={() => setProductionModalVisible(false)} style={styles.cancelBtn}>
+                                <Text style={styles.cancelBtnText}>Cancel</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity onPress={handleProductionSave} style={styles.saveBtn}>
+                                <Text style={styles.saveBtnText}>Record</Text>
                             </TouchableOpacity>
                         </View>
                     </View>
@@ -466,7 +680,151 @@ const styles = StyleSheet.create({
     summaryLabel: { color: 'rgba(255,255,255,0.8)', fontSize: 12, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 1 },
     summaryValueBig: { color: '#fff', fontSize: 32, fontWeight: '800', marginVertical: 4 },
     summaryRow: { flexDirection: 'row', gap: 8, marginTop: 4 },
-    summarySub: { color: 'rgba(255,255,255,0.9)', fontSize: 13, fontWeight: '500' }
+    summarySub: { color: 'rgba(255,255,255,0.9)', fontSize: 13, fontWeight: '500' },
+    productionBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: '#10B981', // Emerald
+        marginHorizontal: 16,
+        marginTop: 8,
+        paddingVertical: 12,
+        borderRadius: 8,
+        elevation: 2,
+    },
+    productionBtnText: {
+        color: '#fff',
+        fontWeight: 'bold',
+        marginLeft: 8,
+    },
+    logCard: {
+        backgroundColor: '#fff',
+        borderRadius: 12,
+        padding: 16,
+        marginBottom: 12,
+        borderWidth: 1,
+        borderColor: Colors.border,
+    },
+    logHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 8,
+    },
+    logTitle: {
+        fontSize: 16,
+        fontWeight: 'bold',
+        color: Colors.text,
+    },
+    logDate: {
+        fontSize: 12,
+        color: Colors.textSecondary,
+    },
+    logDetail: {
+        fontSize: 14,
+        color: Colors.text,
+        fontWeight: '500',
+    },
+    materialsSection: {
+        marginTop: 8,
+        paddingTop: 8,
+        borderTopWidth: 1,
+        borderTopColor: '#f1f1f1',
+    },
+    materialsLabel: {
+        fontSize: 12,
+        fontWeight: '600',
+        color: Colors.textSecondary,
+        marginBottom: 4,
+    },
+    materialText: {
+        fontSize: 12,
+        color: Colors.text,
+    },
+    logNotes: {
+        fontSize: 12,
+        fontStyle: 'italic',
+        color: Colors.textSecondary,
+        marginTop: 8,
+    },
+    productionModalContent: {
+        backgroundColor: '#fff',
+        width: '90%',
+        maxHeight: '80%',
+        borderRadius: 16,
+        padding: 20,
+        elevation: 5,
+    },
+    pickerWrapper: {
+        marginBottom: 16,
+    },
+    pickerItem: {
+        padding: 12,
+        borderRadius: 8,
+        backgroundColor: '#f8f8f8',
+        marginBottom: 8,
+    },
+    pickerItemActive: {
+        backgroundColor: Colors.primary + '20',
+        borderColor: Colors.primary,
+        borderWidth: 1,
+    },
+    pickerItemText: {
+        fontSize: 14,
+        color: Colors.text,
+    },
+    pickerItemTextActive: {
+        color: Colors.primary,
+        fontWeight: 'bold',
+    },
+    materialsUsageSection: {
+        marginBottom: 16,
+        padding: 12,
+        backgroundColor: '#f8f8f8',
+        borderRadius: 8,
+    },
+    materialUsedRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+        marginBottom: 10,
+        backgroundColor: '#fff',
+        padding: 8,
+        borderRadius: 6,
+        borderWidth: 1,
+        borderColor: '#eee',
+    },
+    materialNameText: {
+        flex: 1,
+        fontSize: 14,
+        color: Colors.text,
+    },
+    smallInput: {
+        width: 60,
+        borderWidth: 1,
+        borderColor: Colors.border,
+        borderRadius: 4,
+        padding: 4,
+        fontSize: 14,
+        textAlign: 'center',
+    },
+    materialPickerScroll: {
+        marginTop: 8,
+    },
+    addMaterialChip: {
+        backgroundColor: Colors.primary + '15',
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 20,
+        marginRight: 8,
+        borderWidth: 1,
+        borderColor: Colors.primary + '30',
+    },
+    addMaterialChipText: {
+        fontSize: 12,
+        color: Colors.primary,
+        fontWeight: '600',
+    },
 });
 
 export default StockManagementScreen;
