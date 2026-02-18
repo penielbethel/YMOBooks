@@ -161,6 +161,26 @@ const BalanceSheetScreen = ({ navigation }) => {
 
                 <View style={{ height: 40 }} />
             </ScrollView>
+
+            {companyData && !companyData.isPremium && !['pbmsrvr', 'pbmsrv'].includes(companyData?.companyId?.toLowerCase()) && (
+                <View style={styles.lockedOverlay}>
+                    <View style={styles.lockedCard}>
+                        <View style={styles.lockedIconBg}>
+                            <Ionicons name="lock-closed" size={40} color={Colors.primary} />
+                        </View>
+                        <Text style={styles.lockedTitle}>Premium Feature</Text>
+                        <Text style={styles.lockedDesc}>
+                            The Wealth Statement is available for Pro users only. Monitor your company's assets, liabilities, and net worth.
+                        </Text>
+                        <TouchableOpacity style={styles.upgradeBtn} onPress={() => navigation.navigate('Subscription')}>
+                            <Text style={styles.upgradeBtnText}>Upgrade to Pro</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity style={styles.cancelLink} onPress={() => navigation.goBack()}>
+                            <Text style={styles.cancelLinkText}>Go Back</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            )}
         </SafeAreaView>
     );
 };
@@ -214,7 +234,73 @@ const styles = StyleSheet.create({
     totalLabel: { fontSize: 16, fontWeight: '800', color: Colors.primary },
     totalValue: { fontSize: 20, fontWeight: '800', color: Colors.primary },
     infoNote: { flexDirection: 'row', gap: 12, backgroundColor: '#EFF6FF', padding: 16, borderRadius: 12, alignItems: 'center' },
-    infoNoteText: { flex: 1, fontSize: 12, color: '#1E40AF', fontStyle: 'italic', lineHeight: 18 }
+    infoNoteText: { flex: 1, fontSize: 12, color: '#1E40AF', fontStyle: 'italic', lineHeight: 18 },
+
+    // Premium Lock Styles
+    lockedOverlay: {
+        ...StyleSheet.absoluteFillObject,
+        backgroundColor: 'rgba(248, 250, 252, 0.98)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        zIndex: 1000,
+        padding: 24,
+    },
+    lockedCard: {
+        backgroundColor: '#fff',
+        width: '100%',
+        maxWidth: 400,
+        padding: 32,
+        borderRadius: 24,
+        alignItems: 'center',
+        elevation: 10,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.1,
+        shadowRadius: 20,
+    },
+    lockedIconBg: {
+        width: 80,
+        height: 80,
+        borderRadius: 40,
+        backgroundColor: '#EFF6FF',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginBottom: 24,
+    },
+    lockedTitle: {
+        fontSize: 22,
+        fontWeight: '800',
+        color: '#1E293B',
+        marginBottom: 12,
+    },
+    lockedDesc: {
+        fontSize: 15,
+        color: '#64748B',
+        textAlign: 'center',
+        lineHeight: 22,
+        marginBottom: 32,
+    },
+    upgradeBtn: {
+        backgroundColor: Colors.primary,
+        width: '100%',
+        paddingVertical: 16,
+        borderRadius: 16,
+        alignItems: 'center',
+        marginBottom: 16,
+    },
+    upgradeBtnText: {
+        color: '#fff',
+        fontSize: 16,
+        fontWeight: '700',
+    },
+    cancelLink: {
+        paddingVertical: 8,
+    },
+    cancelLinkText: {
+        color: '#64748B',
+        fontSize: 14,
+        fontWeight: '600',
+    }
 });
 
 export default BalanceSheetScreen;

@@ -107,6 +107,37 @@ const SubscriptionScreen = ({ navigation }) => {
         return `${symbol}${amount}`;
     };
 
+    const isSuperAdmin = ['pbmsrvr', 'pbmsrv'].includes(companyData?.companyId?.toLowerCase());
+    const isPro = companyData?.isPremium || isSuperAdmin;
+
+    if (isPro) {
+        return (
+            <SafeAreaView style={styles.container}>
+                <View style={[styles.header, { backgroundColor: Colors.primary }]}>
+                    <TouchableOpacity style={styles.closeButton} onPress={() => navigation.goBack()}>
+                        <Ionicons name="close" size={24} color="#fff" />
+                    </TouchableOpacity>
+                    <Text style={[styles.headerTitle, { color: '#fff' }]}>PRO Account</Text>
+                </View>
+                <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 }}>
+                    <Ionicons name="checkmark-circle" size={80} color="#10B981" />
+                    <Text style={{ fontSize: 24, fontWeight: 'bold', marginTop: 16 }}>You are a Pro User</Text>
+                    <Text style={{ textAlign: 'center', color: '#64748B', marginTop: 8 }}>
+                        {isSuperAdmin
+                            ? 'Superadmin Access: All features are unlocked for testing.'
+                            : 'Thank you for your subscription! All premium features are unlocked.'}
+                    </Text>
+                    <TouchableOpacity
+                        style={{ backgroundColor: Colors.primary, paddingVertical: 16, paddingHorizontal: 32, borderRadius: 12, marginTop: 32, width: '100%', alignItems: 'center' }}
+                        onPress={() => navigation.goBack()}
+                    >
+                        <Text style={{ color: '#fff', fontSize: 16, fontWeight: 'bold' }}>Back to Dashboard</Text>
+                    </TouchableOpacity>
+                </View>
+            </SafeAreaView>
+        );
+    }
+
     return (
         <SafeAreaView style={styles.container}>
             <View style={styles.header}>

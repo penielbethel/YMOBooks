@@ -19,13 +19,13 @@ import { Spacing } from '../constants/Spacing';
 import { Ionicons } from '@expo/vector-icons';
 import { getApiBaseUrl, resolveAssetUri } from '../utils/api';
 
-const MenuItem = memo(({ item, onPress }) => (
+const MenuItem = memo(({ item, onPress, showProBadge }) => (
   <TouchableOpacity style={styles.menuItem} onPress={() => onPress(item.id)}>
     <View style={styles.iconWrapper}>
       <View style={[styles.menuIcon, { backgroundColor: item.tint }]}>
         <Ionicons name={item.icon} size={26} color={Colors.white} />
       </View>
-      {item.isPro && <View style={styles.proBadge}><Text style={styles.proBadgeText}>PRO</Text></View>}
+      {item.isPro && showProBadge && <View style={styles.proBadge}><Text style={styles.proBadgeText}>PRO</Text></View>}
     </View>
     <Text style={styles.menuTitle}>{item.title}</Text>
     <Text style={styles.menuDescription}>{item.description}</Text>
@@ -149,6 +149,21 @@ const DashboardScreen = ({ navigation }) => {
           icon: 'shirt-outline',
           tint: '#F97316', // Orange
         },
+        {
+          id: 'photo_frames',
+          title: 'Photo Frames',
+          description: 'Frame Production & Mounting',
+          icon: 'image',
+          tint: '#10B981', // Emerald
+        },
+        {
+          id: 'profit_loss',
+          title: 'Overall P&L',
+          description: 'Company-wide Financials',
+          icon: 'bar-chart',
+          tint: '#10B981', // Emerald
+          isPro: true,
+        },
       ];
     }
 
@@ -205,6 +220,7 @@ const DashboardScreen = ({ navigation }) => {
         isPro: true,
       });
     }
+    const isSuperAdmin = ['pbmsrvr', 'pbmsrv'].includes(companyData?.companyId?.toLowerCase());
     return items;
   }, [companyData]);
 
@@ -236,6 +252,9 @@ const DashboardScreen = ({ navigation }) => {
         break;
       case 'dtf_prints':
         navigation.navigate('PrintingService', { service: 'dtf_prints' });
+        break;
+      case 'photo_frames':
+        navigation.navigate('PrintingService', { service: 'photo_frames' });
         break;
       default:
         // For other features, show coming soon alert
@@ -320,7 +339,12 @@ const DashboardScreen = ({ navigation }) => {
           <Text style={styles.sectionTitle}>What would you like to do?</Text>
           <View style={styles.menuGrid}>
             {menuItems.map((item) => (
-              <MenuItem key={item.id} item={item} onPress={handleMenuPress} />
+              <MenuItem
+                key={item.id}
+                item={item}
+                onPress={handleMenuPress}
+                showProBadge={!companyData?.isPremium && !['pbmsrvr', 'pbmsrv'].includes(companyData?.companyId?.toLowerCase())}
+              />
             ))}
           </View>
         </View>

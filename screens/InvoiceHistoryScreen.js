@@ -777,6 +777,7 @@ const InvoiceHistoryScreen = ({ navigation, route }) => {
                         amountPaid: Number(invoiceItem.grandTotal || 0),
                         currencySymbol: resolveCurrencySymbol(invoiceItem, company),
                         currencyCode: invoiceItem.currencyCode,
+                        category: invoiceItem.category || 'general',
                       };
                       const res = await createReceipt(payload);
                       if (res?.success) {

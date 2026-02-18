@@ -22,6 +22,7 @@ const StockManagementScreen = ({ navigation }) => {
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [companyId, setCompanyId] = useState(null);
+    const [companyData, setCompanyData] = useState(null);
     const [currencySymbol, setCurrencySymbol] = useState('$');
     const [activeTab, setActiveTab] = useState('raw_material'); // 'raw_material', 'finished_good', 'history'
 
@@ -70,6 +71,7 @@ const StockManagementScreen = ({ navigation }) => {
             if (stored) {
                 const parsed = JSON.parse(stored);
                 setCompanyId(parsed.companyId);
+                setCompanyData(parsed);
                 setCurrencySymbol(parsed.currencySymbol || '$');
                 if (activeTab === 'history') {
                     await loadProductionHistory(parsed.companyId);
@@ -698,6 +700,26 @@ const StockManagementScreen = ({ navigation }) => {
                     </View>
                 </View>
             </Modal>
+
+            {companyId && companyData && !companyData.isPremium && !['pbmsrvr', 'pbmsrv'].includes(companyData?.companyId?.toLowerCase()) && (
+                <View style={styles.lockedOverlay}>
+                    <View style={styles.lockedCard}>
+                        <View style={styles.lockedIconBg}>
+                            <Ionicons name="lock-closed" size={40} color={Colors.primary} />
+                        </View>
+                        <Text style={styles.lockedTitle}>Premium Feature</Text>
+                        <Text style={styles.lockedDesc}>
+                            Stock Management is available for Pro users only. Manage your raw materials, recipes, and production flow efficiently.
+                        </Text>
+                        <TouchableOpacity style={styles.upgradeBtn} onPress={() => navigation.navigate('Subscription')}>
+                            <Text style={styles.upgradeBtnText}>Upgrade to Pro</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity style={styles.cancelLink} onPress={() => navigation.goBack()}>
+                            <Text style={styles.cancelLinkText}>Go Back</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            )}
         </SafeAreaView>
     );
 };
@@ -931,6 +953,72 @@ const styles = StyleSheet.create({
     matScroll: { marginTop: 8, marginBottom: 16 },
     addMatChip: { backgroundColor: Colors.primary, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20, marginRight: 8 },
     addMatChipText: { color: '#fff', fontSize: 12, fontWeight: 'bold' },
+
+    // Premium Lock Styles
+    lockedOverlay: {
+        ...StyleSheet.absoluteFillObject,
+        backgroundColor: 'rgba(248, 250, 252, 0.98)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        zIndex: 1000,
+        padding: 24,
+    },
+    lockedCard: {
+        backgroundColor: '#fff',
+        width: '100%',
+        maxWidth: 400,
+        padding: 32,
+        borderRadius: 24,
+        alignItems: 'center',
+        elevation: 10,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.1,
+        shadowRadius: 20,
+    },
+    lockedIconBg: {
+        width: 80,
+        height: 80,
+        borderRadius: 40,
+        backgroundColor: '#EFF6FF',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginBottom: 24,
+    },
+    lockedTitle: {
+        fontSize: 22,
+        fontWeight: '800',
+        color: '#1E293B',
+        marginBottom: 12,
+    },
+    lockedDesc: {
+        fontSize: 15,
+        color: '#64748B',
+        textAlign: 'center',
+        lineHeight: 22,
+        marginBottom: 32,
+    },
+    upgradeBtn: {
+        backgroundColor: Colors.primary,
+        width: '100%',
+        paddingVertical: 16,
+        borderRadius: 16,
+        alignItems: 'center',
+        marginBottom: 16,
+    },
+    upgradeBtnText: {
+        color: '#fff',
+        fontSize: 16,
+        fontWeight: '700',
+    },
+    cancelLink: {
+        paddingVertical: 8,
+    },
+    cancelLinkText: {
+        color: '#64748B',
+        fontSize: 14,
+        fontWeight: '600',
+    }
 });
 
 export default StockManagementScreen;

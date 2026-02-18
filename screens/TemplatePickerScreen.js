@@ -26,6 +26,26 @@ const TEMPLATES = [
   { key: 'compact', title: 'Compact', emoji: '📦', isPro: true },
 ];
 
+// --- DI Printing Parameters ---
+const DI_PAPER_TYPES = ['A0', 'A1', 'A2', 'A3', 'A4', 'A5', 'A6', 'B1', 'B2', 'B3', 'B4', 'B5', 'Letter', 'Legal'];
+const DI_PAPER_WEIGHTS = ['Paper (80gsm)', 'Bond (100gsm)', 'Card (250gsm)', 'Card (300gsm)', 'Matt Paper', 'Glossy Paper'];
+const DI_PRINT_SIDES = ['Front Only', 'Front & Back'];
+const DI_EXTENSIONS = ['PDF', 'CDR', 'AI', 'PSD', 'DOCX', 'XLSX', 'JPG', 'PNG', 'TIFF'];
+
+// --- Large Format Parameters ---
+const LF_MEDIA_TYPES = ['Flex Banner', 'SAV (Vinyl)', 'SAV + Gloss Lam', 'SAV + Matte Lam', 'One-Way Vision', 'Mesh Banner', 'Backlit Flex', 'Canvas', 'Reflective SAV'];
+const LF_FINISHING = ['None', 'Eyelets Only', 'Hemming Only', 'Eyelets & Hemming', 'Board Mounting (Foam)', 'Board Mounting (Forex)', 'Pockets'];
+
+// --- DTF Parameters ---
+const DTF_MEDIA_TYPES = ['Standard Matte', 'Glitter Film', 'Metallic Film', 'Fluorescent', 'Premium Soft-Touch'];
+const DTF_SIZES = ['A2', 'A3', 'A4', 'A5'];
+const DTF_PEEL_TYPES = ['Hot Peel', 'Cold Peel', 'Instant Peel'];
+
+// --- Photo Frame Parameters ---
+const PF_SIZES = ['5x7"', '8x10"', '10x12"', '12x16"', '16x20"', '20x24"', '24x36"', '30x40"'];
+const PF_FRAME_TYPES = ['Standard Wood', 'Premium Wood', 'Synthetic (Plastic)', 'Ornate Box', 'Canvas Scroll'];
+const PF_FINISHES = ['Normal Glass', 'Non-Reflective Glass', 'Laminated (No Glass)', 'Canvas Stretch'];
+
 const shadeColor = (hex, percent) => {
   // ... (same as before)
   try {
@@ -536,6 +556,49 @@ export default function TemplatePickerScreen({ navigation, route }) {
   const [previewHtml, setPreviewHtml] = useState('');
   const [pdfReadyUri, setPdfReadyUri] = useState(null);
 
+  // --- DI Printing Job Config ---
+  const [diConfigModalVisible, setDiConfigModalVisible] = useState(false);
+  const [diPresets, setDiPresets] = useState([]);
+  const [currentDiConfig, setCurrentDiConfig] = useState({
+    paperType: 'A4',
+    paperWeight: 'Paper (80gsm)',
+    printSide: 'Front Only',
+    extension: 'PDF',
+    price: '0'
+  });
+
+  // --- Large Format Job Config ---
+  const [lfConfigModalVisible, setLfConfigModalVisible] = useState(false);
+  const [lfPresets, setLfPresets] = useState([]);
+  const [currentLfConfig, setCurrentLfConfig] = useState({
+    media: 'Flex Banner',
+    width: '',
+    height: '',
+    finishing: 'None',
+    rate: '0',
+    totalPrice: '0'
+  });
+
+  // --- DTF Job Config ---
+  const [dtfConfigModalVisible, setDtfConfigModalVisible] = useState(false);
+  const [dtfPresets, setDtfPresets] = useState([]);
+  const [currentDtfConfig, setCurrentDtfConfig] = useState({
+    media: 'Standard Matte',
+    size: 'A3',
+    peel: 'Hot Peel',
+    price: '0'
+  });
+
+  // --- Photo Frame Job Config ---
+  const [pfConfigModalVisible, setPfConfigModalVisible] = useState(false);
+  const [pfPresets, setPfPresets] = useState([]);
+  const [currentPfConfig, setCurrentPfConfig] = useState({
+    size: '8x10"',
+    frameType: 'Standard Wood',
+    finish: 'Normal Glass',
+    price: '0'
+  });
+
   useFocusEffect(
     useCallback(() => {
       (async () => {
@@ -545,8 +608,20 @@ export default function TemplatePickerScreen({ navigation, route }) {
             const parsed = JSON.parse(stored);
             setCompany(parsed);
           }
+          // Load DI Presets
+          const presets = await AsyncStorage.getItem('di_printing_presets');
+          if (presets) setDiPresets(JSON.parse(presets));
+          // Load LF Presets
+          const lfPre = await AsyncStorage.getItem('lf_printing_presets');
+          if (lfPre) setLfPresets(JSON.parse(lfPre));
+          // Load DTF Presets
+          const dtfPre = await AsyncStorage.getItem('dtf_printing_presets');
+          if (dtfPre) setDtfPresets(JSON.parse(dtfPre));
+          // Load PF Presets
+          const pfPre = await AsyncStorage.getItem('pf_printing_presets');
+          if (pfPre) setPfPresets(JSON.parse(pfPre));
         } catch (e) {
-          console.error('Failed to load company data', e);
+          console.error('Failed to load data', e);
         }
       })();
     }, [])
@@ -638,6 +713,141 @@ export default function TemplatePickerScreen({ navigation, route }) {
   const addItem = () => setItems((prev) => [...prev, { description: '', qty: '1', price: '0' }]);
   const removeItem = (index) => setItems((prev) => prev.filter((_, i) => i !== index));
 
+  // --- DI Configuration Helpers ---
+  const buildDiDescription = (cfg) => {
+    return `DI Print: ${cfg.paperType} ${cfg.paperWeight} (${cfg.printSide}) [${cfg.extension}]`;
+  };
+
+  const handleSaveDiPreset = async () => {
+    try {
+      const newPreset = { ...currentDiConfig, id: Date.now() };
+      const updated = [...diPresets, newPreset];
+      setDiPresets(updated);
+      await AsyncStorage.setItem('di_printing_presets', JSON.stringify(updated));
+      Alert.alert('Saved', 'DI configuration saved as preset.');
+    } catch (e) {
+      Alert.alert('Error', 'Failed to save preset');
+    }
+  };
+
+  const applyDiConfig = (cfg) => {
+    const desc = buildDiDescription(cfg);
+    // Add to items
+    setItems((prev) => [...prev, { description: desc, qty: '1', price: cfg.price || '0' }]);
+    setDiConfigModalVisible(false);
+  };
+
+  const deleteDiPreset = async (id) => {
+    try {
+      const updated = diPresets.filter(p => p.id !== id);
+      setDiPresets(updated);
+      await AsyncStorage.setItem('di_printing_presets', JSON.stringify(updated));
+    } catch (e) { }
+  };
+
+  // --- Large Format Configuration Helpers ---
+  const buildLfDescription = (cfg) => {
+    const area = (Number(cfg.width || 0) * Number(cfg.height || 0)).toFixed(2);
+    return `Large Format: ${cfg.media} (${cfg.width}ft x ${cfg.height}ft = ${area}sqft) - Finishing: ${cfg.finishing}`;
+  };
+
+  const handleSaveLfPreset = async () => {
+    try {
+      const newPreset = { ...currentLfConfig, id: Date.now() };
+      const updated = [...lfPresets, newPreset];
+      setLfPresets(updated);
+      await AsyncStorage.setItem('lf_printing_presets', JSON.stringify(updated));
+      Alert.alert('Saved', 'Large Format configuration saved as preset.');
+    } catch (e) {
+      Alert.alert('Error', 'Failed to save preset');
+    }
+  };
+
+  const applyLfConfig = (cfg) => {
+    const desc = buildLfDescription(cfg);
+    setItems((prev) => [...prev, { description: desc, qty: '1', price: cfg.totalPrice || '0' }]);
+    setLfConfigModalVisible(false);
+  };
+
+  const deleteLfPreset = async (id) => {
+    try {
+      const updated = lfPresets.filter(p => p.id !== id);
+      setLfPresets(updated);
+      await AsyncStorage.setItem('lf_printing_presets', JSON.stringify(updated));
+    } catch (e) { }
+  };
+
+  const updateLfCalculation = (patch) => {
+    setCurrentLfConfig((prev) => {
+      const next = { ...prev, ...patch };
+      const area = Number(next.width || 0) * Number(next.height || 0);
+      const total = (area * Number(next.rate || 0)).toFixed(2);
+      return { ...next, totalPrice: total };
+    });
+  };
+
+  // --- DTF Configuration Helpers ---
+  const buildDtfDescription = (cfg) => {
+    return `DTF Print: ${cfg.media} (${cfg.size}) - ${cfg.peel}`;
+  };
+
+  const handleSaveDtfPreset = async () => {
+    try {
+      const newPreset = { ...currentDtfConfig, id: Date.now() };
+      const updated = [...dtfPresets, newPreset];
+      setDtfPresets(updated);
+      await AsyncStorage.setItem('dtf_printing_presets', JSON.stringify(updated));
+      Alert.alert('Saved', 'DTF configuration saved as preset.');
+    } catch (e) {
+      Alert.alert('Error', 'Failed to save preset');
+    }
+  };
+
+  const applyDtfConfig = (cfg) => {
+    const desc = buildDtfDescription(cfg);
+    setItems((prev) => [...prev, { description: desc, qty: '1', price: cfg.price || '0' }]);
+    setDtfConfigModalVisible(false);
+  };
+
+  const deleteDtfPreset = async (id) => {
+    try {
+      const updated = dtfPresets.filter(p => p.id !== id);
+      setDtfPresets(updated);
+      await AsyncStorage.setItem('dtf_printing_presets', JSON.stringify(updated));
+    } catch (e) { }
+  };
+
+  // --- Photo Frame Configuration Helpers ---
+  const buildPfDescription = (cfg) => {
+    return `Photo Frame: ${cfg.size} ${cfg.frameType} - ${cfg.finish}`;
+  };
+
+  const handleSavePfPreset = async () => {
+    try {
+      const newPreset = { ...currentPfConfig, id: Date.now() };
+      const updated = [...pfPresets, newPreset];
+      setPfPresets(updated);
+      await AsyncStorage.setItem('pf_printing_presets', JSON.stringify(updated));
+      Alert.alert('Saved', 'Photo Frame configuration saved as preset.');
+    } catch (e) {
+      Alert.alert('Error', 'Failed to save preset');
+    }
+  };
+
+  const applyPfConfig = (cfg) => {
+    const desc = buildPfDescription(cfg);
+    setItems((prev) => [...prev, { description: desc, qty: '1', price: cfg.price || '0' }]);
+    setPfConfigModalVisible(false);
+  };
+
+  const deletePfPreset = async (id) => {
+    try {
+      const updated = pfPresets.filter(p => p.id !== id);
+      setPfPresets(updated);
+      await AsyncStorage.setItem('pf_printing_presets', JSON.stringify(updated));
+    } catch (e) { }
+  };
+
   // Persist selection so CreateInvoice screen uses it too
   const handleSelectTemplate = async (tplKey) => {
     const templateConfig = TEMPLATES.find(t => t.key === tplKey);
@@ -668,7 +878,7 @@ export default function TemplatePickerScreen({ navigation, route }) {
   };
 
   const renderTemplate = (tplKey, title, emoji, isPro, selected, onSelect) => {
-    const locked = isPro && !company?.isPremium;
+    const locked = isPro && !company?.isPremium && !['pbmsrvr', 'pbmsrv'].includes(company?.companyId?.toLowerCase());
     return (
       <TouchableOpacity
         style={[styles.templateCard, selected && styles.templateSelected, locked && styles.templateLocked]}
@@ -695,8 +905,46 @@ export default function TemplatePickerScreen({ navigation, route }) {
             </TouchableOpacity>
             <Text style={styles.title}>Pick Your Invoice Template</Text>
             <Text style={styles.subtitle}>Choose how your invoice looks. Tap preview for full layout.</Text>
-            <View style={{ marginTop: 8, alignSelf: 'flex-start', backgroundColor: Colors.success, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 }}>
-              <Text style={{ color: Colors.white, fontWeight: '700' }}>Currency: {companyCurrencySymbol} {companyCurrencySymbol === '₦' ? 'Naira' : companyCurrencySymbol === '$' ? 'Dollar' : companyCurrencySymbol}</Text>
+            <View style={{ marginTop: 8, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+              <View style={{ backgroundColor: Colors.success, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 }}>
+                <Text style={{ color: Colors.white, fontWeight: '700' }}>Currency: {companyCurrencySymbol} {companyCurrencySymbol === '₦' ? 'Naira' : companyCurrencySymbol === '$' ? 'Dollar' : companyCurrencySymbol}</Text>
+              </View>
+
+              {category === 'di_printing' && (
+                <TouchableOpacity
+                  onPress={() => setDiConfigModalVisible(true)}
+                  style={{ backgroundColor: '#EC4899', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10, elevation: 3, shadowColor: '#EC4899', shadowOpacity: 0.3, shadowRadius: 5, shadowOffset: { width: 0, height: 2 } }}
+                >
+                  <Text style={{ color: '#fff', fontWeight: '900', fontSize: 13 }}>+ CONFIGURE DI JOB</Text>
+                </TouchableOpacity>
+              )}
+
+              {category === 'large_format' && (
+                <TouchableOpacity
+                  onPress={() => setLfConfigModalVisible(true)}
+                  style={{ backgroundColor: '#2563eb', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10, elevation: 3, shadowColor: '#2563eb', shadowOpacity: 0.3, shadowRadius: 5, shadowOffset: { width: 0, height: 2 } }}
+                >
+                  <Text style={{ color: '#fff', fontWeight: '900', fontSize: 13 }}>+ CONFIGURE LARGE FORMAT</Text>
+                </TouchableOpacity>
+              )}
+
+              {category === 'dtf_prints' && (
+                <TouchableOpacity
+                  onPress={() => setDtfConfigModalVisible(true)}
+                  style={{ backgroundColor: '#7c3aed', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10, elevation: 3, shadowColor: '#7c3aed', shadowOpacity: 0.3, shadowRadius: 5, shadowOffset: { width: 0, height: 2 } }}
+                >
+                  <Text style={{ color: '#fff', fontWeight: '900', fontSize: 13 }}>+ CONFIGURE DTF</Text>
+                </TouchableOpacity>
+              )}
+
+              {category === 'photo_frames' && (
+                <TouchableOpacity
+                  onPress={() => setPfConfigModalVisible(true)}
+                  style={{ backgroundColor: '#10b981', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10, elevation: 3, shadowColor: '#10b981', shadowOpacity: 0.3, shadowRadius: 5, shadowOffset: { width: 0, height: 2 } }}
+                >
+                  <Text style={{ color: '#fff', fontWeight: '900', fontSize: 13 }}>+ CONFIGURE PHOTO FRAME</Text>
+                </TouchableOpacity>
+              )}
             </View>
           </View>
 
@@ -751,8 +999,8 @@ export default function TemplatePickerScreen({ navigation, route }) {
               <TextInput style={styles.input} placeholder="Email or Phone (optional)" placeholderTextColor={Colors.textSecondary} value={invoice.customerContact} onChangeText={(t) => updateInvoice({ customerContact: t })} autoCapitalize="none" />
             </View>
 
-            {/* Section: Category (Printing Press Only) */}
-            {company?.businessType === 'printing_press' && (
+            {/* Section: Category (Printing Press Only - Hidden if already set by Service Dashboard) */}
+            {company?.businessType === 'printing_press' && !route?.params?.category && (
               <View style={{ marginTop: 15 }}>
                 <Text style={styles.sectionTitle}>Service Category</Text>
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
@@ -798,7 +1046,9 @@ export default function TemplatePickerScreen({ navigation, route }) {
               <DateTimePicker value={invoice.dueDate || new Date()} mode="date" display="default" onChange={(e, d) => { setShowDueDatePicker(false); if (d) updateInvoice({ dueDate: d }); }} />
             )}
 
-            <Text style={[styles.sectionTitle, { marginTop: Spacing.md }]}>Items</Text>
+            <View style={{ marginTop: Spacing.md }}>
+              <Text style={styles.sectionTitle}>Items</Text>
+            </View>
             <View style={{ flexDirection: 'row', gap: 8, marginBottom: 6, paddingHorizontal: 2 }}>
               <Text style={[styles.fullMeta, { flex: 2 }]}>Item Description</Text>
               <Text style={[styles.fullMeta, { flex: 0.6, textAlign: 'center' }]}>Qty</Text>
@@ -1185,6 +1435,482 @@ export default function TemplatePickerScreen({ navigation, route }) {
           </Modal>
         </ScrollView>
       </KeyboardAvoidingView>
+      {/* --- DI PRINTING CONFIGURATOR MODAL --- */}
+      <Modal visible={diConfigModalVisible} animationType="slide" transparent={false} onRequestClose={() => setDiConfigModalVisible(false)}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: '#F8FAFC' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#E2E8F0' }}>
+            <TouchableOpacity onPress={() => setDiConfigModalVisible(false)} style={{ padding: 8 }}>
+              <Ionicons name="close" size={24} color="#64748B" />
+            </TouchableOpacity>
+            <Text style={{ fontSize: 18, fontWeight: '800', color: '#1E293B' }}>DI Job Configurator</Text>
+            <View style={{ width: 40 }} />
+          </View>
+
+          <ScrollView style={styles.modalContent}>
+            {/* Presets List */}
+            {diPresets.length > 0 && (
+              <View style={styles.configSection}>
+                <Text style={styles.configLabel}>Saved Presets</Text>
+                {diPresets.map((p) => (
+                  <TouchableOpacity key={p.id} style={styles.presetCard} onPress={() => applyDiConfig(p)}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.presetTitle}>{buildDiDescription(p)}</Text>
+                      <Text style={styles.presetSubtitle}>{companyCurrencySymbol}{p.price} per unit</Text>
+                    </View>
+                    <TouchableOpacity onPress={() => deleteDiPreset(p.id)} style={{ padding: 8 }}>
+                      <Ionicons name="trash-outline" size={20} color={Colors.error} />
+                    </TouchableOpacity>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+
+            {/* Builder UI */}
+            <Text style={[styles.configLabel, { marginBottom: 15 }]}>Configure New DI Job</Text>
+
+            {/* Paper Type */}
+            <View style={styles.configSection}>
+              <Text style={styles.configLabel}>Paper Type</Text>
+              <View style={styles.chipRow}>
+                {DI_PAPER_TYPES.map(t => (
+                  <TouchableOpacity
+                    key={t}
+                    style={[styles.paramChip, currentDiConfig.paperType === t && styles.paramChipActive]}
+                    onPress={() => setCurrentDiConfig(prev => ({ ...prev, paperType: t }))}
+                  >
+                    <Text style={[styles.paramChipText, currentDiConfig.paperType === t && styles.paramChipTextActive]}>{t}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+            {/* Paper Weight */}
+            <View style={styles.configSection}>
+              <Text style={styles.configLabel}>Paper Weight</Text>
+              <View style={styles.chipRow}>
+                {DI_PAPER_WEIGHTS.map(t => (
+                  <TouchableOpacity
+                    key={t}
+                    style={[styles.paramChip, currentDiConfig.paperWeight === t && styles.paramChipActive]}
+                    onPress={() => setCurrentDiConfig(prev => ({ ...prev, paperWeight: t }))}
+                  >
+                    <Text style={[styles.paramChipText, currentDiConfig.paperWeight === t && styles.paramChipTextActive]}>{t}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+            {/* Print Side */}
+            <View style={styles.configSection}>
+              <Text style={styles.configLabel}>Print Side</Text>
+              <View style={styles.chipRow}>
+                {DI_PRINT_SIDES.map(t => (
+                  <TouchableOpacity
+                    key={t}
+                    style={[styles.paramChip, currentDiConfig.printSide === t && styles.paramChipActive]}
+                    onPress={() => setCurrentDiConfig(prev => ({ ...prev, printSide: t }))}
+                  >
+                    <Text style={[styles.paramChipText, currentDiConfig.printSide === t && styles.paramChipTextActive]}>{t}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+            {/* Document Extension */}
+            <View style={styles.configSection}>
+              <Text style={styles.configLabel}>Document Extension</Text>
+              <View style={styles.chipRow}>
+                {DI_EXTENSIONS.map(t => (
+                  <TouchableOpacity
+                    key={t}
+                    style={[styles.paramChip, currentDiConfig.extension === t && styles.paramChipActive]}
+                    onPress={() => setCurrentDiConfig(prev => ({ ...prev, extension: t }))}
+                  >
+                    <Text style={[styles.paramChipText, currentDiConfig.extension === t && styles.paramChipTextActive]}>{t}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+            {/* Price Preview & Entry */}
+            <View style={[styles.configSection, { backgroundColor: '#fff', padding: 16, borderRadius: 16, borderWidth: 1, borderColor: '#E2E8F0' }]}>
+              <Text style={styles.configLabel}>Set Price for this Combination</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 10 }}>
+                <Text style={{ fontSize: 20, fontWeight: 'bold', marginRight: 10 }}>{companyCurrencySymbol}</Text>
+                <TextInput
+                  style={[styles.input, { flex: 1, fontSize: 18, fontWeight: 'bold' }]}
+                  placeholder="0.00"
+                  keyboardType="decimal-pad"
+                  value={currentDiConfig.price}
+                  onChangeText={(t) => setCurrentDiConfig(prev => ({ ...prev, price: t }))}
+                />
+              </View>
+            </View>
+
+            <View style={{ height: 100 }} />
+          </ScrollView>
+
+          <View style={{ padding: 16, backgroundColor: '#fff', borderTopWidth: 1, borderTopColor: '#E2E8F0', flexDirection: 'row', gap: 12 }}>
+            <TouchableOpacity onPress={handleSaveDiPreset} style={[styles.secondaryButton, { flex: 1, borderColor: '#EC4899' }]}>
+              <Text style={[styles.secondaryButtonText, { color: '#EC4899' }]}>Save as Preset</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => applyDiConfig(currentDiConfig)} style={[styles.primaryButton, { flex: 2, backgroundColor: '#EC4899' }]}>
+              <Text style={styles.primaryButtonText}>Add to Invoice</Text>
+            </TouchableOpacity>
+          </View>
+        </SafeAreaView>
+      </Modal>
+
+      {/* --- LARGE FORMAT CONFIGURATOR MODAL --- */}
+      <Modal visible={lfConfigModalVisible} animationType="slide" transparent={false} onRequestClose={() => setLfConfigModalVisible(false)}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: '#F0F9FF' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#BAE6FD' }}>
+            <TouchableOpacity onPress={() => setLfConfigModalVisible(false)} style={{ padding: 8 }}>
+              <Ionicons name="close" size={24} color="#0369a1" />
+            </TouchableOpacity>
+            <Text style={{ fontSize: 18, fontWeight: '800', color: '#0369a1' }}>Large Format Configurator</Text>
+            <View style={{ width: 40 }} />
+          </View>
+
+          <ScrollView style={styles.modalContent}>
+            {/* LF Presets List */}
+            {lfPresets.length > 0 && (
+              <View style={styles.configSection}>
+                <Text style={[styles.configLabel, { color: '#0369a1' }]}>Saved Presets</Text>
+                {lfPresets.map((p) => (
+                  <TouchableOpacity key={p.id} style={[styles.presetCard, { borderLeftColor: '#0369a1' }]} onPress={() => applyLfConfig(p)}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.presetTitle}>{buildLfDescription(p)}</Text>
+                      <Text style={styles.presetSubtitle}>{companyCurrencySymbol}{p.totalPrice} total</Text>
+                    </View>
+                    <TouchableOpacity onPress={() => deleteLfPreset(p.id)} style={{ padding: 8 }}>
+                      <Ionicons name="trash-outline" size={20} color={Colors.error} />
+                    </TouchableOpacity>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+
+            <Text style={[styles.configLabel, { marginBottom: 15, color: '#0369a1' }]}>Job Dimensions & Material</Text>
+
+            {/* Media Type */}
+            <View style={styles.configSection}>
+              <Text style={styles.configLabel}>Material / Media</Text>
+              <View style={styles.chipRow}>
+                {LF_MEDIA_TYPES.map(t => (
+                  <TouchableOpacity
+                    key={t}
+                    style={[styles.paramChip, currentLfConfig.media === t && { backgroundColor: '#0369a1', borderColor: '#0369a1' }]}
+                    onPress={() => updateLfCalculation({ media: t })}
+                  >
+                    <Text style={[styles.paramChipText, currentLfConfig.media === t && { color: '#fff' }]}>{t}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+            {/* Dimensions */}
+            <View style={{ flexDirection: 'row', gap: 15, marginBottom: 20 }}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.configLabel}>Width (ft)</Text>
+                <TextInput
+                  style={[styles.input, { fontSize: 18, fontWeight: 'bold' }]}
+                  placeholder="0"
+                  keyboardType="decimal-pad"
+                  value={currentLfConfig.width}
+                  onChangeText={(t) => updateLfCalculation({ width: t })}
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.configLabel}>Height (ft)</Text>
+                <TextInput
+                  style={[styles.input, { fontSize: 18, fontWeight: 'bold' }]}
+                  placeholder="0"
+                  keyboardType="decimal-pad"
+                  value={currentLfConfig.height}
+                  onChangeText={(t) => updateLfCalculation({ height: t })}
+                />
+              </View>
+            </View>
+
+            {/* Calculation Result */}
+            <View style={{ backgroundColor: '#E0F2FE', padding: 12, borderRadius: 12, marginBottom: 20, alignItems: 'center' }}>
+              <Text style={{ fontSize: 14, color: '#0369a1', fontWeight: 'bold' }}>
+                Total Area: {(Number(currentLfConfig.width || 0) * Number(currentLfConfig.height || 0)).toFixed(2)} Square Feet
+              </Text>
+            </View>
+
+            {/* Rate & Total Price */}
+            <View style={{ flexDirection: 'row', gap: 15, marginBottom: 20 }}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.configLabel}>Rate per sqft ({companyCurrencySymbol})</Text>
+                <TextInput
+                  style={[styles.input, { fontSize: 18, fontWeight: 'bold' }]}
+                  placeholder="0.00"
+                  keyboardType="decimal-pad"
+                  value={currentLfConfig.rate}
+                  onChangeText={(t) => updateLfCalculation({ rate: t })}
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.configLabel}>Total Price</Text>
+                <View style={[styles.input, { backgroundColor: '#f1f5f9', justifyContent: 'center' }]}>
+                  <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#0369a1' }}>{companyCurrencySymbol}{currentLfConfig.totalPrice}</Text>
+                </View>
+              </View>
+            </View>
+
+            {/* Finishing */}
+            <View style={styles.configSection}>
+              <Text style={styles.configLabel}>Finishing Options</Text>
+              <View style={styles.chipRow}>
+                {LF_FINISHING.map(t => (
+                  <TouchableOpacity
+                    key={t}
+                    style={[styles.paramChip, currentLfConfig.finishing === t && { backgroundColor: '#0369a1', borderColor: '#0369a1' }]}
+                    onPress={() => updateLfCalculation({ finishing: t })}
+                  >
+                    <Text style={[styles.paramChipText, currentLfConfig.finishing === t && { color: '#fff' }]}>{t}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+            <View style={{ height: 100 }} />
+          </ScrollView>
+
+          <View style={{ padding: 16, backgroundColor: '#fff', borderTopWidth: 1, borderTopColor: '#BAE6FD', flexDirection: 'row', gap: 12 }}>
+            <TouchableOpacity onPress={handleSaveLfPreset} style={[styles.secondaryButton, { flex: 1, borderColor: '#0369a1' }]}>
+              <Text style={[styles.secondaryButtonText, { color: '#0369a1' }]}>Save Preset</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => applyLfConfig(currentLfConfig)} style={[styles.primaryButton, { flex: 2, backgroundColor: '#0369a1' }]}>
+              <Text style={styles.primaryButtonText}>Add to Invoice</Text>
+            </TouchableOpacity>
+          </View>
+        </SafeAreaView>
+      </Modal>
+
+      {/* --- DTF PRINTING CONFIGURATOR MODAL --- */}
+      <Modal visible={dtfConfigModalVisible} animationType="slide" transparent={false} onRequestClose={() => setDtfConfigModalVisible(false)}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: '#F5F3FF' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#DDD6FE' }}>
+            <TouchableOpacity onPress={() => setDtfConfigModalVisible(false)} style={{ padding: 8 }}>
+              <Ionicons name="close" size={24} color="#7c3aed" />
+            </TouchableOpacity>
+            <Text style={{ fontSize: 18, fontWeight: '800', color: '#7c3aed' }}>DTF Printing Configurator</Text>
+            <View style={{ width: 40 }} />
+          </View>
+
+          <ScrollView style={styles.modalContent}>
+            {/* DTF Presets List */}
+            {dtfPresets.length > 0 && (
+              <View style={styles.configSection}>
+                <Text style={[styles.configLabel, { color: '#7c3aed' }]}>Saved Presets</Text>
+                {dtfPresets.map((p) => (
+                  <TouchableOpacity key={p.id} style={[styles.presetCard, { borderLeftColor: '#7c3aed' }]} onPress={() => applyDtfConfig(p)}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.presetTitle}>{buildDtfDescription(p)}</Text>
+                      <Text style={styles.presetSubtitle}>{companyCurrencySymbol}{p.price} per sheet</Text>
+                    </View>
+                    <TouchableOpacity onPress={() => deleteDtfPreset(p.id)} style={{ padding: 8 }}>
+                      <Ionicons name="trash-outline" size={20} color={Colors.error} />
+                    </TouchableOpacity>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+
+            <Text style={[styles.configLabel, { marginBottom: 15, color: '#7c3aed' }]}>Configure DTF Job</Text>
+
+            {/* Media Type */}
+            <View style={styles.configSection}>
+              <Text style={styles.configLabel}>Film Type (Media)</Text>
+              <View style={styles.chipRow}>
+                {DTF_MEDIA_TYPES.map(t => (
+                  <TouchableOpacity
+                    key={t}
+                    style={[styles.paramChip, currentDtfConfig.media === t && { backgroundColor: '#7c3aed', borderColor: '#7c3aed' }]}
+                    onPress={() => setCurrentDtfConfig(prev => ({ ...prev, media: t }))}
+                  >
+                    <Text style={[styles.paramChipText, currentDtfConfig.media === t && { color: '#fff' }]}>{t}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+            {/* Size */}
+            <View style={styles.configSection}>
+              <Text style={styles.configLabel}>Standard Size</Text>
+              <View style={styles.chipRow}>
+                {DTF_SIZES.map(t => (
+                  <TouchableOpacity
+                    key={t}
+                    style={[styles.paramChip, currentDtfConfig.size === t && { backgroundColor: '#7c3aed', borderColor: '#7c3aed' }]}
+                    onPress={() => setCurrentDtfConfig(prev => ({ ...prev, size: t }))}
+                  >
+                    <Text style={[styles.paramChipText, currentDtfConfig.size === t && { color: '#fff' }]}>{t}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+            {/* Peel Type */}
+            <View style={styles.configSection}>
+              <Text style={styles.configLabel}>Peel Type</Text>
+              <View style={styles.chipRow}>
+                {DTF_PEEL_TYPES.map(t => (
+                  <TouchableOpacity
+                    key={t}
+                    style={[styles.paramChip, currentDtfConfig.peel === t && { backgroundColor: '#7c3aed', borderColor: '#7c3aed' }]}
+                    onPress={() => setCurrentDtfConfig(prev => ({ ...prev, peel: t }))}
+                  >
+                    <Text style={[styles.paramChipText, currentDtfConfig.peel === t && { color: '#fff' }]}>{t}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+            {/* Price */}
+            <View style={[styles.configSection, { backgroundColor: '#fff', padding: 16, borderRadius: 16, borderWidth: 1, borderColor: '#DDD6FE' }]}>
+              <Text style={[styles.configLabel, { color: '#7c3aed' }]}>Set Price ({companyCurrencySymbol})</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 10 }}>
+                <Text style={{ fontSize: 20, fontWeight: 'bold', marginRight: 10 }}>{companyCurrencySymbol}</Text>
+                <TextInput
+                  style={[styles.input, { flex: 1, fontSize: 18, fontWeight: 'bold' }]}
+                  placeholder="0.00"
+                  keyboardType="decimal-pad"
+                  value={currentDtfConfig.price}
+                  onChangeText={(t) => setCurrentDtfConfig(prev => ({ ...prev, price: t }))}
+                />
+              </View>
+            </View>
+
+            <View style={{ height: 100 }} />
+          </ScrollView>
+
+          <View style={{ padding: 16, backgroundColor: '#fff', borderTopWidth: 1, borderTopColor: '#DDD6FE', flexDirection: 'row', gap: 12 }}>
+            <TouchableOpacity onPress={handleSaveDtfPreset} style={[styles.secondaryButton, { flex: 1, borderColor: '#7c3aed' }]}>
+              <Text style={[styles.secondaryButtonText, { color: '#7c3aed' }]}>Save Preset</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => applyDtfConfig(currentDtfConfig)} style={[styles.primaryButton, { flex: 2, backgroundColor: '#7c3aed' }]}>
+              <Text style={styles.primaryButtonText}>Add to Invoice</Text>
+            </TouchableOpacity>
+          </View>
+        </SafeAreaView>
+      </Modal>
+      {/* --- PHOTO FRAME CONFIGURATOR MODAL --- */}
+      <Modal visible={pfConfigModalVisible} animationType="slide" transparent={false} onRequestClose={() => setPfConfigModalVisible(false)}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: '#F0FDF4' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#DCFCE7' }}>
+            <TouchableOpacity onPress={() => setPfConfigModalVisible(false)} style={{ padding: 8 }}>
+              <Ionicons name="close" size={24} color="#64748B" />
+            </TouchableOpacity>
+            <Text style={{ fontSize: 18, fontWeight: '800', color: '#166534' }}>Photo Frame Configurator</Text>
+            <View style={{ width: 40 }} />
+          </View>
+
+          <ScrollView style={styles.modalContent}>
+            {/* Presets List */}
+            {pfPresets.length > 0 && (
+              <View style={styles.configSection}>
+                <Text style={styles.configLabel}>Saved Presets</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexDirection: 'row' }}>
+                  {pfPresets.map(p => (
+                    <TouchableOpacity
+                      key={p.id}
+                      style={{ backgroundColor: '#fff', padding: 12, borderRadius: 12, marginRight: 10, borderWidth: 1, borderColor: '#DCFCE7', minWidth: 140 }}
+                      onPress={() => setCurrentPfConfig(p)}
+                    >
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                        <Text style={{ fontWeight: 'bold', color: '#166534', fontSize: 13 }}>{p.size}</Text>
+                        <TouchableOpacity onPress={() => deletePfPreset(p.id)}>
+                          <Ionicons name="trash-outline" size={14} color="#EF4444" />
+                        </TouchableOpacity>
+                      </View>
+                      <Text style={{ fontSize: 11, color: '#64748B', marginTop: 4 }} numberOfLines={1}>{p.frameType}</Text>
+                      <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#10B981', marginTop: 4 }}>{companyCurrencySymbol}{p.price}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+            )}
+
+            {/* Frame Size */}
+            <View style={styles.configSection}>
+              <Text style={styles.configLabel}>Frame Size (Inches)</Text>
+              <View style={styles.chipRow}>
+                {PF_SIZES.map(t => (
+                  <TouchableOpacity
+                    key={t}
+                    style={[styles.paramChip, currentPfConfig.size === t && { backgroundColor: '#10B981', borderColor: '#10B981' }]}
+                    onPress={() => setCurrentPfConfig(prev => ({ ...prev, size: t }))}
+                  >
+                    <Text style={[styles.paramChipText, currentPfConfig.size === t && { color: '#fff' }]}>{t}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+            {/* Frame Type */}
+            <View style={styles.configSection}>
+              <Text style={styles.configLabel}>Frame Material / Type</Text>
+              <View style={styles.chipRow}>
+                {PF_FRAME_TYPES.map(t => (
+                  <TouchableOpacity
+                    key={t}
+                    style={[styles.paramChip, currentPfConfig.frameType === t && { backgroundColor: '#10B981', borderColor: '#10B981' }]}
+                    onPress={() => setCurrentPfConfig(prev => ({ ...prev, frameType: t }))}
+                  >
+                    <Text style={[styles.paramChipText, currentPfConfig.frameType === t && { color: '#fff' }]}>{t}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+            {/* Finishing */}
+            <View style={styles.configSection}>
+              <Text style={styles.configLabel}>Glass / Finishing</Text>
+              <View style={styles.chipRow}>
+                {PF_FINISHES.map(t => (
+                  <TouchableOpacity
+                    key={t}
+                    style={[styles.paramChip, currentPfConfig.finish === t && { backgroundColor: '#10B981', borderColor: '#10B981' }]}
+                    onPress={() => setCurrentPfConfig(prev => ({ ...prev, finish: t }))}
+                  >
+                    <Text style={[styles.paramChipText, currentPfConfig.finish === t && { color: '#fff' }]}>{t}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+            {/* Price */}
+            <View style={[styles.configSection, { backgroundColor: '#fff', padding: 16, borderRadius: 16, borderWidth: 1, borderColor: '#DCFCE7' }]}>
+              <Text style={[styles.configLabel, { color: '#166534' }]}>Set Unit Price ({companyCurrencySymbol})</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 10 }}>
+                <Text style={{ fontSize: 20, fontWeight: 'bold', marginRight: 10 }}>{companyCurrencySymbol}</Text>
+                <TextInput
+                  style={[styles.input, { flex: 1, fontSize: 18, fontWeight: 'bold' }]}
+                  placeholder="0.00"
+                  keyboardType="decimal-pad"
+                  value={currentPfConfig.price}
+                  onChangeText={(t) => setCurrentPfConfig(prev => ({ ...prev, price: t }))}
+                />
+              </View>
+            </View>
+
+            <View style={{ height: 100 }} />
+          </ScrollView>
+
+          <View style={{ padding: 16, backgroundColor: '#fff', borderTopWidth: 1, borderTopColor: '#DCFCE7', flexDirection: 'row', gap: 12 }}>
+            <TouchableOpacity onPress={handleSavePfPreset} style={[styles.secondaryButton, { flex: 1, borderColor: '#10B981' }]}>
+              <Text style={[styles.secondaryButtonText, { color: '#10B981' }]}>Save Preset</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => applyPfConfig(currentPfConfig)} style={[styles.primaryButton, { flex: 2, backgroundColor: '#10B981' }]}>
+              <Text style={styles.primaryButtonText}>Add to Invoice</Text>
+            </TouchableOpacity>
+          </View>
+        </SafeAreaView>
+      </Modal>
     </SafeAreaView >
   );
 }
@@ -1400,4 +2126,17 @@ const styles = StyleSheet.create({
   proLabel: { position: 'absolute', top: 8, right: 8, backgroundColor: Colors.primary, color: 'white', fontSize: 9, fontWeight: 'bold', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, overflow: 'hidden' },
   templateLocked: { opacity: 0.7, backgroundColor: '#f0f0f0' },
   lockBadge: { position: 'absolute', bottom: -5, right: -5, backgroundColor: Colors.error, borderRadius: 10, width: 20, height: 20, alignItems: 'center', justifyContent: 'center', zIndex: 10 },
+
+  // Configurator Styles
+  modalContent: { flex: 1, padding: 20, backgroundColor: '#F8FAFC' },
+  configSection: { marginBottom: 20 },
+  configLabel: { fontSize: 13, fontWeight: '700', color: '#64748B', textTransform: 'uppercase', marginBottom: 10, letterSpacing: 0.5 },
+  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  paramChip: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12, backgroundColor: '#fff', borderWidth: 1, borderColor: '#E2E8F0', elevation: 1 },
+  paramChipActive: { backgroundColor: '#EC4899', borderColor: '#EC4899' },
+  paramChipText: { fontSize: 13, color: '#1E293B', fontWeight: '500' },
+  paramChipTextActive: { color: '#fff' },
+  presetCard: { backgroundColor: '#fff', padding: 16, borderRadius: 16, borderLeftWidth: 4, borderLeftColor: '#EC4899', marginBottom: 12, elevation: 2, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  presetTitle: { fontSize: 14, fontWeight: '700', color: '#1E293B' },
+  presetSubtitle: { fontSize: 12, color: '#64748B', marginTop: 2 },
 });

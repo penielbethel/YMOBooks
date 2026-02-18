@@ -310,7 +310,7 @@ const InvoiceSchema = new mongoose.Schema(
     ],
     grandTotal: { type: Number },
     pdfPath: { type: String },
-    category: { type: String, enum: ['large_format', 'di_printing', 'dtf_prints', 'general'], default: 'general' },
+    category: { type: String, enum: ['large_format', 'di_printing', 'dtf_prints', 'photo_frames', 'general'], default: 'general' },
   },
   { timestamps: true }
 );
@@ -340,7 +340,7 @@ const ReceiptSchema = new mongoose.Schema(
       },
     ],
     pdfPath: { type: String },
-    category: { type: String, enum: ['large_format', 'di_printing', 'dtf_prints', 'general'], default: 'general' },
+    category: { type: String, enum: ['large_format', 'di_printing', 'dtf_prints', 'photo_frames', 'general'], default: 'general' },
   },
   { timestamps: true }
 );
@@ -351,7 +351,7 @@ const ExpenseSchema = new mongoose.Schema(
   {
     companyId: { type: String, index: true, required: true },
     month: { type: String, index: true, required: true }, // YYYY-MM
-    category: { type: String, enum: ['production', 'expense'], required: true },
+    category: { type: String, enum: ['production', 'expense', 'large_format', 'di_printing', 'dtf_prints', 'photo_frames'], required: true },
     amount: { type: Number, required: true },
     currencySymbol: { type: String },
     currencyCode: { type: String },
@@ -1676,16 +1676,40 @@ app.get('/api/finance/summary', async (req, res) => {
     const avgValue = jobCount > 0 ? totalRevenue / jobCount : 0;
 
     // Expenses (single currency)
-    const expenses = await Expense.find({ companyId, month: m }).lean();
+    const expenseQuery = { companyId, month: m };
+    if (category) {
+      // If a specific category is requested, we only want those expenses
+      expenseQuery.category = category;
+    }
+
+    const expenses = await Expense.find(expenseQuery).lean();
     let productionCost = 0;
     let runningExpenses = 0;
+    const productionCategories = ['production', 'large_format', 'di_printing', 'dtf_prints', 'photo_frames'];
+
     expenses.forEach((e) => {
-      if (String(e.category) === 'production') productionCost += Number(e.amount || 0);
-      else runningExpenses += Number(e.amount || 0);
+      if (productionCategories.includes(String(e.category))) {
+        productionCost += Number(e.amount || 0);
+      } else {
+        runningExpenses += Number(e.amount || 0);
+      }
     });
     const totalExpenses = productionCost + runningExpenses;
 
     const netProfit = Number(totalRevenue || 0) - Number(totalExpenses || 0);
+
+    // Breakdown for reporting
+    const breakdown = {};
+    if (!category) {
+      const categories = ['large_format', 'di_printing', 'dtf_prints', 'photo_frames', 'general'];
+      categories.forEach(cat => {
+        const catRev = receipts.filter(r => (r.category || 'general') === cat).reduce((sum, r) => sum + Number(r.amountPaid || 0), 0);
+        const catExp = expenses.filter(e => e.category === cat).reduce((sum, e) => sum + Number(e.amount || 0), 0);
+        if (catRev > 0 || catExp > 0) {
+          breakdown[cat] = { revenue: catRev, expenses: catExp, net: catRev - catExp };
+        }
+      });
+    }
 
     // Align response to simple number fields for client
     return res.json({
@@ -1698,6 +1722,7 @@ app.get('/api/finance/summary', async (req, res) => {
         net: Number(netProfit || 0),
         jobCount,
         avgValue,
+        breakdown
       }
     });
   } catch (err) {

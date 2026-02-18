@@ -28,6 +28,7 @@ const PrintingServiceScreen = ({ navigation, route }) => {
         revenue: 0,
         jobCount: 0,
         avgValue: 0,
+        net: 0,
     });
 
     const serviceInfo = useMemo(() => {
@@ -58,6 +59,15 @@ const PrintingServiceScreen = ({ navigation, route }) => {
                     color: '#F97316',
                     gradient: '#FB923C',
                     description: 'Apparel Heat Transfer & Films'
+                };
+            case 'photo_frames':
+                return {
+                    title: 'Photo Frame Production',
+                    shortTitle: 'Photo Frames',
+                    icon: 'image-outline',
+                    color: '#10B981',
+                    gradient: '#34D399',
+                    description: 'Custom Frames, Mounting & Portraits'
                 };
             default:
                 return {
@@ -119,6 +129,7 @@ const PrintingServiceScreen = ({ navigation, route }) => {
                         revenue: res.summary.revenue || 0,
                         jobCount: res.summary.jobCount || 0,
                         avgValue: res.summary.avgValue || 0,
+                        net: res.summary.net || 0,
                     });
                 }
             }
@@ -165,6 +176,10 @@ const PrintingServiceScreen = ({ navigation, route }) => {
                         <Ionicons name={serviceInfo.icon} size={80} color="rgba(255,255,255,0.15)" style={styles.heroIcon} />
                         <Text style={styles.heroLabel}>This Month's Revenue</Text>
                         <Text style={styles.heroValue}>{currency}{stats.revenue.toLocaleString()}</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.2)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, marginTop: 10, marginBottom: 5 }}>
+                            <Ionicons name={stats.net >= 0 ? "trending-up" : "trending-down"} size={16} color="#fff" style={{ marginRight: 6 }} />
+                            <Text style={{ color: '#fff', fontSize: 14, fontWeight: '800' }}>Est. Net Profit: {currency}{stats.net.toLocaleString()}</Text>
+                        </View>
                         <Text style={styles.heroSub}>{serviceInfo.description}</Text>
                     </View>
                 </View>

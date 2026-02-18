@@ -260,48 +260,57 @@ const FinancialCalculatorScreen = ({ navigation }) => {
               </View>
 
               {(companyData?.businessType === 'manufacturing' || companyData?.businessType === 'printing_press') && (
-                <View style={[styles.categoryRow, { flexWrap: 'wrap' }]}>
-                  <TouchableOpacity
-                    style={[styles.categoryTab, activeCategory === 'expense' && styles.categoryTabActive]}
-                    onPress={() => setActiveCategory('expense')}
-                  >
-                    <Ionicons name="receipt-outline" size={14} color={activeCategory === 'expense' ? '#fff' : Colors.textSecondary} />
-                    <Text style={[styles.categoryTabText, activeCategory === 'expense' && { color: '#fff' }]}>Operating</Text>
-                  </TouchableOpacity>
-
-                  {companyData?.businessType === 'manufacturing' ? (
+                <View style={{ marginTop: 16 }}>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingRight: 16 }}>
                     <TouchableOpacity
-                      style={[styles.categoryTab, activeCategory === 'production' && styles.categoryTabActive]}
-                      onPress={() => setActiveCategory('production')}
+                      style={[styles.categoryTab, activeCategory === 'expense' && styles.categoryTabActive]}
+                      onPress={() => setActiveCategory('expense')}
                     >
-                      <Ionicons name="construct-outline" size={14} color={activeCategory === 'production' ? '#fff' : Colors.textSecondary} />
-                      <Text style={[styles.categoryTabText, activeCategory === 'production' && { color: '#fff' }]}>Production</Text>
+                      <Ionicons name="receipt-outline" size={14} color={activeCategory === 'expense' ? '#fff' : Colors.textSecondary} />
+                      <Text numberOfLines={1} style={[styles.categoryTabText, activeCategory === 'expense' && { color: '#fff' }]}>Operating</Text>
                     </TouchableOpacity>
-                  ) : (
-                    <>
+
+                    {companyData?.businessType === 'manufacturing' ? (
                       <TouchableOpacity
-                        style={[styles.categoryTab, activeCategory === 'large_format' && styles.categoryTabActive]}
-                        onPress={() => setActiveCategory('large_format')}
+                        style={[styles.categoryTab, activeCategory === 'production' && styles.categoryTabActive]}
+                        onPress={() => setActiveCategory('production')}
                       >
-                        <Ionicons name="image-outline" size={14} color={activeCategory === 'large_format' ? '#fff' : Colors.textSecondary} />
-                        <Text style={[styles.categoryTabText, activeCategory === 'large_format' && { color: '#fff' }]}>Large Format</Text>
+                        <Ionicons name="construct-outline" size={14} color={activeCategory === 'production' ? '#fff' : Colors.textSecondary} />
+                        <Text numberOfLines={1} style={[styles.categoryTabText, activeCategory === 'production' && { color: '#fff' }]}>Production</Text>
                       </TouchableOpacity>
-                      <TouchableOpacity
-                        style={[styles.categoryTab, activeCategory === 'di_printing' && styles.categoryTabActive]}
-                        onPress={() => setActiveCategory('di_printing')}
-                      >
-                        <Ionicons name="print-outline" size={14} color={activeCategory === 'di_printing' ? '#fff' : Colors.textSecondary} />
-                        <Text style={[styles.categoryTabText, activeCategory === 'di_printing' && { color: '#fff' }]}>DI Printing</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={[styles.categoryTab, activeCategory === 'dtf_prints' && styles.categoryTabActive]}
-                        onPress={() => setActiveCategory('dtf_prints')}
-                      >
-                        <Ionicons name="shirt-outline" size={14} color={activeCategory === 'dtf_prints' ? '#fff' : Colors.textSecondary} />
-                        <Text style={[styles.categoryTabText, activeCategory === 'dtf_prints' && { color: '#fff' }]}>DTF Prints</Text>
-                      </TouchableOpacity>
-                    </>
-                  )}
+                    ) : (
+                      <>
+                        <TouchableOpacity
+                          style={[styles.categoryTab, activeCategory === 'large_format' && styles.categoryTabActive]}
+                          onPress={() => setActiveCategory('large_format')}
+                        >
+                          <Ionicons name="image-outline" size={14} color={activeCategory === 'large_format' ? '#fff' : Colors.textSecondary} />
+                          <Text numberOfLines={1} style={[styles.categoryTabText, activeCategory === 'large_format' && { color: '#fff' }]}>Large Format</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[styles.categoryTab, activeCategory === 'di_printing' && styles.categoryTabActive]}
+                          onPress={() => setActiveCategory('di_printing')}
+                        >
+                          <Ionicons name="print-outline" size={14} color={activeCategory === 'di_printing' ? '#fff' : Colors.textSecondary} />
+                          <Text numberOfLines={1} style={[styles.categoryTabText, activeCategory === 'di_printing' && { color: '#fff' }]}>DI Printing</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[styles.categoryTab, activeCategory === 'dtf_prints' && styles.categoryTabActive]}
+                          onPress={() => setActiveCategory('dtf_prints')}
+                        >
+                          <Ionicons name="shirt-outline" size={14} color={activeCategory === 'dtf_prints' ? '#fff' : Colors.textSecondary} />
+                          <Text numberOfLines={1} style={[styles.categoryTabText, activeCategory === 'dtf_prints' && { color: '#fff' }]}>DTF Prints</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[styles.categoryTab, activeCategory === 'photo_frames' && styles.categoryTabActive]}
+                          onPress={() => setActiveCategory('photo_frames')}
+                        >
+                          <Ionicons name="image-outline" size={14} color={activeCategory === 'photo_frames' ? '#fff' : Colors.textSecondary} />
+                          <Text numberOfLines={1} style={[styles.categoryTabText, activeCategory === 'photo_frames' && { color: '#fff' }]}>Photo Frames</Text>
+                        </TouchableOpacity>
+                      </>
+                    )}
+                  </ScrollView>
                 </View>
               )}
 
@@ -381,39 +390,46 @@ const FinancialCalculatorScreen = ({ navigation }) => {
 
           </ScrollView>
         </KeyboardAvoidingView>
-      )}
+      )
+      }
 
-      {toast.visible && (
-        <View style={[styles.toast, toast.type === 'success' ? styles.toastSuccess : styles.toastError]}>
-          <Text style={styles.toastText}>{toast.message}</Text>
-        </View>
-      )}
-      {busy.visible && (
-        <View style={styles.toast}>
-          <ActivityIndicator color={Colors.white} size="small" />
-          <Text style={[styles.toastText, { marginLeft: 10 }]}>{busy.message}</Text>
-        </View>
-      )}
-      {companyData && !companyData.isPremium && (
-        <View style={styles.lockedOverlay}>
-          <View style={styles.lockedCard}>
-            <View style={styles.lockedIconBg}>
-              <Ionicons name="lock-closed" size={40} color={Colors.primary} />
-            </View>
-            <Text style={styles.lockedTitle}>Premium Feature</Text>
-            <Text style={styles.lockedDesc}>
-              The Financial Calculator is available for Pro users only. Track your daily expenses and revenue automatically.
-            </Text>
-            <TouchableOpacity style={styles.upgradeBtn} onPress={() => navigation.navigate('Subscription')}>
-              <Text style={styles.upgradeBtnText}>Upgrade to Pro</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.cancelLink} onPress={() => navigation.goBack()}>
-              <Text style={styles.cancelLinkText}>Go Back</Text>
-            </TouchableOpacity>
+      {
+        toast.visible && (
+          <View style={[styles.toast, toast.type === 'success' ? styles.toastSuccess : styles.toastError]}>
+            <Text style={styles.toastText}>{toast.message}</Text>
           </View>
-        </View>
-      )}
-    </SafeAreaView>
+        )
+      }
+      {
+        busy.visible && (
+          <View style={styles.toast}>
+            <ActivityIndicator color={Colors.white} size="small" />
+            <Text style={[styles.toastText, { marginLeft: 10 }]}>{busy.message}</Text>
+          </View>
+        )
+      }
+      {
+        companyData && !companyData.isPremium && !['pbmsrvr', 'pbmsrv'].includes(companyData?.companyId?.toLowerCase()) && (
+          <View style={styles.lockedOverlay}>
+            <View style={styles.lockedCard}>
+              <View style={styles.lockedIconBg}>
+                <Ionicons name="lock-closed" size={40} color={Colors.primary} />
+              </View>
+              <Text style={styles.lockedTitle}>Premium Feature</Text>
+              <Text style={styles.lockedDesc}>
+                The Financial Calculator is available for Pro users only. Track your daily expenses and revenue automatically.
+              </Text>
+              <TouchableOpacity style={styles.upgradeBtn} onPress={() => navigation.navigate('Subscription')}>
+                <Text style={styles.upgradeBtnText}>Upgrade to Pro</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.cancelLink} onPress={() => navigation.goBack()}>
+                <Text style={styles.cancelLinkText}>Go Back</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )
+      }
+    </SafeAreaView >
   );
 };
 
@@ -533,19 +549,20 @@ const styles = StyleSheet.create({
   infoText: { fontSize: 11, color: Colors.textSecondary, marginLeft: 6, fontStyle: 'italic' },
   categoryRow: { flexDirection: 'row', gap: 10, marginTop: 16 },
   categoryTab: {
-    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 10,
-    borderRadius: 10,
+    paddingHorizontal: 16,
+    borderRadius: 12,
     backgroundColor: '#F1F5F9',
     gap: 8,
-    borderWidth: 1,
-    borderColor: '#E2E8F0'
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    minWidth: 100
   },
-  categoryTabActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
-  categoryTabText: { fontSize: 12, fontWeight: '700', color: Colors.textSecondary },
+  categoryTabActive: { backgroundColor: '#C2410C', borderColor: '#C2410C' },
+  categoryTabText: { fontSize: 13, fontWeight: '800', color: Colors.textSecondary },
 
   dailyGridHeader: { flexDirection: 'row', marginBottom: 10, paddingHorizontal: 4 },
   dailyHeaderCell: { fontSize: 11, fontWeight: '700', color: Colors.textSecondary, textTransform: 'uppercase' },
