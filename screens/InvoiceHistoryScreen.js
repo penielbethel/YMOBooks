@@ -97,8 +97,8 @@ const InvoiceHistoryScreen = ({ navigation, route }) => {
         const category = route?.params?.category;
         await (async () => {
           const [invRes, rctRes] = await Promise.all([
-            fetchInvoices(effectiveId, 12, category),
-            fetchReceipts(effectiveId, 12, category),
+            fetchInvoices(effectiveId, 60, category),
+            fetchReceipts(effectiveId, 60, category),
           ]);
           if (invRes?.success) {
             setInvoices(invRes.invoices || []);

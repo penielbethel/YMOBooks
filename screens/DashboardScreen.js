@@ -179,7 +179,7 @@ const DashboardScreen = ({ navigation }) => {
       {
         id: 'history',
         title: 'Invoice History',
-        description: 'View invoices from the last 6 months',
+        description: 'View invoices from the last 5 years',
         icon: 'albums-outline',
         tint: Colors.success,
       }
