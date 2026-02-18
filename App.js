@@ -19,6 +19,8 @@ import SuperAdminScreen from './screens/SuperAdminScreen';
 import FinancialCalculatorScreen from './screens/FinancialCalculatorScreen';
 import SubscriptionScreen from './screens/SubscriptionScreen';
 import StockManagementScreen from './screens/StockManagementScreen';
+import ProfitLossScreen from './screens/ProfitLossScreen';
+import BalanceSheetScreen from './screens/BalanceSheetScreen';
 
 // Import constants
 import { Colors } from './constants/Colors';
@@ -220,6 +222,20 @@ export default function App() {
         <Stack.Screen
           name="StockManagement"
           component={StockManagementScreen}
+          options={{
+            animationEnabled: true,
+          }}
+        />
+        <Stack.Screen
+          name="ProfitLoss"
+          component={ProfitLossScreen}
+          options={{
+            animationEnabled: true,
+          }}
+        />
+        <Stack.Screen
+          name="BalanceSheet"
+          component={BalanceSheetScreen}
           options={{
             animationEnabled: true,
           }}

@@ -150,6 +150,22 @@ const DashboardScreen = ({ navigation }) => {
         tint: '#F59E0B', // Amber
         isPro: true,
       });
+      items.push({
+        id: 'profit_loss',
+        title: 'Profit & Loss',
+        description: 'Check business profitability',
+        icon: 'bar-chart-outline',
+        tint: '#10B981', // Emerald
+        isPro: true,
+      });
+      items.push({
+        id: 'balance_sheet',
+        title: 'Wealth Statement',
+        description: 'Balance Sheet & Assets',
+        icon: 'briefcase-outline',
+        tint: '#6366F1', // Indigo
+        isPro: true,
+      });
     } else {
       items.push({
         id: 'calculator',
@@ -176,6 +192,12 @@ const DashboardScreen = ({ navigation }) => {
         break;
       case 'stock':
         navigation.navigate('StockManagement');
+        break;
+      case 'profit_loss':
+        navigation.navigate('ProfitLoss');
+        break;
+      case 'balance_sheet':
+        navigation.navigate('BalanceSheet');
         break;
       default:
         // For other features, show coming soon alert

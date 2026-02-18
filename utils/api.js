@@ -190,19 +190,20 @@ export async function fetchRevenueDaily(companyId, month) {
   return res.json();
 }
 
-export async function fetchExpensesDaily(companyId, month) {
+export async function fetchExpensesDaily(companyId, month, category = 'expense') {
   const url = new URL(`${Config.API_BASE_URL}/api/finance/expenses-daily`);
   url.searchParams.set('companyId', companyId);
   if (month) url.searchParams.set('month', month);
+  if (category) url.searchParams.set('category', category);
   const res = await fetch(url.toString());
   return res.json();
 }
 
-export async function saveExpenseDaily(companyId, month, day, amount) {
+export async function saveExpenseDaily(companyId, month, day, amount, category = 'expense') {
   const res = await fetch(`${Config.API_BASE_URL}/api/finance/expenses-daily`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ companyId, month, day, amount }),
+    body: JSON.stringify({ companyId, month, day, amount, category }),
   });
   return res.json();
 }
@@ -308,6 +309,13 @@ export async function recordProduction(payload) {
 
 export async function fetchProductionHistory(companyId) {
   const url = new URL(`${Config.API_BASE_URL}/api/production/history`);
+  url.searchParams.set('companyId', companyId);
+  const res = await fetch(url.toString());
+  return res.json();
+}
+
+export async function fetchBalanceSheet(companyId) {
+  const url = new URL(`${Config.API_BASE_URL}/api/finance/balance-sheet`);
   url.searchParams.set('companyId', companyId);
   const res = await fetch(url.toString());
   return res.json();

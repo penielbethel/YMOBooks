@@ -75,6 +75,7 @@ const FinancialCalculatorScreen = ({ navigation }) => {
   const [expensesDailyInput, setExpensesDailyInput] = useState(Array.from({ length: 31 }, () => '0'));
 
   const [refreshing, setRefreshing] = useState(false);
+  const [activeCategory, setActiveCategory] = useState('expense'); // 'expense' or 'production'
   const [toast, setToast] = useState({ visible: false, message: '', type: 'success' });
   const [busy, setBusy] = useState({ visible: false, message: '' });
 
@@ -97,7 +98,7 @@ const FinancialCalculatorScreen = ({ navigation }) => {
     try {
       const [revDailyRes, expDailyRes] = await Promise.all([
         fetchRevenueDaily(companyData.companyId, month),
-        fetchExpensesDaily(companyData.companyId, month),
+        fetchExpensesDaily(companyData.companyId, month, activeCategory),
       ]);
       if (revDailyRes?.success && Array.isArray(revDailyRes.days)) {
         const arr = Array.from({ length: 31 }, (_, i) => Number(revDailyRes.days[i] || 0));
@@ -119,7 +120,7 @@ const FinancialCalculatorScreen = ({ navigation }) => {
     } finally {
       setLoading(false);
     }
-  }, [companyData, month]);
+  }, [companyData, month, activeCategory]);
 
   useEffect(() => {
     loadData();
@@ -168,7 +169,7 @@ const FinancialCalculatorScreen = ({ navigation }) => {
     try {
       showBusy('Saving...');
       const oldVal = Number(expensesDaily?.[dayIndex] || 0);
-      await saveExpenseDaily(companyData.companyId, month, dayIndex + 1, safe);
+      await saveExpenseDaily(companyData.companyId, month, dayIndex + 1, safe, activeCategory);
       setExpensesDaily((prev) => {
         const next = [...prev];
         next[dayIndex] = safe;
@@ -183,7 +184,7 @@ const FinancialCalculatorScreen = ({ navigation }) => {
     } finally {
       hideBusy();
     }
-  }, [companyData, month, expensesDaily, expensesDailyInput, year, showBusy, hideBusy, showToast]);
+  }, [companyData, month, expensesDaily, expensesDailyInput, year, showBusy, hideBusy, showToast, activeCategory]);
 
   const monthlyTotals = useMemo(() => {
     const exp = (expensesDailyInput || []).reduce((a, b) => a + (parseFloat(b) || 0), 0);
@@ -254,9 +255,33 @@ const FinancialCalculatorScreen = ({ navigation }) => {
                   </TouchableOpacity>
                 ))}
               </View>
+
+              {companyData?.businessType === 'manufacturing' && (
+                <View style={styles.categoryRow}>
+                  <TouchableOpacity
+                    style={[styles.categoryTab, activeCategory === 'expense' && styles.categoryTabActive]}
+                    onPress={() => setActiveCategory('expense')}
+                  >
+                    <Ionicons name="receipt-outline" size={14} color={activeCategory === 'expense' ? '#fff' : Colors.textSecondary} />
+                    <Text style={[styles.categoryTabText, activeCategory === 'expense' && { color: '#fff' }]}>Operating</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.categoryTab, activeCategory === 'production' && styles.categoryTabActive]}
+                    onPress={() => setActiveCategory('production')}
+                  >
+                    <Ionicons name="construct-outline" size={14} color={activeCategory === 'production' ? '#fff' : Colors.textSecondary} />
+                    <Text style={[styles.categoryTabText, activeCategory === 'production' && { color: '#fff' }]}>Production</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+
               <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 10 }}>
                 <Ionicons name="information-circle-outline" size={16} color={Colors.secondary} />
-                <Text style={styles.infoText}>Revenue is automatically tracked from generated receipts.</Text>
+                <Text style={styles.infoText}>
+                  {activeCategory === 'production'
+                    ? 'Enter costs directly related to manufacturing on each day.'
+                    : 'Revenue is automatically tracked from generated receipts.'}
+                </Text>
               </View>
             </Section>
 
@@ -476,6 +501,21 @@ const styles = StyleSheet.create({
   monthChipActive: { backgroundColor: Colors.primary },
   monthChipText: { fontSize: 12, color: Colors.textSecondary, fontWeight: '600' },
   infoText: { fontSize: 11, color: Colors.textSecondary, marginLeft: 6, fontStyle: 'italic' },
+  categoryRow: { flexDirection: 'row', gap: 10, marginTop: 16 },
+  categoryTab: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    borderRadius: 10,
+    backgroundColor: '#F1F5F9',
+    gap: 8,
+    borderWidth: 1,
+    borderColor: '#E2E8F0'
+  },
+  categoryTabActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
+  categoryTabText: { fontSize: 12, fontWeight: '700', color: Colors.textSecondary },
 
   dailyGridHeader: { flexDirection: 'row', marginBottom: 10, paddingHorizontal: 4 },
   dailyHeaderCell: { fontSize: 11, fontWeight: '700', color: Colors.textSecondary, textTransform: 'uppercase' },

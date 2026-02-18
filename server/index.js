@@ -1684,6 +1684,64 @@ app.get('/api/finance/summary', async (req, res) => {
   }
 });
 
+// Balance Sheet - Wealth Statement for Manufacturing
+app.get('/api/finance/balance-sheet', async (req, res) => {
+  try {
+    const { companyId } = req.query;
+    if (!companyId) return res.status(400).json({ success: false, message: 'Missing companyId' });
+
+    // 1. Inventory Assets (Stock Value)
+    const items = await StockItem.find({ companyId }).lean();
+    const inventoryValue = items.reduce((sum, item) => sum + (Number(item.quantity || 0) * Number(item.costPrice || 0)), 0);
+
+    // 2. Accounts Receivable (Unpaid Invoices)
+    const unpaidInvoices = await Invoice.find({ companyId, status: 'unpaid' }).lean();
+    const accountsReceivable = unpaidInvoices.reduce((sum, inv) => sum + Number(inv.grandTotal || 0), 0);
+
+    // 3. Cash Estimation (All Receipts - All Expenses)
+    const receipts = await Receipt.find({ companyId }).lean();
+    const totalCashIn = receipts.reduce((sum, r) => sum + Number(r.amountPaid || 0), 0);
+
+    const expenses = await Expense.find({ companyId }).lean();
+    const totalCashOut = expenses.reduce((sum, e) => sum + Number(e.amount || 0), 0);
+
+    const cashAtBank = totalCashIn - totalCashOut;
+
+    // 4. Resolve Company Currency
+    let company;
+    try { company = await Company.findOne({ companyId }).lean(); } catch (_) { }
+    if (!company) company = findCompanyFile(companyId);
+
+    const totalAssets = inventoryValue + accountsReceivable + cashAtBank;
+
+    return res.json({
+      success: true,
+      balanceSheet: {
+        assets: {
+          inventoryValue,
+          accountsReceivable,
+          cashAtBank,
+          totalAssets
+        },
+        liabilities: {
+          shortTermDebt: 0, // Placeholder
+          totalLiabilities: 0
+        },
+        equity: {
+          netWorth: totalAssets // Assets - Liabilities
+        },
+        currency: {
+          symbol: company?.currencySymbol || '$',
+          code: company?.currencyCode || 'UNK'
+        }
+      }
+    });
+  } catch (err) {
+    console.error('Balance Sheet error:', err);
+    return res.status(500).json({ success: false, message: 'Server error computing balance sheet' });
+  }
+});
+
 // Daily revenue totals from receipts for a given month (31 days)
 app.get('/api/finance/revenue-daily', async (req, res) => {
   try {
@@ -1738,7 +1796,8 @@ app.get('/api/finance/expenses-daily', async (req, res) => {
     const sym = company?.currencySymbol || '$';
     const code = company?.currencyCode || mapSymbolToCode(sym) || 'UNK';
 
-    const expenses = await Expense.find({ companyId, month: m, category: 'expense' }).lean();
+    const cat = String(req.query.category || 'expense');
+    const expenses = await Expense.find({ companyId, month: m, category: cat }).lean();
     const days = Array.from({ length: 31 }, () => 0);
     expenses.forEach((e) => {
       let dayIdx = null;
@@ -1752,7 +1811,7 @@ app.get('/api/finance/expenses-daily', async (req, res) => {
       }
     });
     const total = days.reduce((a, b) => a + Number(b || 0), 0);
-    return res.json({ success: true, month: m, currencyCode: code, symbol: sym, days, total });
+    return res.json({ success: true, month: m, currencyCode: code, symbol: sym, days, total, category: cat });
   } catch (err) {
     console.error('Expenses daily error:', err);
     return res.status(500).json({ success: false, message: 'Server error computing daily expenses' });
@@ -1762,11 +1821,12 @@ app.get('/api/finance/expenses-daily', async (req, res) => {
 // Upsert a daily expense value for a given company and month
 app.post('/api/finance/expenses-daily', async (req, res) => {
   try {
-    const { companyId, month, day, amount } = req.body || {};
+    const { companyId, month, day, amount, category } = req.body || {};
     if (!companyId) return res.status(400).json({ success: false, message: 'Missing companyId' });
     const m = String(month || dayjs().format('YYYY-MM'));
     const d = Number(day);
     const amt = Number(amount);
+    const cat = String(category || 'expense');
     if (!d || d < 1 || d > 31) return res.status(400).json({ success: false, message: 'Invalid day' });
     if (amt == null || isNaN(amt) || amt < 0) return res.status(400).json({ success: false, message: 'Invalid amount' });
 
@@ -1777,10 +1837,10 @@ app.post('/api/finance/expenses-daily', async (req, res) => {
     const sym = company?.currencySymbol || '$';
     const code = company?.currencyCode || mapSymbolToCode(sym) || 'UNK';
 
-    // Remove existing entry for this day to avoid duplication
-    await Expense.deleteMany({ companyId, month: m, category: 'expense', day: d });
+    // Remove existing entry for this day and category to avoid duplication
+    await Expense.deleteMany({ companyId, month: m, category: cat, day: d });
     // Create new entry
-    const created = await Expense.create({ companyId, month: m, category: 'expense', amount: amt, currencySymbol: sym, currencyCode: code, description: `Daily Expense D${d}`, day: d });
+    const created = await Expense.create({ companyId, month: m, category: cat, amount: amt, currencySymbol: sym, currencyCode: code, description: `Daily ${cat === 'production' ? 'Production Cost' : 'Expense'} D${d}`, day: d });
     return res.json({ success: true, expense: created });
   } catch (err) {
     console.error('Expenses daily upsert error:', err);
