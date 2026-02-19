@@ -5,6 +5,9 @@ const path = require('path');
 const fs = require('fs');
 const PDFDocument = require('pdfkit');
 const dayjs = require('dayjs');
+const axios = require('axios');
+const UC_PUBLIC = process.env.UPLOADCARE_PUBLIC_KEY || '608f1703ba6637c4fc73';
+const UC_SECRET = process.env.UPLOADCARE_SECRET_KEY || 'c5c3bdd59e4aefdbc12f';
 let sharp = null; // lazy-loaded to avoid boot issues if optional dep missing
 
 const app = express();
@@ -163,6 +166,10 @@ function parseDataUrl(dataUrl) {
 
 async function optimizeImageDataUrl(dataUrl, kind = 'logo') {
   try {
+    // Priority: Uploadcare
+    const cdnUrl = await uploadToUploadcare(dataUrl);
+    if (cdnUrl) return cdnUrl;
+
     const lib = await ensureSharp();
     const parsed = parseDataUrl(dataUrl);
     if (!parsed) return dataUrl;
@@ -187,6 +194,40 @@ async function optimizeImageDataUrl(dataUrl, kind = 'logo') {
   } catch (e) {
     console.warn('Image optimization/save failed:', e.message);
     return dataUrl;
+  }
+}
+
+async function uploadToUploadcare(dataUrl) {
+  try {
+    const params = new URLSearchParams();
+    params.append('UPLOADCARE_PUB_KEY', UC_PUBLIC);
+    params.append('UPLOADCARE_STORE', '1');
+    params.append('file', dataUrl);
+
+    const res = await axios.post('https://upload.uploadcare.com/base/', params);
+    if (res.data && res.data.file) {
+      return `https://ucarecdn.com/${res.data.file}/`;
+    }
+  } catch (err) {
+    console.warn('Uploadcare upload failed:', err.response?.data || err.message);
+  }
+  return null;
+}
+
+async function deleteFromUploadcare(url) {
+  if (!url || typeof url !== 'string' || !url.includes('ucarecdn.com')) return;
+  try {
+    const fileId = url.split('ucarecdn.com/')[1].split('/')[0];
+    if (!fileId) return;
+    console.log('Deleting Uploadcare file:', fileId);
+    await axios.delete(`https://api.uploadcare.com/files/${fileId}/`, {
+      headers: {
+        'Authorization': `Uploadcare.Simple ${UC_PUBLIC}:${UC_SECRET}`,
+        'Accept': 'application/vnd.uploadcare-v0.5+json'
+      }
+    });
+  } catch (err) {
+    console.warn('Uploadcare delete failed:', err.response?.data || err.message);
   }
 }
 
@@ -497,10 +538,35 @@ function dataUrlToBuffer(dataUrl) {
   }
 }
 
+// New helper to ensure image sources are buffers (handles URLs, Local Paths, and Data URLs)
+async function getImageBuffer(val) {
+  const source = resolveImageSource(val);
+  if (!source) return null;
+  if (Buffer.isBuffer(source)) return source;
+  if (typeof source === 'string') {
+    if (source.startsWith('http')) {
+      try {
+        const resp = await axios.get(source, { responseType: 'arraybuffer', timeout: 5000 });
+        return Buffer.from(resp.data);
+      } catch (e) {
+        console.warn('Buffer fetch fail:', source, e.message);
+        return null;
+      }
+    }
+    try {
+      if (fs.existsSync(source)) return fs.readFileSync(source);
+    } catch (_) { }
+  }
+  return null;
+}
+
 function resolveImageSource(val) {
   if (!val || typeof val !== 'string') return null;
   // Handle Data URLs
   if (val.startsWith('data:')) return dataUrlToBuffer(val);
+
+  // Handle external URLs (like Uploadcare)
+  if (val.startsWith('http') && !val.includes('/files/')) return val;
 
   // Handle local /files/ paths or full URLs pointing to our /files/ endpoint
   let fileName = '';
@@ -511,6 +577,13 @@ function resolveImageSource(val) {
   }
 
   if (fileName) {
+    // If it's a branding image, find it in BRANDING_DIR
+    if (fileName.startsWith('branding/')) {
+      const bFile = fileName.replace('branding/', '');
+      const bPath = path.join(BRANDING_DIR, bFile);
+      if (fs.existsSync(bPath)) return bPath;
+    }
+
     const full = path.join(GENERATED_DIR, fileName);
     if (fs.existsSync(full)) return full;
   }
@@ -738,16 +811,30 @@ app.post('/api/update-company', async (req, res) => {
 
     // Handle Images - specific logic for explicit changes
     if (updates.logo && typeof updates.logo === 'string' && updates.logo.startsWith('data:')) {
+      const oldUrl = currentData.logo;
       currentData.logo = await optimizeImageDataUrl(updates.logo, 'logo');
+      if (oldUrl && oldUrl !== currentData.logo) deleteFromUploadcare(oldUrl);
     } else if (updates.logo === null) {
+      if (currentData.logo) deleteFromUploadcare(currentData.logo);
       currentData.logo = null;
+    } else if (updates.logo && typeof updates.logo === 'string' && updates.logo.startsWith('http') && updates.logo !== currentData.logo) {
+      // If client sends a direct URL (like from frontend Uploadcare), update it and delete old
+      const oldUrl = currentData.logo;
+      currentData.logo = updates.logo;
+      if (oldUrl && oldUrl !== currentData.logo) deleteFromUploadcare(oldUrl);
     }
-    // If updates.logo is a URL or unchanged string, we leave currentData.logo as is
 
     if (updates.signature && typeof updates.signature === 'string' && updates.signature.startsWith('data:')) {
+      const oldUrl = currentData.signature;
       currentData.signature = await optimizeImageDataUrl(updates.signature, 'signature');
+      if (oldUrl && oldUrl !== currentData.signature) deleteFromUploadcare(oldUrl);
     } else if (updates.signature === null) {
+      if (currentData.signature) deleteFromUploadcare(currentData.signature);
       currentData.signature = null;
+    } else if (updates.signature && typeof updates.signature === 'string' && updates.signature.startsWith('http') && updates.signature !== currentData.signature) {
+      const oldUrl = currentData.signature;
+      currentData.signature = updates.signature;
+      if (oldUrl && oldUrl !== currentData.signature) deleteFromUploadcare(oldUrl);
     }
 
     // Ensure we don't try to update immutable fields
@@ -783,7 +870,7 @@ app.post('/api/update-company', async (req, res) => {
 // Helper: draw invoice by template style
 // Helper: draw invoice by template style (pdfkit)
 // Helper: draw invoice by template style (pdfkit)
-function drawInvoiceByTemplate(doc, company, invNo, invoiceDate, dueDate, customer, items) {
+async function drawInvoiceByTemplate(doc, company, invNo, invoiceDate, dueDate, customer, items) {
   const template = (company.invoiceTemplate || 'classic').toLowerCase();
   const theme = {
     classic: { primary: '#1e3050', accent: '#334155', tableHeader: '#f8fafc' },
@@ -808,9 +895,9 @@ function drawInvoiceByTemplate(doc, company, invNo, invoiceDate, dueDate, custom
 
   // Logo
   try {
-    const logoSource = resolveImageSource(company.logo);
-    if (logoSource) {
-      doc.image(logoSource, pageLeft, y, { width: 80 });
+    const logoBuffer = await getImageBuffer(company.logo);
+    if (logoBuffer) {
+      doc.image(logoBuffer, pageLeft, y, { width: 80 });
     } else {
       doc.fontSize(20).fillColor(theme.primary).text((company.name || company.companyName || 'C').charAt(0), pageLeft, y);
     }
@@ -881,8 +968,8 @@ function drawInvoiceByTemplate(doc, company, invNo, invoiceDate, dueDate, custom
   // Signature
   y = Math.max(doc.y + 50, doc.page.height - 180);
   try {
-    const sigSrc = resolveImageSource(company.signature);
-    if (sigSrc) doc.image(sigSrc, pageLeft + pageWidth - 140, y, { width: 120 });
+    const sigBuffer = await getImageBuffer(company.signature);
+    if (sigBuffer) doc.image(sigBuffer, pageLeft + pageWidth - 140, y, { width: 120 });
   } catch (_) { }
   doc.moveTo(pageLeft + pageWidth - 140, y + 45).lineTo(pageLeft + pageWidth, y + 45).stroke('#1e293b');
   doc.fontSize(9).fillColor('#64748b').text('Authorized Signature', pageLeft + pageWidth - 140, y + 50, { align: 'center', width: 140 });
@@ -894,7 +981,7 @@ function drawInvoiceByTemplate(doc, company, invNo, invoiceDate, dueDate, custom
 }
 
 // Helper: draw receipt by template style
-function drawReceiptByTemplate(doc, company, rctNo, receiptDate, invoiceNumber, customer, amountPaid, items = []) {
+async function drawReceiptByTemplate(doc, company, rctNo, receiptDate, invoiceNumber, customer, amountPaid, items = []) {
   const template = (company.receiptTemplate || company.invoiceTemplate || 'modern').toLowerCase();
   const theme = {
     classic: { primary: '#10b981', secondary: '#059669', tableHeader: '#f8fafc' },
@@ -925,8 +1012,8 @@ function drawReceiptByTemplate(doc, company, rctNo, receiptDate, invoiceNumber, 
     const contentWidth = doc.page.width - 100 - doc.page.margins.right;
 
     try {
-      const sigSrc = resolveImageSource(company.logo);
-      if (sigSrc) doc.image(sigSrc, 15, 50, { width: 50 });
+      const sigBuffer = await getImageBuffer(company.logo);
+      if (sigBuffer) doc.image(sigBuffer, 15, 50, { width: 50 });
     } catch (_) { }
 
     doc.fillColor(theme.primary).fontSize(28).text('RECEIPT', contentLeft, y, { align: 'right', width: contentWidth });
@@ -956,8 +1043,8 @@ function drawReceiptByTemplate(doc, company, rctNo, receiptDate, invoiceNumber, 
     // --- MINIMAL TEMPLATE (Clean) ---
     let y = 50;
     try {
-      const logoSrc = resolveImageSource(company.logo);
-      if (logoSrc) doc.image(logoSrc, pageLeft, y, { width: 60 });
+      const logoBuffer = await getImageBuffer(company.logo);
+      if (logoBuffer) doc.image(logoBuffer, pageLeft, y, { width: 60 });
     } catch (_) { }
     doc.fontSize(24).fillColor('#0f172a').text('Receipt', pageLeft, y + 10, { align: 'right', width: pageWidth });
     doc.fontSize(10).fillColor('#94a3b8').text(`#${rctNo} • ${dayjs(receiptDate).format('MMM DD, YYYY')}`, pageLeft, y + 40, { align: 'right', width: pageWidth });
@@ -984,8 +1071,8 @@ function drawReceiptByTemplate(doc, company, rctNo, receiptDate, invoiceNumber, 
     doc.rect(0, 0, doc.page.width, 120).fill(theme.primary);
     let y = 40;
     try {
-      const logoSrc = resolveImageSource(company.logo);
-      if (logoSrc) doc.image(logoSrc, pageLeft, y, { width: 80 });
+      const logoBuffer = await getImageBuffer(company.logo);
+      if (logoBuffer) doc.image(logoBuffer, pageLeft, y, { width: 80 });
     } catch (_) { }
     doc.fillColor('#fff').fontSize(30).text('Receipt', pageLeft, y, { align: 'right', width: pageWidth });
     doc.fontSize(10).opacity(0.8).text(`#${rctNo} | ${dayjs(receiptDate).format('YYYY-MM-DD')}`, pageLeft, y + 40, { align: 'right', width: pageWidth });
@@ -1011,9 +1098,9 @@ function drawReceiptByTemplate(doc, company, rctNo, receiptDate, invoiceNumber, 
     doc.rect(0, 0, doc.page.width, 15).fill(theme.primary);
     let y = 40;
     try {
-      const logoSrc = resolveImageSource(company.logo);
-      if (logoSrc) {
-        doc.image(logoSrc, pageLeft, y, { width: 50 });
+      const logoBuffer = await getImageBuffer(company.logo);
+      if (logoBuffer) {
+        doc.image(logoBuffer, pageLeft, y, { width: 50 });
         doc.fillColor(theme.primary).fontSize(20).text('OFFICIAL RECEIPT', pageLeft + 60, y + 10);
       } else {
         doc.fillColor(theme.primary).fontSize(20).text('OFFICIAL RECEIPT', pageLeft, y);
@@ -1061,8 +1148,8 @@ function drawReceiptByTemplate(doc, company, rctNo, receiptDate, invoiceNumber, 
     // Signature
     y = doc.y + 20;
     try {
-      const sigSrc = resolveImageSource(company.signature);
-      if (sigSrc) doc.image(sigSrc, pageLeft, y, { width: 120 });
+      const sigBuffer = await getImageBuffer(company.signature);
+      if (sigBuffer) doc.image(sigBuffer, pageLeft, y, { width: 120 });
     } catch (_) { }
     doc.moveTo(pageLeft, y + 50).lineTo(pageLeft + 180, y + 50).stroke('#1e293b');
     doc.fontSize(10).fillColor('#64748b').text('Authorized Receiver Signature', pageLeft, y + 55);
@@ -1187,7 +1274,7 @@ app.post('/api/invoice/create', async (req, res) => {
       }
     }
     // Template-aware rendering
-    drawInvoiceByTemplate(doc, companyForRender, invNo, invoiceDate, dueDate, customer, items);
+    await drawInvoiceByTemplate(doc, companyForRender, invNo, invoiceDate, dueDate, customer, items);
 
     doc.end();
 
@@ -1283,7 +1370,7 @@ app.post('/api/receipt/create', async (req, res) => {
     doc.pipe(stream);
 
     const companyForReceipt = { ...company, currencySymbol: derivedCurrency };
-    drawReceiptByTemplate(doc, companyForReceipt, rctNo, receiptDate, invoiceNumber, derivedCustomer, derivedAmount, derivedItems);
+    await drawReceiptByTemplate(doc, companyForReceipt, rctNo, receiptDate, invoiceNumber, derivedCustomer, derivedAmount, derivedItems);
 
     doc.end();
 

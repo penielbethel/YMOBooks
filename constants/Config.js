@@ -25,4 +25,5 @@ if (Platform.OS !== 'web' && base.includes('localhost')) {
 
 export const Config = {
   API_BASE_URL: base,
+  UPLOADCARE_PUBLIC_KEY: '608f1703ba6637c4fc73',
 };

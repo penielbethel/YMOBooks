@@ -24,6 +24,7 @@ import { Colors } from '../constants/Colors';
 import { Fonts } from '../constants/Fonts';
 import { Spacing } from '../constants/Spacing';
 import { registerCompany, updateCompany, fetchCompany } from '../utils/api';
+import { uploadToUploadcare } from '../utils/uploadcare';
 
 const CompanyRegistrationScreen = ({ navigation, route }) => {
   const mode = route?.params?.mode === 'edit' ? 'edit' : 'register';
@@ -173,14 +174,16 @@ const CompanyRegistrationScreen = ({ navigation, route }) => {
 
       if (!result.canceled) {
         const uri = result.assets[0].uri;
+        setLoading(true);
         if (type === 'logo') {
           try {
             const dataUrl = await compressToDataUrl(uri, 'logo');
-            if (dataUrl) {
-              await AsyncStorage.setItem('companyLogoCache', dataUrl);
-              updateFormData(type, dataUrl);
+            const cdnUrl = await uploadToUploadcare(dataUrl || uri);
+            if (cdnUrl) {
+              await AsyncStorage.setItem('companyLogoCache', cdnUrl);
+              updateFormData(type, cdnUrl);
             } else {
-              updateFormData(type, uri);
+              updateFormData(type, dataUrl || uri);
             }
           } catch {
             updateFormData(type, uri);
@@ -188,13 +191,15 @@ const CompanyRegistrationScreen = ({ navigation, route }) => {
         } else if (type === 'signature') {
           try {
             const dataUrl = await compressToDataUrl(uri, 'signature');
-            updateFormData(type, dataUrl || uri);
+            const cdnUrl = await uploadToUploadcare(dataUrl || uri);
+            updateFormData(type, cdnUrl || dataUrl || uri);
           } catch {
             updateFormData(type, uri);
           }
         } else {
           updateFormData(type, uri);
         }
+        setLoading(false);
       }
     } catch (error) {
       Alert.alert('Error', 'Failed to pick image');
@@ -264,9 +269,9 @@ const CompanyRegistrationScreen = ({ navigation, route }) => {
         address: formData.address,
         email: formData.email,
         phone: formData.phoneNumber,
-        // Always send compact base64 for smaller payloads
-        logo: formData.logo === null ? null : await toCompressedData(formData.logo, 'logo'),
-        signature: formData.signature === null ? null : await toCompressedData(formData.signature, 'signature'),
+        // Send existing URLs or upload base64 to Uploadcare via server if still base64
+        logo: formData.logo,
+        signature: formData.signature,
         // Send both modern and legacy keys so server can map reliably
         bankAccountNumber: formData.bankAccountNumber,
         bankAccountName: formData.bankAccountName,
@@ -586,10 +591,13 @@ const CompanyRegistrationScreen = ({ navigation, route }) => {
             <View style={{ flex: 1, backgroundColor: Colors.white, borderWidth: 1, borderColor: Colors.border, borderRadius: 8 }}>
               <SignatureCanvas
                 onOK={async (sig) => {
+                  setSignatureModalVisible(false);
+                  setLoading(true);
                   // sig is a base64 data URL; recompress for smaller payload
                   const compact = await compressToDataUrl(sig, 'signature');
-                  updateFormData('signature', compact || sig);
-                  setSignatureModalVisible(false);
+                  const cdnUrl = await uploadToUploadcare(compact || sig);
+                  updateFormData('signature', cdnUrl || compact || sig);
+                  setLoading(false);
                   Alert.alert('Signature Saved', 'Your electronic signature has been captured.');
                 }}
                 onEmpty={() => {
