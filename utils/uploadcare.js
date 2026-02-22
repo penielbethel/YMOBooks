@@ -1,5 +1,6 @@
 import { Config } from '../constants/Config';
 import * as FileSystem from 'expo-file-system';
+import * as FileSystemLegacy from 'expo-file-system/legacy';
 
 /**
  * Uploads a file (URI or Base64) to Uploadcare and returns the CDN URL.
@@ -25,7 +26,7 @@ export async function uploadToUploadcare(fileSource) {
             const extension = fileSource.split(';')[0].split('/')[1] || 'png';
             tempFile = `${FileSystem.cacheDirectory}uploadcare_temp_${Date.now()}.${extension}`;
             await FileSystem.writeAsStringAsync(tempFile, base64Data, {
-                encoding: FileSystem.EncodingType.Base64,
+                encoding: 'base64',
             });
             uploadUri = tempFile;
         }
@@ -65,7 +66,7 @@ export async function uploadToUploadcare(fileSource) {
     } finally {
         if (tempFile) {
             try {
-                await FileSystem.deleteAsync(tempFile, { idempotent: true });
+                await FileSystemLegacy.deleteAsync(tempFile, { idempotent: true });
             } catch (e) {
                 console.warn('Failed to delete temp file:', e.message);
             }

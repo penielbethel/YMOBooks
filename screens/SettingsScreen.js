@@ -128,7 +128,7 @@ const SettingsScreen = ({ navigation }) => {
         const { base64 } = parseDataUrl(input);
         if (!base64) return null;
         const path = `${FileSystem.cacheDirectory || ''}img-${kind}-${Date.now()}.png`;
-        await FileSystem.writeAsStringAsync(path, base64, { encoding: FileSystem.EncodingType.Base64 });
+        await FileSystem.writeAsStringAsync(path, base64, { encoding: 'base64' });
         return path;
       } catch {
         return null;
