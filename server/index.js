@@ -2405,7 +2405,6 @@ app.get('/api/admin/stats', async (req, res) => {
 });
 
 // --- Payment Gateway (Flutterwave) ---
-const axios = require('axios');
 // User provided Live credentials
 const FLW_PUBLIC_KEY = process.env.FLW_PUBLIC_KEY || 'FLWPUBK-295adda62f8a6f453f78cbab2e50d3a1-X';
 const FLW_SECRET_KEY = process.env.FLW_SECRET_KEY || 'FLWSECK-0b3e64a8eb324bfd9f9ff14c86555c7d-19c25961147vt-X';
