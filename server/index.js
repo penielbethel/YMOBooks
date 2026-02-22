@@ -8,6 +8,7 @@ const dayjs = require('dayjs');
 const axios = require('axios');
 const UC_PUBLIC = process.env.UPLOADCARE_PUBLIC_KEY || '608f1703ba6637c4fc73';
 const UC_SECRET = process.env.UPLOADCARE_SECRET_KEY || 'c5c3bdd59e4aefdbc12f';
+let DB_CONNECTED = false;
 let sharp = null; // lazy-loaded to avoid boot issues if optional dep missing
 
 const app = express();
@@ -199,31 +200,29 @@ async function optimizeImageDataUrl(dataUrl, kind = 'logo') {
 
 async function uploadToUploadcare(dataUrlOrPath) {
   try {
-    // If it's a path to a file we just saved, we should send that. 
-    // But dataUrl is what's usually passed here.
-
+    const FormData = require('form-data');
     const formData = new FormData();
     formData.append('UPLOADCARE_PUB_KEY', UC_PUBLIC);
     formData.append('UPLOADCARE_STORE', '1');
 
-    if (dataUrlOrPath.startsWith('data:')) {
+    if (typeof dataUrlOrPath === 'string' && dataUrlOrPath.startsWith('data:')) {
       const parsed = parseDataUrl(dataUrlOrPath);
       if (parsed) {
-        const blob = new Blob([parsed.buffer], { type: parsed.mime });
-        formData.append('file', blob, 'image.png');
+        formData.append('file', parsed.buffer, {
+          filename: 'image.png',
+          contentType: parsed.mime
+        });
       } else {
         formData.append('file', dataUrlOrPath);
       }
-    } else if (fs.existsSync(dataUrlOrPath)) {
-      const buffer = fs.readFileSync(dataUrlOrPath);
-      const blob = new Blob([buffer], { type: 'image/png' });
-      formData.append('file', blob, path.basename(dataUrlOrPath));
+    } else if (typeof dataUrlOrPath === 'string' && fs.existsSync(dataUrlOrPath)) {
+      formData.append('file', fs.createReadStream(dataUrlOrPath));
     } else {
       formData.append('file', dataUrlOrPath);
     }
 
     const res = await axios.post('https://upload.uploadcare.com/base/', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' }
+      headers: formData.getHeaders()
     });
 
     if (res.data && res.data.file) {
@@ -295,7 +294,20 @@ connectToDatabase().catch(e => console.warn('Initial warm-up connection fail:', 
 // Listeners
 mongoose.connection.on('connected', () => { DB_CONNECTED = true; });
 mongoose.connection.on('disconnected', () => { DB_CONNECTED = false; });
-console.warn('MONGO_URI not set. Running with file-based fallback storage.');
+if (!MONGO_URI) {
+  console.warn('MONGO_URI not set. Running with file-based fallback storage.');
+}
+
+app.get('/api/health', (req, res) => {
+  res.json({
+    status: 'ok',
+    uptime: process.uptime(),
+    db: DB_CONNECTED ? 'connected' : 'disconnected',
+    uploadcare: !!(UC_PUBLIC && UC_SECRET),
+    vercel: !!process.env.VERCEL,
+    node: process.version
+  });
+});
 
 // Models
 // Currency catalog (for clarity and consistency)
@@ -475,7 +487,7 @@ async function generateCompanyId(name, businessType) {
   if (businessType === 'printing_press') typeSuffix = 'PP';
   else if (businessType === 'manufacturing') typeSuffix = 'MC';
 
-  const prefix = `${cleanNamePrefix}/${typeSuffix}`;
+  const prefix = `${cleanNamePrefix}-${typeSuffix}`;
 
   let candidate;
   let existsDb = null;

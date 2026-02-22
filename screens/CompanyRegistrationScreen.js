@@ -378,7 +378,8 @@ const CompanyRegistrationScreen = ({ navigation, route }) => {
         }
       }
     } catch (error) {
-      Alert.alert('Error', 'Failed to save company data');
+      console.error('[CompanyRegistration] Submission failed:', error);
+      Alert.alert('Error', `Failed to save company data: ${error.message}`);
     } finally {
       if (progressTimerRef.current) {
         clearInterval(progressTimerRef.current);
