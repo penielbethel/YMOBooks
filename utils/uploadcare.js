@@ -33,10 +33,16 @@ export async function uploadToUploadcare(fileSource) {
         const response = await fetch('https://upload.uploadcare.com/base/', {
             method: 'POST',
             body: formData,
-            // Note: Do not set Content-Type header when using FormData with fetch
         });
 
-        const data = await response.json();
+        const responseText = await response.text();
+        let data;
+        try {
+            data = JSON.parse(responseText);
+        } catch (e) {
+            console.error('Uploadcare non-JSON response:', responseText);
+            throw new Error(`Invalid JSON response from Uploadcare: ${responseText.substring(0, 100)}`);
+        }
 
         if (data && data.file) {
             const fileId = data.file;
@@ -44,7 +50,7 @@ export async function uploadToUploadcare(fileSource) {
         }
         return null;
     } catch (error) {
-        console.error('Uploadcare upload error:', error.message);
+        console.error('Uploadcare upload error detalhes:', error.message);
         return null;
     }
 }
