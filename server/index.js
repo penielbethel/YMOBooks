@@ -197,14 +197,35 @@ async function optimizeImageDataUrl(dataUrl, kind = 'logo') {
   }
 }
 
-async function uploadToUploadcare(dataUrl) {
+async function uploadToUploadcare(dataUrlOrPath) {
   try {
-    const params = new URLSearchParams();
-    params.append('UPLOADCARE_PUB_KEY', UC_PUBLIC);
-    params.append('UPLOADCARE_STORE', '1');
-    params.append('file', dataUrl);
+    // If it's a path to a file we just saved, we should send that. 
+    // But dataUrl is what's usually passed here.
 
-    const res = await axios.post('https://upload.uploadcare.com/base/', params);
+    const formData = new FormData();
+    formData.append('UPLOADCARE_PUB_KEY', UC_PUBLIC);
+    formData.append('UPLOADCARE_STORE', '1');
+
+    if (dataUrlOrPath.startsWith('data:')) {
+      const parsed = parseDataUrl(dataUrlOrPath);
+      if (parsed) {
+        const blob = new Blob([parsed.buffer], { type: parsed.mime });
+        formData.append('file', blob, 'image.png');
+      } else {
+        formData.append('file', dataUrlOrPath);
+      }
+    } else if (fs.existsSync(dataUrlOrPath)) {
+      const buffer = fs.readFileSync(dataUrlOrPath);
+      const blob = new Blob([buffer], { type: 'image/png' });
+      formData.append('file', blob, path.basename(dataUrlOrPath));
+    } else {
+      formData.append('file', dataUrlOrPath);
+    }
+
+    const res = await axios.post('https://upload.uploadcare.com/base/', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    });
+
     if (res.data && res.data.file) {
       return `https://ucarecdn.com/${res.data.file}/`;
     }
