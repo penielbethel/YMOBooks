@@ -4,12 +4,12 @@
     "slug": "ymobooks",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./logo.png",
+    "icon": "./assets/logo.png",
     "scheme": "ymobooks",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "splash": {
-      "image": "./logo.png",
+      "image": "./assets/logo.png",
       "resizeMode": "contain",
       "backgroundColor": "#CC5500"
     },
@@ -20,7 +20,7 @@
     },
   "android": {
     "adaptiveIcon": {
-      "foregroundImage": "./logo.png",
+      "foregroundImage": "./assets/logo.png",
       "backgroundColor": "#CC5500"
     },
     "edgeToEdgeEnabled": true,
@@ -28,7 +28,7 @@
     "package": "com.penielbethel.ymobooks"
   },
     "web": {
-      "favicon": "./logo.png"
+      "favicon": "./assets/logo.png"
     },
     "extra": {
       "apiBaseUrl": "https://ymobooks.vercel.app",
