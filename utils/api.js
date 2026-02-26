@@ -9,10 +9,16 @@ export function resolveAssetUri(uri) {
   if (uri.startsWith('data:') || uri.startsWith('file://')) return uri;
   if (uri.startsWith('/')) return `${Config.API_BASE_URL}${uri}`;
 
-  // Retrofit old Uploadcare URLs to enforce compression and PNG format
-  if (uri.includes('ucarecdn.com') && !uri.includes('/-/preview/')) {
-    let newUri = uri.endsWith('/') ? uri : `${uri}/`;
-    return `${newUri}-/preview/600x600/-/quality/smart/-/format/png/`;
+  // Retrofit old Uploadcare URLs to enforce basic preview/compression
+  if (uri.includes('ucarecdn.com')) {
+    if (uri.includes('/-/')) return uri; // Already has commands
+    
+    // Extract the UUID (36 chars)
+    const match = uri.match(/ucarecdn\.com\/([a-f0-9-]{36})/);
+    if (match && match[1]) {
+      return `https://ucarecdn.com/${match[1]}/-/preview/400x400/`;
+    }
+    return uri;
   }
   return uri;
 }

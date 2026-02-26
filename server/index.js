@@ -226,8 +226,8 @@ async function uploadToUploadcare(dataUrlOrPath) {
     });
 
     if (res.data && res.data.file) {
-      // Use smart quality and PNG format for maximum compatibility and speed
-      return `https://ucarecdn.com/${res.data.file}/-/preview/600x600/-/quality/smart/-/format/png/`;
+      // Use standard preview command for better compatibility
+      return `https://ucarecdn.com/${res.data.file}/-/preview/400x400/`;
     }
   } catch (err) {
     console.warn('Uploadcare upload failed:', err.response?.data || err.message);
@@ -235,16 +235,23 @@ async function uploadToUploadcare(dataUrlOrPath) {
   return null;
 }
 
-async function deleteFromUploadcare(url) {
-  if (!url || typeof url !== 'string' || !url.includes('ucarecdn.com')) return;
+function getUploadcareUuid(url) {
+  if (!url || typeof url !== 'string' || !url.includes('ucarecdn.com')) return null;
   try {
-    const fileId = url.split('ucarecdn.com/')[1].split('/')[0];
-    if (!fileId) return;
+    const parts = url.split('ucarecdn.com/')[1].split('/');
+    return parts[0] || null;
+  } catch (_) { return null; }
+}
+
+async function deleteFromUploadcare(url) {
+  const fileId = getUploadcareUuid(url);
+  if (!fileId) return;
+  try {
     console.log('Deleting Uploadcare file:', fileId);
     await axios.delete(`https://api.uploadcare.com/files/${fileId}/`, {
       headers: {
         'Authorization': `Uploadcare.Simple ${UC_PUBLIC}:${UC_SECRET}`,
-        'Accept': 'application/vnd.uploadcare-v0.5+json'
+        'Accept': 'application/vnd.uploadcare-v0.7+json'
       }
     });
   } catch (err) {
@@ -852,33 +859,33 @@ app.post('/api/update-company', async (req, res) => {
     if (updates.bankAccountNumber !== undefined) currentData.accountNumber = (updates.bankAccountNumber || '').trim() || undefined;
     if (updates.bankAccountName !== undefined) currentData.accountName = (updates.bankAccountName || '').trim();
 
-    // Handle Images - specific logic for explicit changes
-    if (updates.logo && typeof updates.logo === 'string' && updates.logo.startsWith('data:')) {
-      const oldUrl = currentData.logo;
-      currentData.logo = await optimizeImageDataUrl(updates.logo, 'logo');
-      if (oldUrl && oldUrl !== currentData.logo) deleteFromUploadcare(oldUrl);
-    } else if (updates.logo === null) {
-      if (currentData.logo) deleteFromUploadcare(currentData.logo);
-      currentData.logo = null;
-    } else if (updates.logo && typeof updates.logo === 'string' && updates.logo.startsWith('http') && updates.logo !== currentData.logo) {
-      // If client sends a direct URL (like from frontend Uploadcare), update it and delete old
-      const oldUrl = currentData.logo;
-      currentData.logo = updates.logo;
-      if (oldUrl && oldUrl !== currentData.logo) deleteFromUploadcare(oldUrl);
-    }
+     // Handle Images - smarter logic to avoid deleting same-uuid files
+    const updateAsset = async (field, newVal) => {
+      const oldVal = currentData[field];
+      const oldUuid = getUploadcareUuid(oldVal);
+      
+      if (newVal === null) {
+        if (oldUuid) deleteFromUploadcare(oldVal);
+        currentData[field] = null;
+      } else if (typeof newVal === 'string') {
+        if (newVal.startsWith('data:')) {
+          const fresh = await optimizeImageDataUrl(newVal, field);
+          currentData[field] = fresh;
+          // Only delete if the new upload returned a different UUID (unlikely for data url but safe)
+          if (oldUuid && getUploadcareUuid(fresh) !== oldUuid) deleteFromUploadcare(oldVal);
+        } else if (newVal.startsWith('http')) {
+          const newUuid = getUploadcareUuid(newVal);
+          currentData[field] = newVal;
+          // CRITICAL: Only delete if the file itself has changed!
+          if (oldUuid && newUuid && oldUuid !== newUuid) {
+            deleteFromUploadcare(oldVal);
+          }
+        }
+      }
+    };
 
-    if (updates.signature && typeof updates.signature === 'string' && updates.signature.startsWith('data:')) {
-      const oldUrl = currentData.signature;
-      currentData.signature = await optimizeImageDataUrl(updates.signature, 'signature');
-      if (oldUrl && oldUrl !== currentData.signature) deleteFromUploadcare(oldUrl);
-    } else if (updates.signature === null) {
-      if (currentData.signature) deleteFromUploadcare(currentData.signature);
-      currentData.signature = null;
-    } else if (updates.signature && typeof updates.signature === 'string' && updates.signature.startsWith('http') && updates.signature !== currentData.signature) {
-      const oldUrl = currentData.signature;
-      currentData.signature = updates.signature;
-      if (oldUrl && oldUrl !== currentData.signature) deleteFromUploadcare(oldUrl);
-    }
+    if (updates.logo !== undefined) await updateAsset('logo', updates.logo);
+    if (updates.signature !== undefined) await updateAsset('signature', updates.signature);
 
     // Ensure we don't try to update immutable fields
     delete currentData._id;
