@@ -24,7 +24,8 @@ export async function uploadToUploadcare(fileSource) {
             // Save base64 to a temp file to send as a real file
             const base64Data = fileSource.split(',')[1];
             const extension = fileSource.split(';')[0].split('/')[1] || 'png';
-            const cacheDir = FileSystem.cacheDirectory || FileSystemLegacy.cacheDirectory || '';
+            let cacheDir = FileSystem.cacheDirectory || FileSystemLegacy.cacheDirectory || '';
+            if (!cacheDir && Platform.OS !== 'web') cacheDir = `${FileSystem.documentDirectory}cache/`;
             tempFile = `${cacheDir}uploadcare_temp_${Date.now()}.${extension}`;
             await FileSystemLegacy.writeAsStringAsync(tempFile, base64Data, {
                 encoding: 'base64',

@@ -80,46 +80,42 @@ const DashboardScreen = ({ navigation }) => {
     }
   };
 
-  const loadCompanyData = async () => {
+  const loadCompanyData = async (forceFetch = false) => {
     try {
       const stored = await AsyncStorage.getItem('companyData');
-      if (!stored) return;
-      let parsed = JSON.parse(stored);
-      setCompanyData(parsed);
+      let parsed = stored ? JSON.parse(stored) : null;
+      
+      if (parsed) setCompanyData(parsed);
 
-      // On-demand fetch for missing logo/signature to ensure dashboard looks complete
-      if ((!parsed.logo || !parsed.signature) && parsed.companyId) {
-        if (parsed.hasLogo || parsed.hasSignature) {
-          try {
-            const { getApiBaseUrl } = await import('../utils/api');
-            const resp = await fetch(`${getApiBaseUrl()}/api/company/${parsed.companyId}`);
-            const json = await resp.json();
-            const c = json?.company || json?.data;
-            if (c) {
-              const updated = { ...parsed, ...c };
-              setCompanyData(updated);
-              // Save back to AsyncStorage to make it permanent locally
-              await AsyncStorage.setItem('companyData', JSON.stringify(updated)).catch(() => { });
-              if (c.logo) await AsyncStorage.setItem('companyLogoCache', c.logo).catch(() => { });
-            }
-          } catch (e) {
-            console.warn('[Dashboard] On-demand fetch failed:', e);
+      // On-demand fetch for missing or suspicious logo/signature
+      const isSuspicious = (u) => !u || typeof u !== 'string' || u.includes('undefined') || u.includes('null') || (typeof u === 'string' && u.startsWith('/files/'));
+      
+      if ((forceFetch || isSuspicious(parsed?.logo) || isSuspicious(parsed?.signature)) && parsed?.companyId) {
+        try {
+          const baseUrl = getApiBaseUrl();
+          const resp = await fetch(`${baseUrl}/api/company/${parsed.companyId}`);
+          const json = await resp.json();
+          const c = json?.company || json?.data;
+          if (c) {
+            const updated = { ...(parsed || {}), ...c };
+            setCompanyData(updated);
+            await AsyncStorage.setItem('companyData', JSON.stringify(updated)).catch(() => { });
+            if (c.logo) await AsyncStorage.setItem('companyLogoCache', c.logo).catch(() => { });
           }
+        } catch (e) {
+          console.warn('[Dashboard] Fetch failed:', e);
         }
       }
     } catch (error) {
-      Alert.alert('Error', 'Failed to load company data');
+      console.error('Dashboard load error:', error);
     }
   };
 
-  const onRefresh = useCallback(async () => {
+  const onRefresh = async () => {
     setRefreshing(true);
-    try {
-      await loadCompanyData();
-    } finally {
-      setRefreshing(false);
-    }
-  }, []);
+    await loadCompanyData(true); // Force re-fetch from server
+    setRefreshing(false);
+  };
 
   const menuItems = useMemo(() => {
     const isManufacturing = companyData?.businessType === 'manufacturing';
@@ -286,6 +282,8 @@ const DashboardScreen = ({ navigation }) => {
               <Image
                 source={{ uri: resolveAssetUri(companyData.logo) }}
                 style={styles.companyLogo}
+                resizeMode="contain"
+                onError={(e) => console.warn('Logo load error:', e.nativeEvent.error)}
               />
             )}
             <View style={styles.companyInfo}>
@@ -329,6 +327,8 @@ const DashboardScreen = ({ navigation }) => {
               <Image
                 source={{ uri: resolveAssetUri(companyData.signature) }}
                 style={styles.signatureImage}
+                resizeMode="contain"
+                onError={(e) => console.warn('Signature load error:', e.nativeEvent.error)}
               />
             </View>
           )}

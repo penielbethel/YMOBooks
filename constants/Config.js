@@ -9,7 +9,11 @@ const envUrl = process.env.EXPO_PUBLIC_API_BASE_URL;
 const configUrl = Constants?.expoConfig?.extra?.apiBaseUrl;
 
 // Base resolution
-let base = envUrl || configUrl || 'https://ymobooks.vercel.app';
+const FALLBACK_URL = 'https://ymobooks.vercel.app';
+let base = envUrl || configUrl || FALLBACK_URL;
+
+// Ensure base is a string
+base = String(base || FALLBACK_URL);
 
 // When running on a physical device or native simulator, "localhost" points to the device.
 // Rewrite to the Expo dev host IP so the app can reach your local backend.

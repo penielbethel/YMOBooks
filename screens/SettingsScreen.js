@@ -6,6 +6,7 @@ import { Colors } from '../constants/Colors';
 import { Fonts } from '../constants/Fonts';
 import { Spacing } from '../constants/Spacing';
 import { updateCompany, fetchCompany, resolveAssetUri } from '../utils/api';
+import { uploadToUploadcare } from '../utils/uploadcare';
 
 import { Modal } from 'react-native';
 import SignatureCanvas from 'react-native-signature-canvas';
@@ -75,26 +76,20 @@ const SettingsScreen = ({ navigation }) => {
         // Populate initial fields
         populateFields(c);
 
-        // On-demand fetch if assets are missing but flags say they exist
-        if ((!c.logo || !c.signature) && c.companyId) {
-          if (c.hasLogo || c.hasSignature) {
-            try {
-              const fetched = await fetchCompany(c.companyId);
-              const full = fetched?.company || fetched?.data;
-              if (full) {
-                // Merge and update state
-                const merged = { ...c, ...full };
-                populateFields(merged);
-                // Save back to AsyncStorage to make it permanent locally
-                await AsyncStorage.setItem('companyData', JSON.stringify(merged)).catch(() => { });
-                // Also cache the logo for other screens
-                if (full.logo) {
-                  await AsyncStorage.setItem('companyLogoCache', full.logo).catch(() => { });
-                }
-              }
-            } catch (e) {
-              console.warn('[Settings] Failed to fetch full company details on load', e);
+        // On-demand fetch for missing/suspicious assets
+        const isSuspicious = (u) => !u || typeof u !== 'string' || u.includes('undefined') || u.includes('null') || (typeof u === 'string' && u.startsWith('/files/'));
+        if ((isSuspicious(c.logo) || isSuspicious(c.signature)) && c.companyId) {
+          try {
+            const fetched = await fetchCompany(c.companyId);
+            const full = fetched?.company || fetched?.data;
+            if (full) {
+              const merged = { ...c, ...full };
+              populateFields(merged);
+              await AsyncStorage.setItem('companyData', JSON.stringify(merged)).catch(() => { });
+              if (full.logo) await AsyncStorage.setItem('companyLogoCache', full.logo).catch(() => { });
             }
+          } catch (e) {
+            console.warn('[Settings] Failed to fetch full company details on load', e);
           }
         }
       } catch (_) { }
@@ -127,7 +122,8 @@ const SettingsScreen = ({ navigation }) => {
       try {
         const { base64 } = parseDataUrl(input);
         if (!base64) return null;
-        const cacheDir = FileSystem.cacheDirectory || FileSystemLegacy.cacheDirectory || '';
+        let cacheDir = FileSystem.cacheDirectory || FileSystemLegacy.cacheDirectory || '';
+        if (!cacheDir && Platform.OS !== 'web') cacheDir = `${FileSystem.documentDirectory}cache/`;
         const path = `${cacheDir}img-${kind}-${Date.now()}.png`;
         await FileSystemLegacy.writeAsStringAsync(path, base64, { encoding: 'base64' });
         return path;
@@ -178,25 +174,25 @@ const SettingsScreen = ({ navigation }) => {
 
       if (!result.canceled) {
         const uri = result.assets[0].uri;
-        if (type === 'logo') {
-          try {
-            const dataUrl = await compressToDataUrl(uri, 'logo');
-            if (dataUrl) {
-              // cache immediately for other screens
-              AsyncStorage.setItem('companyLogoCache', dataUrl).catch(() => { });
-              setLogo(dataUrl);
-            } else {
-              setLogo(uri);
-            }
-          } catch (e) { setLogo(uri); }
-        } else {
-          try {
-            const dataUrl = await compressToDataUrl(uri, 'signature');
-            setSignature(dataUrl || uri);
-          } catch (e) { setSignature(uri); }
+        setSaving(true);
+        try {
+          const dataUrl = await compressToDataUrl(uri, type);
+          const cdnUrl = await uploadToUploadcare(dataUrl || uri);
+          if (type === 'logo') {
+            setLogo(cdnUrl || dataUrl || uri);
+            if (cdnUrl) AsyncStorage.setItem('companyLogoCache', cdnUrl).catch(() => { });
+          } else {
+            setSignature(cdnUrl || dataUrl || uri);
+          }
+        } catch (e) {
+          if (type === 'logo') setLogo(uri);
+          else setSignature(uri);
+        } finally {
+          setSaving(false);
         }
       }
     } catch (e) {
+      setSaving(false);
       Alert.alert('Error', 'Could not pick image');
     }
   };
@@ -487,11 +483,19 @@ const SettingsScreen = ({ navigation }) => {
             <View style={{ flex: 1, backgroundColor: Colors.white, borderWidth: 1, borderColor: Colors.border, borderRadius: 8 }}>
               <SignatureCanvas
                 onOK={async (sig) => {
-                  // sig is a base64 data URL; recompress for smaller payload
-                  const compact = await compressToDataUrl(sig, 'signature');
-                  setSignature(compact || sig);
                   setSignatureModalVisible(false);
-                  Alert.alert('Signature Saved', 'Your electronic signature has been captured.');
+                  setSaving(true);
+                  try {
+                    // sig is a base64 data URL; recompress for smaller payload
+                    const compact = await compressToDataUrl(sig, 'signature');
+                    const cdnUrl = await uploadToUploadcare(compact || sig);
+                    setSignature(cdnUrl || compact || sig);
+                    Alert.alert('Signature Captured', 'Your signature has been optimized and saved to the form.');
+                  } catch (e) {
+                    setSignature(sig);
+                  } finally {
+                    setSaving(false);
+                  }
                 }}
                 onEmpty={() => {
                   Alert.alert('No Signature', 'Please draw your signature before saving.');

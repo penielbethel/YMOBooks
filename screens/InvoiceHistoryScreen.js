@@ -152,20 +152,33 @@ const InvoiceHistoryScreen = ({ navigation, route }) => {
     if (!uri || typeof uri !== 'string') return '';
     if (uri.startsWith('data:')) return uri;
     try {
-      const ext = (uri.split(/[#?]/)[0].split('.').pop() || '').toLowerCase();
+      // Improved extension detection to avoid mangled paths for CDN URLs
+      const pathPart = uri.split(/[#?]/)[0];
+      let ext = (pathPart.split('.').pop() || '').toLowerCase();
+      // If extension is too long or empty, fallback to png (common for CDN URLs like Uploadcare)
+      if (ext.length > 4 || !ext || ext.includes('/')) {
+        ext = 'png';
+      }
+      
       const mime = ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : (ext === 'jpg' || ext === 'jpeg') ? 'image/jpeg' : 'image/png';
 
       if (uri.startsWith('file:')) {
         const base64 = await FileSystemLegacy.readAsStringAsync(uri, { encoding: 'base64' });
         return `data:${mime};base64,${base64}`;
       } else {
-        const tmp = `${FileSystem.cacheDirectory}img-${Date.now()}.${ext || 'png'}`;
+        const cacheDir = FileSystem.cacheDirectory || FileSystemLegacy.cacheDirectory || '';
+        if (!cacheDir) throw new Error('Cache directory is unavailable');
+        // Ensure the filename is safe and doesn't contain path segments
+        const tmp = `${cacheDir}img_${Date.now()}_${Math.floor(Math.random() * 1000)}.${ext}`;
         const dl = await FileSystemLegacy.downloadAsync(uri, tmp);
         const base64 = await FileSystemLegacy.readAsStringAsync(dl.uri, { encoding: 'base64' });
+        // Cleanup temp file to avoid storage bloat
+        await FileSystemLegacy.deleteAsync(tmp, { idempotent: true });
         return `data:${mime};base64,${base64}`;
       }
     } catch (err) {
       console.warn('[toDataUrl] Failed:', err.message);
+      // Return original URI as fallback if data URL conversion fails
       return uri;
     }
   };

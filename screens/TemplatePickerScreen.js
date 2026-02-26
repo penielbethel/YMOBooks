@@ -7,7 +7,7 @@ import * as FileSystemLegacy from 'expo-file-system/legacy';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import * as ImagePicker from 'expo-image-picker';
-import { createInvoice, getApiBaseUrl } from '../utils/api';
+import { createInvoice, getApiBaseUrl, resolveAssetUri } from '../utils/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors } from '../constants/Colors';
 import { Fonts } from '../constants/Fonts';
@@ -631,23 +631,31 @@ export default function TemplatePickerScreen({ navigation, route }) {
     if (previewVisible) {
       (async () => {
         try {
-          const toDataUrl = async (uri) => {
+          const toDataUrl = async (rawUri) => {
+            const uri = resolveAssetUri(rawUri);
             if (!uri || typeof uri !== 'string') return '';
             if (uri.startsWith('data:')) return uri;
             try {
               if (Platform.OS === 'web') {
                 return uri;
               } else {
-                const ext = (uri.split(/[#?]/)[0].split('.').pop() || '').toLowerCase();
+                const pathPart = uri.split(/[#?]/)[0];
+                let ext = (pathPart.split('.').pop() || '').toLowerCase();
+                if (ext.length > 4 || !ext || ext.includes('/')) {
+                  ext = 'png';
+                }
                 const mime = ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : (ext === 'jpg' || ext === 'jpeg') ? 'image/jpeg' : 'image/png';
 
                 if (uri.startsWith('file:')) {
                   const base64 = await FileSystemLegacy.readAsStringAsync(uri, { encoding: 'base64' });
                   return `data:${mime};base64,${base64}`;
                 } else {
-                  const tmp = `${FileSystem.cacheDirectory}img-${Date.now()}.${ext || 'png'}`;
+                  const cacheDir = FileSystem.cacheDirectory || FileSystemLegacy.cacheDirectory || '';
+                  if (!cacheDir) throw new Error('Cache directory is unavailable');
+                  const tmp = `${cacheDir}img_${Date.now()}_${Math.floor(Math.random() * 1000)}.${ext}`;
                   const dl = await FileSystemLegacy.downloadAsync(uri, tmp);
                   const base64 = await FileSystemLegacy.readAsStringAsync(dl.uri, { encoding: 'base64' });
+                  await FileSystemLegacy.deleteAsync(tmp, { idempotent: true });
                   return `data:${mime};base64,${base64}`;
                 }
               }
@@ -1135,37 +1143,38 @@ export default function TemplatePickerScreen({ navigation, route }) {
                             return 'image/*';
                           };
 
-                          const toDataUrl = async (uri) => {
-                            if (!uri) return '';
-                            if (uri.startsWith('data:')) return uri;
-                            try {
-                              if (Platform.OS === 'web') {
-                                const res = await fetch(uri);
-                                const blob = await res.blob();
-                                const dataUrl = await new Promise((resolve, reject) => {
-                                  const reader = new FileReader();
-                                  reader.onloadend = () => resolve(reader.result);
-                                  reader.onerror = reject;
-                                  reader.readAsDataURL(blob);
-                                });
-                                return dataUrl;
-                              } else {
-                                if (uri.startsWith('file:')) {
-                                  const base64 = await FileSystemLegacy.readAsStringAsync(uri, { encoding: 'base64' });
-                                  const mime = guessMime(uri);
-                                  return `data:${mime};base64,${base64}`;
-                                } else {
-                                  const tmp = `${FileSystem.cacheDirectory}img-${Date.now()}`;
-                                  const dl = await FileSystemLegacy.downloadAsync(uri, tmp);
-                                  const base64 = await FileSystemLegacy.readAsStringAsync(dl.uri, { encoding: 'base64' });
-                                  const mime = guessMime(uri);
-                                  return `data:${mime};base64,${base64}`;
-                                }
+                          const toDataUrl = async (rawUri) => {
+                              const uri = resolveAssetUri(rawUri);
+                              if (!uri || typeof uri !== 'string') return '';
+                              if (uri.startsWith('data:')) return uri;
+                              try {
+                                  if (Platform.OS === 'web') {
+                                      return uri;
+                                  } else {
+                                      const pathPart = uri.split(/[#?]/)[0];
+                                      let ext = (pathPart.split('.').pop() || '').toLowerCase();
+                                      if (ext.length > 4 || !ext || ext.includes('/')) {
+                                          ext = 'png';
+                                      }
+                                      const mime = ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : (ext === 'jpg' || ext === 'jpeg') ? 'image/jpeg' : 'image/png';
+
+                                      if (uri.startsWith('file:')) {
+                                          const base64 = await FileSystemLegacy.readAsStringAsync(uri, { encoding: 'base64' });
+                                          return `data:${mime};base64,${base64}`;
+                                      } else {
+                                          const cacheDir = FileSystem.cacheDirectory || FileSystemLegacy.cacheDirectory || '';
+                                          if (!cacheDir) throw new Error('Cache directory is unavailable');
+                                          const tmp = `${cacheDir}img_${Date.now()}_${Math.floor(Math.random() * 1000)}.${ext}`;
+                                          const dl = await FileSystemLegacy.downloadAsync(uri, tmp);
+                                          const base64 = await FileSystemLegacy.readAsStringAsync(dl.uri, { encoding: 'base64' });
+                                          await FileSystemLegacy.deleteAsync(tmp, { idempotent: true });
+                                          return `data:${mime};base64,${base64}`;
+                                      }
+                                  }
+                              } catch (err) {
+                                  console.warn('[TemplatePicker][toDataUrl] Failed:', err?.message || err);
+                                  return uri;
                               }
-                            } catch (err) {
-                              console.warn('[TemplatePicker][toDataUrl] Failed:', err?.message || err);
-                              return uri;
-                            }
                           };
 
                           // Resolve logo/signature robustly: prefer in-memory, then AsyncStorage caches, then a web asset

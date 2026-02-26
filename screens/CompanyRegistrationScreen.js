@@ -123,7 +123,9 @@ const CompanyRegistrationScreen = ({ navigation, route }) => {
       try {
         const { base64 } = parseDataUrl(input);
         if (!base64) return null;
-        const cacheDir = FileSystem.cacheDirectory || FileSystemLegacy.cacheDirectory || '';
+        let cacheDir = FileSystem.cacheDirectory || FileSystemLegacy.cacheDirectory || '';
+        // Fallback for some environments where both are undefined
+        if (!cacheDir && Platform.OS !== 'web') cacheDir = `${FileSystem.documentDirectory}cache/`;
         const path = `${cacheDir}img-${kind}-${Date.now()}.png`;
         await FileSystemLegacy.writeAsStringAsync(path, base64, { encoding: 'base64' });
         return path;
