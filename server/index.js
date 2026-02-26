@@ -1483,6 +1483,7 @@ app.post('/api/receipt/create', async (req, res) => {
 // Fetch receipts history
 app.get('/api/receipts', async (req, res) => {
   try {
+    await connectToDatabase();
     const { companyId, months = 6, category } = req.query;
     if (!companyId) return res.status(400).json({ success: false, message: 'companyId is required' });
     const since = dayjs().subtract(Number(months), 'month').toDate();
@@ -2048,6 +2049,7 @@ app.post('/api/finance/expenses-daily', async (req, res) => {
 // Fetch invoice history for last N months (default 6)
 app.get('/api/invoices', async (req, res) => {
   try {
+    await connectToDatabase();
     const { companyId, months = 6, category } = req.query;
     if (!companyId) return res.status(400).json({ success: false, message: 'companyId is required' });
     const since = dayjs().subtract(Number(months), 'month').toDate();
