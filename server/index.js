@@ -226,7 +226,8 @@ async function uploadToUploadcare(dataUrlOrPath) {
     });
 
     if (res.data && res.data.file) {
-      return `https://ucarecdn.com/${res.data.file}/-/preview/500x500/-/quality/smart/-/format/png/`;
+      // Use smart quality and PNG format for maximum compatibility and speed
+      return `https://ucarecdn.com/${res.data.file}/-/preview/600x600/-/quality/smart/-/format/png/`;
     }
   } catch (err) {
     console.warn('Uploadcare upload failed:', err.response?.data || err.message);
@@ -579,7 +580,8 @@ async function getImageBuffer(val) {
   if (typeof source === 'string') {
     if (source.startsWith('http')) {
       try {
-        const resp = await axios.get(source, { responseType: 'arraybuffer', timeout: 5000 });
+        // Increased timeout to 10s for on-demand image processing on CDN
+        const resp = await axios.get(source, { responseType: 'arraybuffer', timeout: 10000 });
         return Buffer.from(resp.data);
       } catch (e) {
         console.warn('Buffer fetch fail:', source, e.message);
@@ -604,7 +606,7 @@ function resolveImageSource(val) {
     // Retrofit old Uploadcare URLs to enforce compression and PNG format
     if (url.includes('ucarecdn.com') && !url.includes('/-/preview/')) {
       let newUri = url.endsWith('/') ? url : `${url}/`;
-      url = `${newUri}-/preview/500x500/-/quality/smart/-/format/png/`;
+      url = `${newUri}-/preview/600x600/-/quality/smart/-/format/png/`;
     }
     return url;
   }
@@ -1078,8 +1080,8 @@ async function drawReceiptByTemplate(doc, company, rctNo, receiptDate, invoiceNu
 
     y += 100;
     drawItemsTable(doc, items, { x: contentLeft, y, width: contentWidth, theme, curr, amountPaid });
-    doc.fontSize(8).fillColor('#94a3b8').text(footerText, contentLeft, doc.page.height - 40, { align: 'center', width: contentWidth });
-
+    // Sidebar-specific footer handled below common logic if needed
+    doc.x = contentLeft; // Reset x for common signature logic
   } else if (template === 'minimal') {
     // --- MINIMAL TEMPLATE (Clean) ---
     let y = 50;
@@ -1105,8 +1107,6 @@ async function drawReceiptByTemplate(doc, company, rctNo, receiptDate, invoiceNu
 
     y += 100;
     drawItemsTable(doc, items, { x: pageLeft, y, width: pageWidth, theme, curr, amountPaid, isMinimal: true });
-    doc.fontSize(8).fillColor('#94a3b8').text(footerText, pageLeft, doc.page.height - 40, { align: 'center', width: pageWidth });
-
   } else if (template === 'modern') {
     // --- MODERN TEMPLATE ---
     doc.rect(0, 0, doc.page.width, 120).fill(theme.primary);
@@ -1132,8 +1132,6 @@ async function drawReceiptByTemplate(doc, company, rctNo, receiptDate, invoiceNu
 
     y += 110;
     drawItemsTable(doc, items, { x: pageLeft, y, width: pageWidth, theme, curr, amountPaid });
-    doc.fontSize(8).fillColor('#94a3b8').text(footerText, pageLeft, doc.page.height - 40, { align: 'center', width: pageWidth });
-
   } else if (template === 'compact') {
     // --- COMPACT TEMPLATE ---
     doc.rect(0, 0, doc.page.width, 15).fill(theme.primary);
@@ -1159,8 +1157,6 @@ async function drawReceiptByTemplate(doc, company, rctNo, receiptDate, invoiceNu
 
     y += 40;
     drawItemsTable(doc, items, { x: pageLeft, y, width: pageWidth, theme, curr, amountPaid });
-    doc.fontSize(8).fillColor('#94a3b8').text(footerText, pageLeft, doc.page.height - 40, { align: 'center', width: pageWidth });
-
   } else {
     // --- CLASSIC TEMPLATE ---
     doc.rect(0, 0, doc.page.width, 100).fill(theme.primary);
@@ -1185,18 +1181,24 @@ async function drawReceiptByTemplate(doc, company, rctNo, receiptDate, invoiceNu
 
     y = Math.max(doc.y + 40, addrY + 80);
     drawItemsTable(doc, items, { x: pageLeft, y, width: pageWidth, theme, curr, amountPaid });
-
-    // Signature
-    y = doc.y + 20;
-    try {
-      const sigBuffer = await getImageBuffer(company.signature);
-      if (sigBuffer) doc.image(sigBuffer, pageLeft, y, { width: 120 });
-    } catch (_) { }
-    doc.moveTo(pageLeft, y + 50).lineTo(pageLeft + 180, y + 50).stroke('#1e293b');
-    doc.fontSize(10).fillColor('#64748b').text('Authorized Receiver Signature', pageLeft, y + 55);
-
-    doc.fontSize(8).fillColor('#94a3b8').text(footerText, pageLeft, doc.page.height - 40, { align: 'center', width: pageWidth });
   }
+
+  // --- COMMON SIGNATURE & FOOTER (Ensures display on all templates) ---
+  const footX = template === 'bold' ? 100 : pageLeft;
+  const footW = template === 'bold' ? (doc.page.width - 100 - doc.page.margins.right) : pageWidth;
+
+  y = Math.max(doc.y + 30, doc.page.height - 180);
+  try {
+    const sigBuffer = await getImageBuffer(company.signature);
+    if (sigBuffer) {
+      doc.image(sigBuffer, footX + footW - 140, y, { width: 120 });
+    }
+  } catch (_) { }
+
+  doc.moveTo(footX + footW - 140, y + 45).lineTo(footX + footW, y + 45).stroke('#1e293b');
+  doc.fontSize(9).fillColor('#64748b').text('Authorized Receiver Signature', footX + footW - 140, y + 50, { align: 'center', width: 140 });
+
+  doc.fontSize(8).fillColor('#94a3b8').text(footerText, footX, doc.page.height - 40, { align: 'center', width: footW });
 }
 
 // Helper: Common Table Drawer for Receipts

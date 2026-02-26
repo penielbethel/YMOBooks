@@ -1,5 +1,4 @@
-// Consolidated high-premium HTML generator for Invoices and Receipts
-// Optimized for A4 printing and professional brand presentation
+import { resolveAssetUri } from './api';
 
 export function buildInvoiceHtml(opts) {
   return buildDocumentHtml({ ...opts, type: 'invoice' });
@@ -36,8 +35,8 @@ function buildDocumentHtml({
   const address = safe(company.address || '');
   const email = safe(company.email || '');
   const phone = safe(company.phone || company.phoneNumber || '');
-  const logo = safe(company.logo || '');
-  const signature = safe(company.signature || '');
+  const logo = resolveAssetUri(safe(company.logo || ''));
+  const signature = resolveAssetUri(safe(company.signature || ''));
   const terms = safe(company.termsAndConditions || company.terms || '');
   const bankName = safe(company.bankName || '');
   const accountName = safe(company.accountName || company.bankAccountName || '');

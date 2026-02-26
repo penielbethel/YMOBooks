@@ -12,7 +12,7 @@ export function resolveAssetUri(uri) {
   // Retrofit old Uploadcare URLs to enforce compression and PNG format
   if (uri.includes('ucarecdn.com') && !uri.includes('/-/preview/')) {
     let newUri = uri.endsWith('/') ? uri : `${uri}/`;
-    return `${newUri}-/preview/500x500/-/quality/smart/-/format/png/`;
+    return `${newUri}-/preview/600x600/-/quality/smart/-/format/png/`;
   }
   return uri;
 }

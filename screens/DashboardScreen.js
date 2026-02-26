@@ -327,7 +327,7 @@ const DashboardScreen = ({ navigation }) => {
             <View style={[styles.infoRow, { alignItems: 'center' }]}>
               <Text style={styles.infoLabel}>🖋️ Signature</Text>
               <Image
-                source={{ uri: companyData.signature }}
+                source={{ uri: resolveAssetUri(companyData.signature) }}
                 style={styles.signatureImage}
               />
             </View>
