@@ -8,6 +8,12 @@ export function resolveAssetUri(uri) {
   if (!uri || typeof uri !== 'string') return null;
   if (uri.startsWith('data:') || uri.startsWith('file://')) return uri;
   if (uri.startsWith('/')) return `${Config.API_BASE_URL}${uri}`;
+
+  // Retrofit old Uploadcare URLs to enforce compression and PNG format
+  if (uri.includes('ucarecdn.com') && !uri.includes('/-/preview/')) {
+    let newUri = uri.endsWith('/') ? uri : `${uri}/`;
+    return `${newUri}-/preview/500x500/-/quality/smart/-/format/png/`;
+  }
   return uri;
 }
 

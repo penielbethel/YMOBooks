@@ -226,7 +226,7 @@ async function uploadToUploadcare(dataUrlOrPath) {
     });
 
     if (res.data && res.data.file) {
-      return `https://ucarecdn.com/${res.data.file}/`;
+      return `https://ucarecdn.com/${res.data.file}/-/preview/500x500/-/quality/smart/-/format/png/`;
     }
   } catch (err) {
     console.warn('Uploadcare upload failed:', err.response?.data || err.message);
@@ -599,7 +599,15 @@ function resolveImageSource(val) {
   if (val.startsWith('data:')) return dataUrlToBuffer(val);
 
   // Handle external URLs (like Uploadcare)
-  if (val.startsWith('http') && !val.includes('/files/')) return val;
+  if (val.startsWith('http') && !val.includes('/files/')) {
+    let url = val;
+    // Retrofit old Uploadcare URLs to enforce compression and PNG format
+    if (url.includes('ucarecdn.com') && !url.includes('/-/preview/')) {
+      let newUri = url.endsWith('/') ? url : `${url}/`;
+      url = `${newUri}-/preview/500x500/-/quality/smart/-/format/png/`;
+    }
+    return url;
+  }
 
   // Handle local /files/ paths or full URLs pointing to our /files/ endpoint
   let fileName = '';

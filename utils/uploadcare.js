@@ -58,7 +58,7 @@ export async function uploadToUploadcare(fileSource) {
 
         if (data && data.file) {
             const fileId = data.file;
-            return `https://ucarecdn.com/${fileId}/`;
+            return `https://ucarecdn.com/${fileId}/-/preview/500x500/-/quality/smart/-/format/png/`;
         }
         return null;
     } catch (error) {
