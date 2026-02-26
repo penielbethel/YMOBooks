@@ -11,11 +11,13 @@ export function resolveAssetUri(uri) {
 
   // Retrofit old Uploadcare URLs to enforce basic preview/compression
   if (uri.includes('ucarecdn.com')) {
-    if (uri.includes('/-/')) return uri; // Already has commands
+    // If it already has commands like /preview/, keep it as is
+    if (uri.includes('/-/preview/')) return uri;
     
-    // Extract the UUID (36 chars)
-    const match = uri.match(/ucarecdn\.com\/([a-f0-9-]{36})/);
+    // Extract the UUID (36 chars, case-insensitive)
+    const match = uri.match(/ucarecdn\.com\/([a-f0-9-]{36})/i);
     if (match && match[1]) {
+      // Rebuild into a clean preview URL
       return `https://ucarecdn.com/${match[1]}/-/preview/400x400/`;
     }
     return uri;

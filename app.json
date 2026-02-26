@@ -18,15 +18,15 @@
       "bundleIdentifier": "com.penielbethel.ymobooks",
       "buildNumber": "5"
     },
-  "android": {
-    "adaptiveIcon": {
-      "foregroundImage": "./assets/logo.png",
-      "backgroundColor": "#CC5500"
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/logo.png",
+        "backgroundColor": "#CC5500"
+      },
+      "edgeToEdgeEnabled": true,
+      "versionCode": 6,
+      "package": "com.penielbethel.ymobooks"
     },
-    "edgeToEdgeEnabled": true,
-    "versionCode": 6,
-    "package": "com.penielbethel.ymobooks"
-  },
     "web": {
       "favicon": "./assets/logo.png"
     },

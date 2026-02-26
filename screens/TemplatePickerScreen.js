@@ -646,17 +646,19 @@ export default function TemplatePickerScreen({ navigation, route }) {
                 }
                 const mime = ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : (ext === 'jpg' || ext === 'jpeg') ? 'image/jpeg' : 'image/png';
 
-                if (uri.startsWith('file:')) {
-                  const base64 = await FileSystemLegacy.readAsStringAsync(uri, { encoding: 'base64' });
-                  return `data:${mime};base64,${base64}`;
+                if (uri.startsWith('file:') || uri.startsWith('/')) {
+                  const filePath = uri.startsWith('/') ? `file://${uri}` : uri;
+                  const base64 = await FileSystemLegacy.readAsStringAsync(filePath, { encoding: 'base64' });
+                  return `data:${mime};base64,${base64.replace(/\s/g, '')}`;
                 } else {
-                  const cacheDir = FileSystem.cacheDirectory || FileSystemLegacy.cacheDirectory || '';
-                  if (!cacheDir) throw new Error('Cache directory is unavailable');
-                  const tmp = `${cacheDir}img_${Date.now()}_${Math.floor(Math.random() * 1000)}.${ext}`;
+                  let cacheDir = FileSystem.cacheDirectory || FileSystemLegacy.cacheDirectory || '';
+                  if (!cacheDir && Platform.OS !== 'web') cacheDir = `${FileSystem.documentDirectory}cache/`;
+                  if (!cacheDir.endsWith('/')) cacheDir += '/';
+                  const tmp = `${cacheDir}to_data_uri_${Date.now()}_${Math.floor(Math.random() * 1000)}.${ext}`;
                   const dl = await FileSystemLegacy.downloadAsync(uri, tmp);
                   const base64 = await FileSystemLegacy.readAsStringAsync(dl.uri, { encoding: 'base64' });
                   await FileSystemLegacy.deleteAsync(tmp, { idempotent: true });
-                  return `data:${mime};base64,${base64}`;
+                  return `data:${mime};base64,${base64.replace(/\s/g, '')}`;
                 }
               }
             } catch (err) {
@@ -1144,37 +1146,39 @@ export default function TemplatePickerScreen({ navigation, route }) {
                           };
 
                           const toDataUrl = async (rawUri) => {
-                              const uri = resolveAssetUri(rawUri);
-                              if (!uri || typeof uri !== 'string') return '';
-                              if (uri.startsWith('data:')) return uri;
-                              try {
-                                  if (Platform.OS === 'web') {
-                                      return uri;
-                                  } else {
-                                      const pathPart = uri.split(/[#?]/)[0];
-                                      let ext = (pathPart.split('.').pop() || '').toLowerCase();
-                                      if (ext.length > 4 || !ext || ext.includes('/')) {
-                                          ext = 'png';
-                                      }
-                                      const mime = ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : (ext === 'jpg' || ext === 'jpeg') ? 'image/jpeg' : 'image/png';
+                            const uri = resolveAssetUri(rawUri);
+                            if (!uri || typeof uri !== 'string') return '';
+                            if (uri.startsWith('data:')) return uri;
+                            try {
+                              if (Platform.OS === 'web') {
+                                return uri;
+                              } else {
+                                const pathPart = uri.split(/[#?]/)[0];
+                                let ext = (pathPart.split('.').pop() || '').toLowerCase();
+                                if (ext.length > 4 || !ext || ext.includes('/')) {
+                                  ext = 'png';
+                                }
+                                const mime = ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : (ext === 'jpg' || ext === 'jpeg') ? 'image/jpeg' : 'image/png';
 
-                                      if (uri.startsWith('file:')) {
-                                          const base64 = await FileSystemLegacy.readAsStringAsync(uri, { encoding: 'base64' });
-                                          return `data:${mime};base64,${base64}`;
-                                      } else {
-                                          const cacheDir = FileSystem.cacheDirectory || FileSystemLegacy.cacheDirectory || '';
-                                          if (!cacheDir) throw new Error('Cache directory is unavailable');
-                                          const tmp = `${cacheDir}img_${Date.now()}_${Math.floor(Math.random() * 1000)}.${ext}`;
-                                          const dl = await FileSystemLegacy.downloadAsync(uri, tmp);
-                                          const base64 = await FileSystemLegacy.readAsStringAsync(dl.uri, { encoding: 'base64' });
-                                          await FileSystemLegacy.deleteAsync(tmp, { idempotent: true });
-                                          return `data:${mime};base64,${base64}`;
-                                      }
-                                  }
-                              } catch (err) {
-                                  console.warn('[TemplatePicker][toDataUrl] Failed:', err?.message || err);
-                                  return uri;
+                                if (uri.startsWith('file:') || uri.startsWith('/')) {
+                                  const filePath = uri.startsWith('/') ? `file://${uri}` : uri;
+                                  const base64 = await FileSystemLegacy.readAsStringAsync(filePath, { encoding: 'base64' });
+                                  return `data:${mime};base64,${base64.replace(/\s/g, '')}`;
+                                } else {
+                                  let cacheDir = FileSystem.cacheDirectory || FileSystemLegacy.cacheDirectory || '';
+                                  if (!cacheDir && Platform.OS !== 'web') cacheDir = `${FileSystem.documentDirectory}cache/`;
+                                  if (!cacheDir.endsWith('/')) cacheDir += '/';
+                                  const tmp = `${cacheDir}sh_to_data_uri_${Date.now()}_${Math.floor(Math.random() * 1000)}.${ext}`;
+                                  const dl = await FileSystemLegacy.downloadAsync(uri, tmp);
+                                  const base64 = await FileSystemLegacy.readAsStringAsync(dl.uri, { encoding: 'base64' });
+                                  await FileSystemLegacy.deleteAsync(tmp, { idempotent: true });
+                                  return `data:${mime};base64,${base64.replace(/\s/g, '')}`;
+                                }
                               }
+                            } catch (err) {
+                              console.warn('[Share.toDataUrl] Failed:', err.message);
+                              return uri;
+                            }
                           };
 
                           // Resolve logo/signature robustly: prefer in-memory, then AsyncStorage caches, then a web asset
