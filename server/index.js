@@ -318,6 +318,8 @@ app.get('/api/health', async (req, res) => {
     status: 'ok',
     uptime: process.uptime(),
     db: dbStatus,
+    mongo: !!MONGO_URI,
+    generatedRoot: WRITABLE_ROOT,
     uploadcare: !!(UC_PUBLIC && UC_SECRET),
     vercel: !!process.env.VERCEL,
     node: process.version
