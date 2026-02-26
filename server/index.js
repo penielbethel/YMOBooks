@@ -306,11 +306,18 @@ if (!MONGO_URI) {
   console.warn('MONGO_URI not set. Running with file-based fallback storage.');
 }
 
-app.get('/api/health', (req, res) => {
+app.get('/api/health', async (req, res) => {
+  let dbStatus = 'disconnected';
+  try {
+    const db = await connectToDatabase();
+    dbStatus = (db && mongoose.connection.readyState === 1) ? 'connected' : 'connecting';
+  } catch (e) {
+    dbStatus = `error: ${e.message}`;
+  }
   res.json({
     status: 'ok',
     uptime: process.uptime(),
-    db: DB_CONNECTED ? 'connected' : 'disconnected',
+    db: dbStatus,
     uploadcare: !!(UC_PUBLIC && UC_SECRET),
     vercel: !!process.env.VERCEL,
     node: process.version
@@ -811,6 +818,7 @@ app.post('/api/register-company', async (req, res) => {
 // Update company details (including bank info) - REBUILT
 app.post('/api/update-company', async (req, res) => {
   try {
+    await connectToDatabase();
     let { companyId, ...updates } = req.body;
     companyId = (companyId || '').trim();
     if (!companyId) return res.status(400).json({ success: false, message: 'Company ID is required' });
@@ -2176,6 +2184,7 @@ app.delete('/api/invoices/:invoiceNumber', async (req, res) => {
 });
 app.post('/api/login', async (req, res) => {
   try {
+    await connectToDatabase();
     const { companyId, businessType } = req.body;
     if (!companyId) return res.status(400).json({ success: false, message: 'Company ID is required' });
     console.log('Login attempt:', companyId, ' Category:', businessType);
@@ -2237,6 +2246,7 @@ app.post('/api/login', async (req, res) => {
 
 app.get('/api/company/:companyId', async (req, res) => {
   try {
+    await connectToDatabase();
     const { companyId } = req.params;
     const fileCompany = findCompanyFile(companyId);
     let dbCompany = null;
