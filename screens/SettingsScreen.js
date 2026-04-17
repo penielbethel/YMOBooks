@@ -243,8 +243,8 @@ const SettingsScreen = ({ navigation }) => {
         currencySymbol,
         currencyCode: symbolToCode(currencySymbol),
         // Use logic that preserves existing data on server if we don't have a new upload ready
-        logo: logo === null ? null : await compressToDataUrl(logo, 'logo'),
-        signature: signature === null ? null : await compressToDataUrl(signature, 'signature')
+        logo: logo === null ? null : (logo.startsWith('http') ? logo : await compressToDataUrl(logo, 'logo')),
+        signature: signature === null ? null : (signature.startsWith('http') ? signature : await compressToDataUrl(signature, 'signature'))
       };
 
       const res = await updateCompany(payload);
