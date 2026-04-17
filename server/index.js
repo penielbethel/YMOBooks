@@ -619,10 +619,11 @@ function resolveImageSource(val) {
   // Handle external URLs (like Uploadcare)
   if (val.startsWith('http') && !val.includes('/files/')) {
     let url = val;
-    // Retrofit old Uploadcare URLs to enforce compression and PNG format
-    if (url.includes('ucarecdn.com') && !url.includes('/-/preview/')) {
-      let newUri = url.endsWith('/') ? url : `${url}/`;
-      url = `${newUri}-/preview/600x600/-/quality/smart/-/format/png/`;
+    if (url.includes('ucarecdn.com')) {
+      const match = url.match(/ucarecdn\.com\/([a-f0-9-]{36})/i);
+      if (match && match[1]) {
+         url = `https://ucarecdn.com/${match[1]}/-/preview/600x600/-/quality/smart/-/format/png/`;
+      }
     }
     return url;
   }

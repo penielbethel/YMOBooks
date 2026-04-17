@@ -222,7 +222,7 @@ function renderFullInvoicePreview(company, template, brandColor, liveInvoice) {
           </View>
           <View style={[styles.fullInfoBox, { borderColor: theme.border, marginHorizontal: Spacing.lg }]}>
             {!!company?.logo && (
-              <Image source={{ uri: company.logo }} style={{ width: 64, height: 64, borderRadius: 8, marginBottom: 6 }} />
+              <Image source={{ uri: resolveAssetUri(company.logo) }} style={{ width: 64, height: 64, borderRadius: 8, marginBottom: 6 }} />
             )}
             <Text style={styles.fullText}>{address}</Text>
             <Text style={styles.fullText}>Email: {email}</Text>
@@ -261,7 +261,7 @@ function renderFullInvoicePreview(company, template, brandColor, liveInvoice) {
           {!!company?.signature && (
             <View style={{ paddingHorizontal: Spacing.lg, marginTop: Spacing.md }}>
               <Text style={styles.fullMeta}>Authorized Signature</Text>
-              <Image source={{ uri: company.signature }} style={{ width: 140, height: 70, resizeMode: 'contain' }} />
+              <Image source={{ uri: resolveAssetUri(company.signature) }} style={{ width: 140, height: 70, resizeMode: 'contain' }} />
             </View>
           )}
           <Text style={[styles.fullHint, { marginTop: 12 }]}>{`This invoice is generated electronically by ${name} and any alteration renders it invalid — Printed on ${new Date().toLocaleDateString()}`}</Text>
@@ -329,7 +329,7 @@ function renderFullInvoicePreview(company, template, brandColor, liveInvoice) {
           {!!company?.signature && (
             <View style={{ paddingHorizontal: Spacing.lg, marginTop: Spacing.md }}>
               <Text style={styles.fullMeta}>Authorized Signature</Text>
-              <Image source={{ uri: company.signature }} style={{ width: 140, height: 70, resizeMode: 'contain' }} />
+              <Image source={{ uri: resolveAssetUri(company.signature) }} style={{ width: 140, height: 70, resizeMode: 'contain' }} />
             </View>
           )}
           <Text style={[styles.fullHint, { marginTop: 12 }]}>{`This invoice is generated electronically by ${name} and any alteration renders it invalid — Printed on ${new Date().toLocaleDateString()}`}</Text>
@@ -386,7 +386,7 @@ function renderFullInvoicePreview(company, template, brandColor, liveInvoice) {
           {!!company?.signature && (
             <View style={{ paddingHorizontal: Spacing.lg, marginTop: Spacing.md }}>
               <Text style={styles.fullMeta}>Authorized Signature</Text>
-              <Image source={{ uri: company.signature }} style={{ width: 140, height: 70, resizeMode: 'contain' }} />
+              <Image source={{ uri: resolveAssetUri(company.signature) }} style={{ width: 140, height: 70, resizeMode: 'contain' }} />
             </View>
           )}
           <Text style={[styles.fullHint, { marginTop: 12 }]}>{`This invoice is generated electronically by ${name} and any alteration renders it invalid — Printed on ${new Date().toLocaleDateString()}`}</Text>
@@ -404,7 +404,7 @@ function renderFullInvoicePreview(company, template, brandColor, liveInvoice) {
           <View style={styles.fullRow}>
             <View style={{ flex: 1 }}>
               {!!company?.logo && (
-                <Image source={{ uri: company.logo }} style={{ width: 56, height: 56, borderRadius: 8, marginBottom: 6 }} />
+                <Image source={{ uri: resolveAssetUri(company.logo) }} style={{ width: 56, height: 56, borderRadius: 8, marginBottom: 6 }} />
               )}
               <Text style={styles.fullCompany}>{name}</Text>
               <Text style={styles.fullText}>Email: {email}</Text>
@@ -447,7 +447,7 @@ function renderFullInvoicePreview(company, template, brandColor, liveInvoice) {
           {!!company?.signature && (
             <View style={{ paddingHorizontal: Spacing.lg, marginTop: Spacing.md }}>
               <Text style={styles.fullMeta}>Authorized Signature</Text>
-              <Image source={{ uri: company.signature }} style={{ width: 140, height: 70, resizeMode: 'contain' }} />
+              <Image source={{ uri: resolveAssetUri(company.signature) }} style={{ width: 140, height: 70, resizeMode: 'contain' }} />
             </View>
           )}
           <Text style={[styles.fullHint, { marginTop: 12 }]}>{`This invoice is generated electronically by ${name} and any alteration renders it invalid — Printed on ${new Date().toLocaleDateString()}`}</Text>
@@ -478,7 +478,7 @@ function renderFullInvoicePreview(company, template, brandColor, liveInvoice) {
             <View style={{ alignItems: 'flex-end', flex: 1 }}>
               <View style={[styles.fullInfoBox, { borderColor: theme.border }]}>
                 {!!company?.logo && (
-                  <Image source={{ uri: company.logo }} style={{ width: 64, height: 64, borderRadius: 8, marginBottom: 6 }} />
+                  <Image source={{ uri: resolveAssetUri(company.logo) }} style={{ width: 64, height: 64, borderRadius: 8, marginBottom: 6 }} />
                 )}
                 <Text style={styles.fullText}>{address}</Text>
                 <Text style={styles.fullText}>Email: {email}</Text>
@@ -519,7 +519,7 @@ function renderFullInvoicePreview(company, template, brandColor, liveInvoice) {
           {!!company?.signature && (
             <View style={{ paddingHorizontal: Spacing.lg, marginTop: Spacing.md }}>
               <Text style={styles.fullMeta}>Authorized Signature</Text>
-              <Image source={{ uri: company.signature }} style={{ width: 140, height: 70, resizeMode: 'contain' }} />
+              <Image source={{ uri: resolveAssetUri(company.signature) }} style={{ width: 140, height: 70, resizeMode: 'contain' }} />
             </View>
           )}
           <Text style={[styles.fullHint, { marginTop: 12 }]}>{`This invoice is generated electronically by ${name} and any alteration renders it invalid — Printed on ${new Date().toLocaleDateString()}`}</Text>

@@ -9,18 +9,11 @@ export function resolveAssetUri(uri) {
   if (uri.startsWith('data:') || uri.startsWith('file://')) return uri;
   if (uri.startsWith('/')) return `${Config.API_BASE_URL}${uri}`;
 
-  // Retrofit old Uploadcare URLs to enforce basic preview/compression
   if (uri.includes('ucarecdn.com')) {
-    // If it already has commands like /preview/, keep it as is
-    if (uri.includes('/-/preview/')) return uri;
-    
-    // Extract the UUID (36 chars, case-insensitive)
     const match = uri.match(/ucarecdn\.com\/([a-f0-9-]{36})/i);
     if (match && match[1]) {
-      // Rebuild into a clean preview URL
-      return `https://ucarecdn.com/${match[1]}/-/preview/400x400/`;
+      return `https://ucarecdn.com/${match[1]}/-/preview/400x400/-/format/png/`;
     }
-    return uri;
   }
   return uri;
 }
