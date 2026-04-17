@@ -29,6 +29,7 @@ if (Platform.OS !== 'web' && base.includes('localhost')) {
 
 export const Config = {
   API_BASE_URL: base,
-  UPLOADCARE_PUBLIC_KEY: '608f1703ba6637c4fc73',
-  UPLOADCARE_SECRET_KEY: 'c5c3bdd59e4aefdbc12f',
+  // Cloudinary — unsigned upload (no secret needed on client)
+  CLOUDINARY_CLOUD_NAME: 'drt1zncli',
+  CLOUDINARY_UPLOAD_PRESET: 'ymobooks_preset',
 };

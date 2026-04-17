@@ -24,7 +24,7 @@ import { Colors } from '../constants/Colors';
 import { Fonts } from '../constants/Fonts';
 import { Spacing } from '../constants/Spacing';
 import { registerCompany, updateCompany, fetchCompany } from '../utils/api';
-import { uploadToUploadcare } from '../utils/uploadcare';
+import { uploadToCloudinary } from '../utils/cloudinary';
 
 const CompanyRegistrationScreen = ({ navigation, route }) => {
   const mode = route?.params?.mode === 'edit' ? 'edit' : 'register';
@@ -181,7 +181,7 @@ const CompanyRegistrationScreen = ({ navigation, route }) => {
         if (type === 'logo') {
           try {
             const dataUrl = await compressToDataUrl(uri, 'logo');
-            const cdnUrl = await uploadToUploadcare(dataUrl || uri);
+            const cdnUrl = await uploadToCloudinary(dataUrl || uri);
             if (cdnUrl) {
               await AsyncStorage.setItem('companyLogoCache', cdnUrl);
               updateFormData(type, cdnUrl);
@@ -194,7 +194,7 @@ const CompanyRegistrationScreen = ({ navigation, route }) => {
         } else if (type === 'signature') {
           try {
             const dataUrl = await compressToDataUrl(uri, 'signature');
-            const cdnUrl = await uploadToUploadcare(dataUrl || uri);
+            const cdnUrl = await uploadToCloudinary(dataUrl || uri);
             updateFormData(type, cdnUrl || dataUrl || uri);
           } catch {
             updateFormData(type, uri);
@@ -599,7 +599,7 @@ const CompanyRegistrationScreen = ({ navigation, route }) => {
                   setLoading(true);
                   // sig is a base64 data URL; recompress for smaller payload
                   const compact = await compressToDataUrl(sig, 'signature');
-                  const cdnUrl = await uploadToUploadcare(compact || sig);
+                  const cdnUrl = await uploadToCloudinary(compact || sig);
                   updateFormData('signature', cdnUrl || compact || sig);
                   setLoading(false);
                   Alert.alert('Signature Saved', 'Your electronic signature has been captured.');
