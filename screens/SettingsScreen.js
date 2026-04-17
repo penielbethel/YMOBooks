@@ -6,7 +6,7 @@ import { Colors } from '../constants/Colors';
 import { Fonts } from '../constants/Fonts';
 import { Spacing } from '../constants/Spacing';
 import { updateCompany, fetchCompany, resolveAssetUri } from '../utils/api';
-import { uploadToCloudinary } from '../utils/cloudinary';
+import { uploadToUploadcare } from '../utils/uploadcare';
 
 import { Modal } from 'react-native';
 import SignatureCanvas from 'react-native-signature-canvas';
@@ -177,7 +177,7 @@ const SettingsScreen = ({ navigation }) => {
         setSaving(true);
         try {
           const dataUrl = await compressToDataUrl(uri, type);
-          const cdnUrl = await uploadToCloudinary(dataUrl || uri);
+          const cdnUrl = await uploadToUploadcare(dataUrl || uri);
           if (type === 'logo') {
             setLogo(cdnUrl || dataUrl || uri);
             if (cdnUrl) AsyncStorage.setItem('companyLogoCache', cdnUrl).catch(() => { });
@@ -488,7 +488,7 @@ const SettingsScreen = ({ navigation }) => {
                   try {
                     // sig is a base64 data URL; recompress for smaller payload
                     const compact = await compressToDataUrl(sig, 'signature');
-                    const cdnUrl = await uploadToCloudinary(compact || sig);
+                    const cdnUrl = await uploadToUploadcare(compact || sig);
                     setSignature(cdnUrl || compact || sig);
                     Alert.alert('Signature Captured', 'Your signature has been optimized and saved to the form.');
                   } catch (e) {

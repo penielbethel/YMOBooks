@@ -13,13 +13,6 @@ export function resolveAssetUri(uri) {
   // The stored URL may already have transformation paths like /-/preview/400x400/
   // appended from an older version. Stacking more operations on top causes 404s.
   // Extracting just the UUID and using the base URL always works.
-  // Cloudinary — return as-is (already a clean, permanent CDN URL)
-  if (uri.includes('res.cloudinary.com')) {
-    console.log('[resolveAssetUri] cloudinary →', uri);
-    return uri;
-  }
-
-  // Legacy Uploadcare — normalize to base UUID URL
   if (uri.includes('ucarecdn.com')) {
     const match = uri.match(/ucarecdn\.com\/([a-f0-9-]{36})/i);
     if (match && match[1]) {

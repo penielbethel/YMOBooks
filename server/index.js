@@ -167,8 +167,8 @@ function parseDataUrl(dataUrl) {
 
 async function optimizeImageDataUrl(dataUrl, kind = 'logo') {
   try {
-    // Priority: Cloudinary
-    const cdnUrl = await uploadToCloudinary(dataUrl);
+    // Priority: Uploadcare
+    const cdnUrl = await uploadToUploadcare(dataUrl);
     if (cdnUrl) return cdnUrl;
 
     const lib = await ensureSharp();
@@ -198,12 +198,12 @@ async function optimizeImageDataUrl(dataUrl, kind = 'logo') {
   }
 }
 
-async function uploadToCloudinary(dataUrlOrPath) {
+async function uploadToUploadcare(dataUrlOrPath) {
   try {
     const FormData = require('form-data');
     const formData = new FormData();
-    formData.append('upload_preset', 'ymobooks_preset');
-    formData.append('folder', 'ymobooks');
+    formData.append('UPLOADCARE_PUB_KEY', UC_PUBLIC);
+    formData.append('UPLOADCARE_STORE', '1');
 
     if (typeof dataUrlOrPath === 'string' && dataUrlOrPath.startsWith('data:')) {
       const parsed = parseDataUrl(dataUrlOrPath);
@@ -221,36 +221,42 @@ async function uploadToCloudinary(dataUrlOrPath) {
       formData.append('file', dataUrlOrPath);
     }
 
-    const res = await axios.post('https://api.cloudinary.com/v1_1/drt1zncli/image/upload', formData, {
+    const res = await axios.post('https://upload.uploadcare.com/base/', formData, {
       headers: formData.getHeaders()
     });
 
-    if (res.data && res.data.secure_url) {
-      return res.data.secure_url;
+    if (res.data && res.data.file) {
+      // Store clean base URL — resolveImageSource handles display/fetch
+      return `https://ucarecdn.com/${res.data.file}/`;
     }
   } catch (err) {
-    console.warn('Cloudinary upload failed:', err.response?.data || err.message);
+    console.warn('Uploadcare upload failed:', err.response?.data || err.message);
   }
   return null;
 }
 
-function getCloudinaryId(url) {
-  if (!url || typeof url !== 'string' || !url.includes('cloudinary.com')) return null;
+function getUploadcareUuid(url) {
+  if (!url || typeof url !== 'string' || !url.includes('ucarecdn.com')) return null;
   try {
-    const parts = url.split('/ymobooks/');
-    if (parts.length > 1) {
-      return `ymobooks/${parts[1].split('.')[0]}`;
-    }
-  } catch (_) {}
-  return null;
+    const parts = url.split('ucarecdn.com/')[1].split('/');
+    return parts[0] || null;
+  } catch (_) { return null; }
 }
 
-async function deleteFromCloudinary(url) {
-  const publicId = getCloudinaryId(url);
-  if (!publicId) return;
-  // Simplistic logic: We don't urgently need aggressive delete for Cloudinary
-  // as it doesn't auto-delete and we are on a new account, but we log it.
-  console.log('Would delete from Cloudinary:', publicId);
+async function deleteFromUploadcare(url) {
+  const fileId = getUploadcareUuid(url);
+  if (!fileId) return;
+  try {
+    console.log('Deleting Uploadcare file:', fileId);
+    await axios.delete(`https://api.uploadcare.com/files/${fileId}/`, {
+      headers: {
+        'Authorization': `Uploadcare.Simple ${UC_PUBLIC}:${UC_SECRET}`,
+        'Accept': 'application/vnd.uploadcare-v0.7+json'
+      }
+    });
+  } catch (err) {
+    console.warn('Uploadcare delete failed:', err.response?.data || err.message);
+  }
 }
 
 // Mongo connection (optional)
@@ -867,21 +873,23 @@ app.post('/api/update-company', async (req, res) => {
      // Handle Images - smarter logic to avoid deleting same-uuid files
     const updateAsset = async (field, newVal) => {
       const oldVal = currentData[field];
-      const oldId = getCloudinaryId(oldVal);
+      const oldUuid = getUploadcareUuid(oldVal);
       
       if (newVal === null) {
-        if (oldId) deleteFromCloudinary(oldVal);
+        if (oldUuid) deleteFromUploadcare(oldVal);
         currentData[field] = null;
       } else if (typeof newVal === 'string') {
         if (newVal.startsWith('data:')) {
           const fresh = await optimizeImageDataUrl(newVal, field);
           currentData[field] = fresh;
-          if (oldId && getCloudinaryId(fresh) !== oldId) deleteFromCloudinary(oldVal);
+          // Only delete if the new upload returned a different UUID (unlikely for data url but safe)
+          if (oldUuid && getUploadcareUuid(fresh) !== oldUuid) deleteFromUploadcare(oldVal);
         } else if (newVal.startsWith('http')) {
-          const newId = getCloudinaryId(newVal);
+          const newUuid = getUploadcareUuid(newVal);
           currentData[field] = newVal;
-          if (oldId && newId && oldId !== newId) {
-            deleteFromCloudinary(oldVal);
+          // CRITICAL: Only delete if the file itself has changed!
+          if (oldUuid && newUuid && oldUuid !== newUuid) {
+            deleteFromUploadcare(oldVal);
           }
         }
       }
