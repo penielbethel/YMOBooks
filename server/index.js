@@ -622,7 +622,7 @@ function resolveImageSource(val) {
     if (url.includes('ucarecdn.com')) {
       const match = url.match(/ucarecdn\.com\/([a-f0-9-]{36})/i);
       if (match && match[1]) {
-         url = `https://ucarecdn.com/${match[1]}/-/preview/600x600/-/quality/smart/-/format/png/`;
+        url = `https://ucarecdn.com/${match[1]}/`;
       }
     }
     return url;

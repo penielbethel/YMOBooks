@@ -9,10 +9,14 @@ export function resolveAssetUri(uri) {
   if (uri.startsWith('data:') || uri.startsWith('file://')) return uri;
   if (uri.startsWith('/')) return `${Config.API_BASE_URL}${uri}`;
 
+  // Always normalize Uploadcare URLs to the clean base URL.
+  // The stored URL may already have transformation paths like /-/preview/400x400/
+  // appended from an older version. Stacking more operations on top causes 404s.
+  // Extracting just the UUID and using the base URL always works.
   if (uri.includes('ucarecdn.com')) {
     const match = uri.match(/ucarecdn\.com\/([a-f0-9-]{36})/i);
     if (match && match[1]) {
-      return `https://ucarecdn.com/${match[1]}/-/preview/400x400/-/format/png/`;
+      return `https://ucarecdn.com/${match[1]}/`;
     }
   }
   return uri;
