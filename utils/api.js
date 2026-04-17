@@ -12,12 +12,12 @@ export function resolveAssetUri(uri) {
   // Always normalize Uploadcare URLs to the clean base URL.
   // The stored URL may already have transformation paths like /-/preview/400x400/
   // appended from an older version. Stacking more operations on top causes 404s.
-  // Extracting just the UUID and using the base URL always works.
-  if (uri.includes('ucarecdn.com')) {
-    const match = uri.match(/ucarecdn\.com\/([a-f0-9-]{36})/i);
+  // Extracting just the UUID and using the correct custom CDN host always works.
+  if (uri.includes('ucarecdn.com') || uri.includes('ucarecd.net')) {
+    const match = uri.match(/(?:ucarecdn\.com|ucarecd\.net)\/([a-f0-9-]{36})/i);
     if (match && match[1]) {
-      const resolved = `https://ucarecdn.com/${match[1]}/`;
-      console.log('[resolveAssetUri] ucarecdn →', resolved);
+      const resolved = `https://1cu7zozupu.ucarecd.net/${match[1]}/`;
+      console.log('[resolveAssetUri] uploadcare →', resolved);
       return resolved;
     }
   }

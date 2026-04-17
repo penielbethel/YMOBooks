@@ -227,7 +227,7 @@ async function uploadToUploadcare(dataUrlOrPath) {
 
     if (res.data && res.data.file) {
       // Store clean base URL — resolveImageSource handles display/fetch
-      return `https://ucarecdn.com/${res.data.file}/`;
+      return `https://1cu7zozupu.ucarecd.net/${res.data.file}/`;
     }
   } catch (err) {
     console.warn('Uploadcare upload failed:', err.response?.data || err.message);
@@ -236,10 +236,10 @@ async function uploadToUploadcare(dataUrlOrPath) {
 }
 
 function getUploadcareUuid(url) {
-  if (!url || typeof url !== 'string' || !url.includes('ucarecdn.com')) return null;
+  if (!url || typeof url !== 'string' || (!url.includes('ucarecdn.com') && !url.includes('ucarecd.net'))) return null;
   try {
-    const parts = url.split('ucarecdn.com/')[1].split('/');
-    return parts[0] || null;
+    const match = url.match(/(?:ucarecdn\.com|ucarecd\.net)\/([a-f0-9-]{36})/i);
+    return match ? match[1] : null;
   } catch (_) { return null; }
 }
 
@@ -619,10 +619,10 @@ function resolveImageSource(val) {
   // Handle external URLs (like Uploadcare)
   if (val.startsWith('http') && !val.includes('/files/')) {
     let url = val;
-    if (url.includes('ucarecdn.com')) {
-      const match = url.match(/ucarecdn\.com\/([a-f0-9-]{36})/i);
+    if (url.includes('ucarecdn.com') || url.includes('ucarecd.net')) {
+      const match = url.match(/(?:ucarecdn\.com|ucarecd\.net)\/([a-f0-9-]{36})/i);
       if (match && match[1]) {
-        url = `https://ucarecdn.com/${match[1]}/`;
+        url = `https://1cu7zozupu.ucarecd.net/${match[1]}/`;
       }
     }
     return url;
