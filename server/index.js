@@ -226,8 +226,8 @@ async function uploadToUploadcare(dataUrlOrPath) {
     });
 
     if (res.data && res.data.file) {
-      // Use standard preview command for better compatibility
-      return `https://ucarecdn.com/${res.data.file}/-/preview/400x400/`;
+      // Store clean base URL — resolveImageSource handles display/fetch
+      return `https://ucarecdn.com/${res.data.file}/`;
     }
   } catch (err) {
     console.warn('Uploadcare upload failed:', err.response?.data || err.message);

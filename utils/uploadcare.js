@@ -59,9 +59,12 @@ export async function uploadToUploadcare(fileSource) {
 
         if (data && data.file) {
             const fileId = data.file;
+            const cdnUrl = `https://ucarecdn.com/${fileId}/`;
+            console.log('[Uploadcare] Upload OK. fileId:', fileId, '→ URL:', cdnUrl);
             // Store the clean base URL — resolveAssetUri handles display transformations
-            return `https://ucarecdn.com/${fileId}/`;
+            return cdnUrl;
         }
+        console.warn('[Uploadcare] No file ID in response:', JSON.stringify(data));
         return null;
     } catch (error) {
         console.error('Uploadcare upload error detalhes:', error.message);
