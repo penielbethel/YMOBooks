@@ -67,12 +67,24 @@ const LoginScreen = ({ navigation }) => {
       let result = await loginCompany(entered, selectedType);
       console.log('[Login] Result:', result);
       // Fallback: older servers may not implement POST /api/login; try GET /api/company/:id
-      if (!(result?.success && result.company)) {
+      // Skip fallback if server explicitly rejected due to category mismatch (Access Denied)
+      if (!(result?.success && result.company) && (!result?.message || !result.message.includes('Access Denied'))) {
         try {
           const alt = await fetchCompany(entered);
           console.log('[Login] Fallback fetchCompany:', alt);
           if (alt?.success && (alt.company || alt.data)) {
-            result = { success: true, company: alt.company || alt.data };
+            const fallbackCompany = alt.company || alt.data;
+            const companyType = fallbackCompany.businessType || 'general_merchandise';
+            if (companyType !== selectedType) {
+              const names = {
+                'printing_press': 'Printing Press',
+                'manufacturing': 'Manufacturing',
+                'general_merchandise': 'General Merchandise'
+              };
+              result = { success: false, message: `Access Denied. This ID belongs to the "${names[companyType] || companyType}" category. Please switch tabs to login.` };
+            } else {
+              result = { success: true, company: fallbackCompany };
+            }
           }
         } catch (e) {
           console.warn('[Login] Fallback fetchCompany failed:', e?.message || e);
