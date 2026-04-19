@@ -1409,14 +1409,39 @@ app.post('/api/invoice/create', async (req, res) => {
         console.error('Persist invoice error:', persistErr);
       }
 
-      // Send Email Notification to Company
+      // Send Detailed Email Notification to Company
       if (company && company.email) {
+        let itemsList = items.map(it => `- ${it.name}: ${it.qty} x ${resolvedCurrencySymbol}${it.price} = ${resolvedCurrencySymbol}${(it.qty * it.price).toFixed(2)}`).join('\n');
+        
+        const emailBody = `
+Hello ${company.name || 'Vendor'},
+
+A new invoice has been successfully created in your YMOBooks account.
+
+------------- INVOICE DETAILS -------------
+Invoice Number: ${invNo}
+Date: ${invoiceDate || new Date().toLocaleDateString()}
+Category: ${category?.toUpperCase()}
+
+--- CUSTOMER ---
+Name: ${customer?.name || 'Walk-in'}
+Address: ${customer?.address || 'N/A'}
+Contact: ${customer?.contact || 'N/A'}
+
+--- ITEMS ---
+${itemsList}
+
+-------------------------------------------
+GRAND TOTAL: ${resolvedCurrencySymbol}${grandTotalPersist.toFixed(2)}
+-------------------------------------------
+
+Thank you for using YMOBooks!
+`;
+
         sendEmailNotification({
           to: company.email,
           subject: `YMOBooks: New Invoice Created (${invNo})`,
-          text: `Hello ${company.name || 'Vendor'},\n\nA new invoice has been successfully created in your YMOBooks account.\n\nDetails:\n- Invoice Number: ${invNo}\n- Customer: ${customer?.name || 'Walk-in'}\n- Grand Total: ${resolvedCurrencySymbol}${grandTotalPersist}\n- Date: ${invoiceDate || new Date().toLocaleDateString()}\n\nA PDF copy of this invoice has been attached for your records.\n\nThank you for using YMOBooks!`,
-          filename,
-          filePath
+          text: emailBody.trim()
         });
       }
 
@@ -1519,14 +1544,39 @@ app.post('/api/receipt/create', async (req, res) => {
         console.error('Persist receipt error:', persistErr.message);
       }
 
-      // Send Email Notification to Company
+      // Send Detailed Email Notification to Company
       if (company && company.email) {
+        let itemsList = derivedItems.map(it => `- ${it.name}: ${it.qty} x ${derivedCurrency}${it.price} = ${derivedCurrency}${(it.qty * it.price).toFixed(2)}`).join('\n');
+
+        const emailBody = `
+Hello ${company.name || 'Vendor'},
+
+A new payment receipt has been successfully generated in your YMOBooks account.
+
+------------- RECEIPT DETAILS -------------
+Receipt Number: ${rctNo}
+Reference Invoice: ${invoiceNumber || 'None'}
+Date: ${receiptDate || new Date().toLocaleDateString()}
+Category: ${derivedCategory?.toUpperCase()}
+
+--- CUSTOMER ---
+Name: ${derivedCustomer?.name || 'Walk-in'}
+Contact: ${derivedCustomer?.contact || 'N/A'}
+
+--- ITEMS/SERVICES ---
+${itemsList || 'Payment for Invoice'}
+
+-------------------------------------------
+AMOUNT PAID: ${derivedCurrency}${Number(derivedAmount).toFixed(2)}
+-------------------------------------------
+
+Thank you for using YMOBooks!
+`;
+
         sendEmailNotification({
           to: company.email,
           subject: `YMOBooks: New Receipt Generated (${rctNo})`,
-          text: `Hello ${company.name || 'Vendor'},\n\nA new payment receipt has been successfully generated in your YMOBooks account.\n\nDetails:\n- Receipt Number: ${rctNo}\n- Invoice Ref: ${invoiceNumber || 'N/A'}\n- Customer: ${derivedCustomer?.name || 'Walk-in'}\n- Amount Paid: ${derivedCurrency}${derivedAmount}\n- Date: ${receiptDate || new Date().toLocaleDateString()}\n\nA PDF copy of this receipt has been attached for your records.\n\nThank you for using YMOBooks!`,
-          filename,
-          filePath
+          text: emailBody.trim()
         });
       }
 
