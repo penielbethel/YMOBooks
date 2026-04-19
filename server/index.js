@@ -438,7 +438,7 @@ const InvoiceSchema = new mongoose.Schema(
     ],
     grandTotal: { type: Number },
     pdfPath: { type: String },
-    category: { type: String, enum: ['large_format', 'di_printing', 'dtf_prints', 'photo_frames', 'general'], default: 'general' },
+    category: { type: String, default: 'general' },
   },
   { timestamps: true }
 );
@@ -468,7 +468,7 @@ const ReceiptSchema = new mongoose.Schema(
       },
     ],
     pdfPath: { type: String },
-    category: { type: String, enum: ['large_format', 'di_printing', 'dtf_prints', 'photo_frames', 'general'], default: 'general' },
+    category: { type: String, default: 'general' },
   },
   { timestamps: true }
 );
@@ -1409,11 +1409,15 @@ app.post('/api/invoice/create', async (req, res) => {
         console.error('Persist invoice error:', persistErr);
       }
 
-      // Send Detailed Email Notification to Company
+      // Return response immediately so app doesn't hang
+      res.json({ success: true, pdfPath, filename });
+
+      // Send Detailed Email Notification to Company (Background)
       if (company && company.email) {
-        let itemsList = items.map(it => `- ${it.name}: ${it.qty} x ${resolvedCurrencySymbol}${it.price} = ${resolvedCurrencySymbol}${(it.qty * it.price).toFixed(2)}`).join('\n');
-        
-        const emailBody = `
+        try {
+          const itemsList = items.map(it => `- ${it.name}: ${it.qty} x ${resolvedCurrencySymbol}${it.price} = ${resolvedCurrencySymbol}${(it.qty * it.price).toFixed(2)}`).join('\n');
+          
+          const emailBody = `
 Hello ${company.name || 'Vendor'},
 
 A new invoice has been successfully created in your YMOBooks account.
@@ -1438,14 +1442,15 @@ GRAND TOTAL: ${resolvedCurrencySymbol}${grandTotalPersist.toFixed(2)}
 Thank you for using YMOBooks!
 `;
 
-        sendEmailNotification({
-          to: company.email,
-          subject: `YMOBooks: New Invoice Created (${invNo})`,
-          text: emailBody.trim()
-        });
+          sendEmailNotification({
+            to: company.email,
+            subject: `YMOBooks: New Invoice Created (${invNo})`,
+            text: emailBody.trim()
+          });
+        } catch (mailErr) {
+          console.error('Background mail error:', mailErr.message);
+        }
       }
-
-      return res.json({ success: true, pdfPath, filename });
     });
     stream.on('error', (err) => {
       console.error('PDF stream error:', err);
@@ -1544,11 +1549,15 @@ app.post('/api/receipt/create', async (req, res) => {
         console.error('Persist receipt error:', persistErr.message);
       }
 
-      // Send Detailed Email Notification to Company
-      if (company && company.email) {
-        let itemsList = derivedItems.map(it => `- ${it.name}: ${it.qty} x ${derivedCurrency}${it.price} = ${derivedCurrency}${(it.qty * it.price).toFixed(2)}`).join('\n');
+      // Return response immediately so app doesn't hang
+      res.json({ success: true, pdfPath, filename });
 
-        const emailBody = `
+      // Send Detailed Email Notification to Company (Background)
+      if (company && company.email) {
+        try {
+          const itemsList = derivedItems.map(it => `- ${it.name}: ${it.qty} x ${derivedCurrency}${it.price} = ${derivedCurrency}${(it.qty * it.price).toFixed(2)}`).join('\n');
+
+          const emailBody = `
 Hello ${company.name || 'Vendor'},
 
 A new payment receipt has been successfully generated in your YMOBooks account.
@@ -1573,14 +1582,15 @@ AMOUNT PAID: ${derivedCurrency}${Number(derivedAmount).toFixed(2)}
 Thank you for using YMOBooks!
 `;
 
-        sendEmailNotification({
-          to: company.email,
-          subject: `YMOBooks: New Receipt Generated (${rctNo})`,
-          text: emailBody.trim()
-        });
+          sendEmailNotification({
+            to: company.email,
+            subject: `YMOBooks: New Receipt Generated (${rctNo})`,
+            text: emailBody.trim()
+          });
+        } catch (mailErr) {
+          console.error('Background mail error:', mailErr.message);
+        }
       }
-
-      return res.json({ success: true, pdfPath, filename });
     });
     stream.on('error', (err) => {
       console.error('PDF receipt stream error:', err);
