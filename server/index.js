@@ -1,3 +1,4 @@
+require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const mongoose = require('mongoose');
@@ -6,8 +7,10 @@ const fs = require('fs');
 const PDFDocument = require('pdfkit');
 const dayjs = require('dayjs');
 const axios = require('axios');
-const UC_PUBLIC = process.env.UPLOADCARE_PUBLIC_KEY || '608f1703ba6637c4fc73';
-const UC_SECRET = process.env.UPLOADCARE_SECRET_KEY || 'c5c3bdd59e4aefdbc12f';
+const nodemailer = require('nodemailer');
+
+const UC_PUBLIC = process.env.UPLOADCARE_PUBLIC_KEY;
+const UC_SECRET = process.env.UPLOADCARE_SECRET_KEY;
 let DB_CONNECTED = false;
 let sharp = null; // lazy-loaded to avoid boot issues if optional dep missing
 
@@ -256,6 +259,40 @@ async function deleteFromUploadcare(url) {
     });
   } catch (err) {
     console.warn('Uploadcare delete failed:', err.response?.data || err.message);
+  }
+}
+
+const transporter = nodemailer.createTransport({
+  host: 'smtp-relay.brevo.com',
+  port: 587,
+  auth: {
+    user: process.env.BREVO_SENDER_EMAIL,
+    pass: process.env.BREVO_API_KEY
+  }
+});
+
+async function sendEmailNotification({ to, subject, text, filename, filePath }) {
+  if (!to || !to.includes('@')) {
+    console.warn('Skipping email: No valid recipient address registered for this company.');
+    return;
+  }
+  try {
+    const mailOptions = {
+      from: `"YMOBooks Notifications" <${process.env.BREVO_SENDER_EMAIL}>`,
+      to,
+      subject,
+      text,
+      attachments: filename && filePath ? [
+        {
+          filename,
+          path: filePath
+        }
+      ] : []
+    };
+    await transporter.sendMail(mailOptions);
+    console.log(`[Email] Notification sent to ${to} for ${filename || subject}`);
+  } catch (error) {
+    console.error('[Email] Sending failed:', error.message);
   }
 }
 
@@ -1371,6 +1408,18 @@ app.post('/api/invoice/create', async (req, res) => {
       } catch (persistErr) {
         console.error('Persist invoice error:', persistErr);
       }
+
+      // Send Email Notification to Company
+      if (company && company.email) {
+        sendEmailNotification({
+          to: company.email,
+          subject: `YMOBooks: New Invoice Created (${invNo})`,
+          text: `Hello ${company.name || 'Vendor'},\n\nA new invoice has been successfully created in your YMOBooks account.\n\nDetails:\n- Invoice Number: ${invNo}\n- Customer: ${customer?.name || 'Walk-in'}\n- Grand Total: ${resolvedCurrencySymbol}${grandTotalPersist}\n- Date: ${invoiceDate || new Date().toLocaleDateString()}\n\nA PDF copy of this invoice has been attached for your records.\n\nThank you for using YMOBooks!`,
+          filename,
+          filePath
+        });
+      }
+
       return res.json({ success: true, pdfPath, filename });
     });
     stream.on('error', (err) => {
@@ -1469,6 +1518,18 @@ app.post('/api/receipt/create', async (req, res) => {
       } catch (persistErr) {
         console.error('Persist receipt error:', persistErr.message);
       }
+
+      // Send Email Notification to Company
+      if (company && company.email) {
+        sendEmailNotification({
+          to: company.email,
+          subject: `YMOBooks: New Receipt Generated (${rctNo})`,
+          text: `Hello ${company.name || 'Vendor'},\n\nA new payment receipt has been successfully generated in your YMOBooks account.\n\nDetails:\n- Receipt Number: ${rctNo}\n- Invoice Ref: ${invoiceNumber || 'N/A'}\n- Customer: ${derivedCustomer?.name || 'Walk-in'}\n- Amount Paid: ${derivedCurrency}${derivedAmount}\n- Date: ${receiptDate || new Date().toLocaleDateString()}\n\nA PDF copy of this receipt has been attached for your records.\n\nThank you for using YMOBooks!`,
+          filename,
+          filePath
+        });
+      }
+
       return res.json({ success: true, pdfPath, filename });
     });
     stream.on('error', (err) => {
