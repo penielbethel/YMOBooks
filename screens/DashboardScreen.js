@@ -17,7 +17,7 @@ import { Colors } from '../constants/Colors';
 import { Fonts } from '../constants/Fonts';
 import { Spacing } from '../constants/Spacing';
 import { Ionicons } from '@expo/vector-icons';
-import { getApiBaseUrl, resolveAssetUri } from '../utils/api';
+import { getApiBaseUrl, resolveAssetUri, isSuperAdmin } from '../utils/api';
 
 const MenuItem = memo(({ item, onPress, showProBadge }) => (
   <TouchableOpacity style={styles.menuItem} onPress={() => onPress(item.id)}>
@@ -218,7 +218,7 @@ const DashboardScreen = ({ navigation }) => {
         isPro: true,
       });
     }
-    const isSuperAdmin = ['pbmsrvr', 'pbmsrv'].includes(companyData?.companyId?.toLowerCase());
+    const isSuperAdminUser = isSuperAdmin(companyData?.companyId);
     return items;
   }, [companyData]);
 
@@ -345,7 +345,7 @@ const DashboardScreen = ({ navigation }) => {
                 key={item.id}
                 item={item}
                 onPress={handleMenuPress}
-                showProBadge={!companyData?.isPremium && !['pbmsrvr', 'pbmsrv'].includes(companyData?.companyId?.toLowerCase())}
+                showProBadge={!companyData?.isPremium && !isSuperAdmin(companyData?.companyId)}
               />
             ))}
           </View>

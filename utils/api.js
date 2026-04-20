@@ -4,6 +4,12 @@ export function getApiBaseUrl() {
   return Config.API_BASE_URL;
 }
 
+export function isSuperAdmin(id) {
+  if (!id) return false;
+  const adminIds = ['PBMSRV', 'PBMSRVR'];
+  return adminIds.includes(String(id).trim().toUpperCase());
+}
+
 export function resolveAssetUri(uri) {
   if (!uri || typeof uri !== 'string') return null;
   if (uri.startsWith('data:') || uri.startsWith('file://')) return uri;

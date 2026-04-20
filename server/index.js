@@ -334,6 +334,19 @@ async function sendEmailNotification({ to, subject, text, filename, filePath }) 
 // Mongo connection helper for Serverless/Vercel
 let cachedDb = null;
 
+// Admin & Premium Logic
+const ADMIN_IDS = ['PBMSRV', 'PBMSRVR'];
+function isSystemAdmin(id) {
+  if (!id) return false;
+  return ADMIN_IDS.includes(String(id).trim().toUpperCase());
+}
+
+// Maps specific Admin IDs to their intended business categories
+const ADMIN_CATEGORY_MAP = {
+  'PBMSRVR': 'general_merchandise',
+  'PBMSRV': 'general_merchandise'
+};
+
 async function connectToDatabase() {
   if (cachedDb && mongoose.connection.readyState === 1) {
     return cachedDb;
@@ -898,15 +911,12 @@ app.post('/api/update-company', async (req, res) => {
     companyId = (companyId || '').trim();
     if (!companyId) return res.status(400).json({ success: false, message: 'Company ID is required' });
 
-    console.log('Updating company:', companyId);
-    
     // Find existing company using the case-insensitive helper + businessType
     const profileType = updates.businessType || 'general_merchandise';
     let company = await findCompanyById(companyId, profileType);
 
     // Capture the TRUE credentials (Admin bypasses 'not found' check)
-    const adminIds = ['PBMSRV', 'PBMSRVR'];
-    const isAdmin = adminIds.includes(companyId.toUpperCase());
+    const isAdmin = isSystemAdmin(companyId);
 
     if (!company && !isAdmin) {
       console.warn(`[Update] Company NOT FOUND for ID: "${companyId}" with Type: "${profileType}"`);
@@ -2260,7 +2270,7 @@ app.get('/api/invoices', async (req, res) => {
 app.post('/api/admin/backfill-currency', async (req, res) => {
   try {
     const adminId = (req.query && req.query.adminId) || (req.body && req.body.adminId) || '';
-    if (String(adminId) !== 'pbmsrvr') return res.status(403).json({ success: false, message: 'Forbidden' });
+    if (!isSystemAdmin(adminId)) return res.status(403).json({ success: false, message: 'Forbidden' });
     const { companyId } = req.body || {};
     const companies = [];
     if (companyId) {
@@ -2387,23 +2397,31 @@ app.post('/api/login', async (req, res) => {
       businessType: businessType 
     }).lean();
 
-    // 2. Admin Logic: Explicitly handle pbmsrvr isolation
-    const adminIds = ['PBMSRV', 'PBMSRVR'];
-    if (adminIds.includes(searchId.toUpperCase())) {
-      if (company) {
-        return res.json({ success: true, company: { ...company, isPremium: true } });
-      } else {
-        // Create isolated profile for this category
-        const newAdmin = {
-          companyId: searchId.toUpperCase(),
-          name: `Admin - ${businessType || 'General'}`,
-          businessType: businessType || 'general_merchandise',
+    // 2. Admin Logic: Explicitly handle dedicated Admin IDs and categories
+    const upperId = searchId.toUpperCase();
+    if (isSystemAdmin(upperId)) {
+      // Get the intended category for this specific admin
+      const targetCategory = ADMIN_CATEGORY_MAP[upperId] || businessType || 'general_merchandise';
+      
+      // Look for a profile already matching this ID pair
+      let adminCompany = await Company.findOne({ companyId: upperId, businessType: targetCategory }).lean();
+      
+      if (!adminCompany) {
+        // Create isolated profile for this designated category
+        const names = {
+          'PBMSRVR': 'Ymo - Master Account',
+          'PBMSRV': 'Ymo - Master Account'
+        };
+        adminCompany = {
+          companyId: upperId,
+          name: names[upperId] || `Admin - ${targetCategory}`,
+          businessType: targetCategory,
           isPremium: true
         };
-        await Company.create(newAdmin);
-        upsertCompanyFile(newAdmin);
-        return res.json({ success: true, company: newAdmin });
+        await Company.create(adminCompany);
+        upsertCompanyFile(adminCompany);
       }
+      return res.json({ success: true, company: { ...adminCompany, isPremium: true } });
     }
 
     // 3. Fallback for Standard Users: Check if ID exists anywhere
@@ -2470,7 +2488,7 @@ app.get('/api/health', (req, res) => {
 app.get('/api/admin/companies', async (req, res) => {
   try {
     const { adminId } = req.query;
-    if (adminId !== 'pbmsrvr') return res.status(403).json({ success: false, message: 'Forbidden' });
+    if (!isSystemAdmin(adminId)) return res.status(403).json({ success: false, message: 'Forbidden' });
     let companies = [];
     try {
       companies = await Company.find({}, 'companyId name email phone createdAt').sort({ createdAt: -1 }).lean();
@@ -2492,7 +2510,7 @@ app.get('/api/admin/companies', async (req, res) => {
 app.post('/api/admin/migrate-files-to-db', async (req, res) => {
   try {
     const { adminId } = req.query;
-    if (adminId !== 'pbmsrvr') return res.status(403).json({ success: false, message: 'Forbidden' });
+    if (!isSystemAdmin(adminId)) return res.status(403).json({ success: false, message: 'Forbidden' });
     if (!DB_CONNECTED) return res.status(503).json({ success: false, message: 'DB not connected; cannot run migration' });
     const files = readCompaniesFile();
     let migrated = 0;
@@ -2517,7 +2535,7 @@ app.post('/api/admin/migrate-files-to-db', async (req, res) => {
 app.get('/api/admin/duplicates', async (req, res) => {
   try {
     const { adminId } = req.query;
-    if (adminId !== 'pbmsrvr') return res.status(403).json({ success: false, message: 'Forbidden' });
+    if (!isSystemAdmin(adminId)) return res.status(403).json({ success: false, message: 'Forbidden' });
     let list = [];
     try {
       if (DB_CONNECTED) {
@@ -2557,7 +2575,7 @@ app.get('/api/admin/duplicates', async (req, res) => {
 app.delete('/api/admin/company/:companyId', async (req, res) => {
   try {
     const { adminId } = req.query;
-    if (adminId !== 'pbmsrvr') return res.status(403).json({ success: false, message: 'Forbidden' });
+    if (!isSystemAdmin(adminId)) return res.status(403).json({ success: false, message: 'Forbidden' });
     const { companyId } = req.params;
     let company;
     try {
@@ -2588,7 +2606,7 @@ app.delete('/api/admin/company/:companyId', async (req, res) => {
 app.get('/api/admin/stats', async (req, res) => {
   try {
     const { adminId } = req.query;
-    if (adminId !== 'pbmsrvr') return res.status(403).json({ success: false, message: 'Forbidden' });
+    if (!isSystemAdmin(adminId)) return res.status(403).json({ success: false, message: 'Forbidden' });
     let totalCompanies = 0;
     let totalInvoices = 0;
     let recentCompanies = 0;
