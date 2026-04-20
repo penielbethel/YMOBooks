@@ -90,8 +90,9 @@ const StockManagementScreen = ({ navigation }) => {
         if (!cId) return;
         setRefreshing(true);
         try {
-            // Fetch specifically active tab type
-            const res = await fetchStock(cId, activeTab === 'history' ? undefined : activeTab);
+            // Fetch specifically active tab type + business category
+            const cat = companyData?.businessType || 'manufacturing';
+            const res = await fetchStock(cId, activeTab === 'history' ? undefined : activeTab, cat);
             if (res && res.success) {
                 setStockItems(res.items || []);
             }
@@ -125,7 +126,8 @@ const StockManagementScreen = ({ navigation }) => {
         const payload = {
             ...formData,
             companyId,
-            type: activeTab
+            type: activeTab,
+            category: companyData?.businessType || 'manufacturing'
         };
 
         setLoading(true);

@@ -42,7 +42,8 @@ const BalanceSheetScreen = ({ navigation }) => {
         if (!companyData?.companyId) return;
         setLoading(true);
         try {
-            const res = await fetchBalanceSheet(companyData.companyId);
+            const cat = companyData.businessType || 'general_merchandise';
+            const res = await fetchBalanceSheet(companyData.companyId, cat);
             if (res && res.success) {
                 setData(res.balanceSheet);
             }

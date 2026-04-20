@@ -80,31 +80,41 @@ function upsertCompanyFile(entry) {
   writeCompaniesFile(companies);
   return entry;
 }
-function findCompanyFile(companyId) {
+function findCompanyFile(companyId, businessType) {
   const companies = readCompaniesFile();
-  return companies.find((c) => c.companyId === companyId);
+  return companies.find((c) => {
+    const idMatch = c.companyId === companyId;
+    if (idMatch && businessType) {
+      return c.businessType === businessType;
+    }
+    return idMatch;
+  });
 }
 
-async function findCompanyById(companyId) {
+async function findCompanyById(companyId, businessType) {
   if (!companyId) return null;
   const searchId = String(companyId).trim();
   
-  // 1. Try JSON local file first (fastest fallback)
-  let company = findCompanyFile(searchId);
+  // 1. Try JSON local file first
+  let company = findCompanyFile(searchId, businessType);
   if (company) return company;
 
   // 2. Try MongoDB match if connected
   try {
-    // Only attempt DB if Mongo is definitely used or we try it and it catches
-    // Exact match
-    company = await Company.findOne({ companyId: searchId }).lean();
-    if (company) return company;
+    // If businessType provided, try pairing it
+    if (businessType) {
+      company = await Company.findOne({ 
+        companyId: { $regex: new RegExp(`^${searchId}$`, 'i') },
+        businessType: businessType 
+      }).lean();
+      if (company) return company;
+    }
 
-    // Case-insensitive match (crucial for ensuring logins work regardless of casing)
+    // Fallback to ID only if not found with pair
     company = await Company.findOne({ companyId: { $regex: new RegExp(`^${searchId}$`, 'i') } }).lean();
     if (company) return company;
   } catch (err) {
-    // DB lookup failed or no connection, proceed to return null if not in file
+    // DB lookup failed
   }
 
   return null;
@@ -401,36 +411,34 @@ const Currency = mongoose.model('Currency', CurrencySchema);
 
 const CompanySchema = new mongoose.Schema(
   {
-    companyId: { type: String, unique: true, index: true },
-    name: { type: String, required: true, unique: true, sparse: true },
+    companyId: { type: String, index: true },
+    businessType: { type: String, default: 'general_merchandise', index: true },
+    name: { type: String, required: true },
     address: { type: String },
-    email: { type: String, unique: true, sparse: true },
-    phone: { type: String, unique: true, sparse: true },
+    email: { type: String },
+    phone: { type: String },
     logo: { type: String }, // base64 or URL
     signature: { type: String }, // base64 or URL (optional)
     brandColor: { type: String },
     country: { type: String },
-    currencySymbol: { type: String, default: '$' },
-    currencyCode: { type: String }, // e.g., NGN, USD
+    currencySymbol: { type: String, default: '₦' },
+    currencyCode: { type: String, default: 'NGN' }, // e.g., NGN, USD
     termsAndConditions: { type: String },
     // Bank details
     bankName: { type: String },
     accountName: { type: String },
-    accountNumber: { type: String, unique: true, sparse: true },
+    accountNumber: { type: String },
     // Document templates
     invoiceTemplate: { type: String, default: 'classic' },
     receiptTemplate: { type: String, default: 'classic' },
-    // Business Type Classification
-    businessType: {
-      type: String,
-      enum: ['printing_press', 'manufacturing', 'general_merchandise'],
-      default: 'general_merchandise'
-    },
     // Subscription
     isPremium: { type: Boolean, default: false },
   },
   { timestamps: true }
 );
+
+// Allow (companyId + businessType) to be the unique key
+CompanySchema.index({ companyId: 1, businessType: 1 }, { unique: true });
 
 const Company = mongoose.model('Company', CompanySchema);
 
@@ -505,6 +513,7 @@ const ExpenseSchema = new mongoose.Schema(
     month: { type: String, index: true, required: true }, // YYYY-MM
     category: { type: String, enum: ['production', 'expense', 'large_format', 'di_printing', 'dtf_prints', 'photo_frames'], required: true },
     amount: { type: Number, required: true },
+    businessCategory: { type: String, default: 'general_merchandise', index: true },
     currencySymbol: { type: String },
     currencyCode: { type: String },
     description: { type: String },
@@ -526,6 +535,7 @@ const StockItemSchema = new mongoose.Schema(
     sellingPrice: { type: Number, default: 0 }, // Selling price (for finished goods)
     minStockLevel: { type: Number, default: 0 }, // Alert level
     description: { type: String },
+    category: { type: String, default: 'manufacturing', index: true },
     // Bill of Materials (for Finished Goods)
     bom: [
       {
@@ -542,6 +552,7 @@ const StockItem = mongoose.model('StockItem', StockItemSchema);
 const ProductionLogSchema = new mongoose.Schema(
   {
     companyId: { type: String, required: true, index: true },
+    category: { type: String, default: 'manufacturing', index: true },
     finishedGoodId: { type: mongoose.Schema.Types.ObjectId, ref: 'StockItem', required: true },
     quantityProduced: { type: Number, required: true },
     materialsUsed: [
@@ -889,14 +900,15 @@ app.post('/api/update-company', async (req, res) => {
 
     console.log('Updating company:', companyId);
     
-    // Find existing company using the case-insensitive helper
-    let company = await findCompanyById(companyId);
+    // Find existing company using the case-insensitive helper + businessType
+    const profileType = updates.businessType || company?.businessType || 'general_merchandise';
+    let company = await findCompanyById(companyId, profileType);
     if (!company) {
-      console.warn(`[Update] Company NOT FOUND for ID: "${companyId}"`);
+      console.warn(`[Update] Company NOT FOUND for ID: "${companyId}" with Type: "${profileType}"`);
       return res.status(404).json({ success: false, message: 'Company not found' });
     }
 
-    // Capture the TRUE companyId from the record (preserving its casing in the DB)
+    // Capture the TRUE credentials
     const trueId = company.companyId; 
     const currentData = { ...company };
 
@@ -963,7 +975,7 @@ app.post('/api/update-company', async (req, res) => {
     // Save to DB
     try {
       const updatedDoc = await Company.findOneAndUpdate(
-        { companyId: trueId },
+        { companyId: trueId, businessType: profileType },
         { $set: currentData },
         { new: true, upsert: true }
       ).lean();
@@ -1341,10 +1353,10 @@ app.post('/api/invoice/create', async (req, res) => {
       companyId, invoiceNumber, invoiceDate, dueDate, customer = {},
       items = [], template, brandColor, companyOverride, category = 'general'
     } = req.body;
-    console.log(`[Invoice] Creating for CompanyID: "${companyId}"`);
+    console.log(`[Invoice] Creating for CompanyID: "${companyId}" with Category: "${category}"`);
     if (!companyId) return res.status(400).json({ success: false, message: 'companyId is required' });
     
-    let company = await findCompanyById(companyId);
+    let company = await findCompanyById(companyId, category);
     if (company) {
       console.log(`[Invoice] Company found: "${company.name}"`);
     } else {
@@ -1493,10 +1505,10 @@ app.post('/api/receipt/create', async (req, res) => {
       companyId, invoiceNumber, receiptNumber, receiptDate, customer = {},
       amountPaid, items = [], category = 'general'
     } = req.body;
-    console.log(`[Receipt] Creating for CompanyID: "${companyId}"`);
+    console.log(`[Receipt] Creating for CompanyID: "${companyId}" with Category: "${category}"`);
     if (!companyId) return res.status(400).json({ success: false, message: 'companyId is required' });
     
-    let company = await findCompanyById(companyId);
+    let company = await findCompanyById(companyId, category);
     if (company) {
       console.log(`[Receipt] Company found: "${company.name}"`);
     } else {
@@ -1742,26 +1754,31 @@ app.delete('/api/receipts/by-invoice/:invoiceNumber', async (req, res) => {
 // Create expense entry
 app.post('/api/expenses/create', async (req, res) => {
   try {
-    const { companyId, month, category, amount, description } = req.body || {};
+    const { companyId, month, category, amount, description, businessCategory } = req.body || {};
     if (!companyId) return res.status(400).json({ success: false, message: 'Missing companyId' });
-    if (!month) return res.status(400).json({ success: false, message: 'Missing month (YYYY-MM)' });
-    if (!category) return res.status(400).json({ success: false, message: 'Missing category' });
-    const amt = Number(amount);
-    if (!amt || amt <= 0) return res.status(400).json({ success: false, message: 'Amount must be positive' });
 
     // Enforce company currency
-    let company;
-    try { company = await Company.findOne({ companyId }).lean(); } catch (_) { }
-    if (!company) company = findCompanyFile(companyId);
-    const sym = company?.currencySymbol || '$';
-    const code = company?.currencyCode || mapSymbolToCode(sym) || undefined;
+    let company = await findCompanyById(companyId, businessCategory);
+    const sym = company?.currencySymbol || '₦';
+    const code = company?.currencyCode || 'NGN';
+
     try {
-      const created = await Expense.create({ companyId, month, category, amount: amt, currencySymbol: sym, currencyCode: code, description });
+      const created = await Expense.create({ 
+        companyId, month, category, 
+        amount: Number(amount), 
+        businessCategory: businessCategory || 'general_merchandise',
+        currencySymbol: sym, currencyCode: code, description 
+      });
       return res.json({ success: true, expense: created });
     } catch (err) {
       console.warn('Expense create DB failed, using file fallback:', err.message);
-      const created = addExpenseFile({ companyId, month, category, amount: amt, currencySymbol: sym, currencyCode: code, description });
-      return res.json({ success: true, expense: created, fallback: 'file' });
+      const created = addExpenseFile({ 
+        companyId, month, category, 
+        amount: Number(amount), 
+        businessCategory: businessCategory || 'general_merchandise',
+        currencySymbol: sym, currencyCode: code, description 
+      });
+      return res.json({ success: true, expense: created });
     }
   } catch (err) {
     console.error('Expense create error:', err);
@@ -1772,10 +1789,12 @@ app.post('/api/expenses/create', async (req, res) => {
 // Fetch expenses for a company and month
 app.get('/api/expenses', async (req, res) => {
   try {
-    const { companyId, month } = req.query;
+    const { companyId, month, businessCategory } = req.query;
     if (!companyId) return res.status(400).json({ success: false, message: 'Missing companyId' });
     const query = { companyId };
     if (month) query.month = String(month);
+    if (businessCategory) query.businessCategory = businessCategory;
+    
     let expenses = [];
     try {
       expenses = await Expense.find(query).sort({ createdAt: -1 }).lean();
@@ -1793,11 +1812,13 @@ app.get('/api/expenses', async (req, res) => {
 // Purge expenses for a company (optional: by month and/or category)
 app.delete('/api/expenses', async (req, res) => {
   try {
-    const { companyId, month, category } = req.query;
+    const { companyId, month, category, businessCategory } = req.query;
     if (!companyId) return res.status(400).json({ success: false, message: 'Missing companyId' });
     const query = { companyId };
     if (month) query.month = String(month);
     if (category) query.category = String(category);
+    if (businessCategory) query.businessCategory = businessCategory;
+    
     let deletedCount = 0;
     try {
       const result = await Expense.deleteMany(query);
@@ -1818,10 +1839,9 @@ app.delete('/api/expenses', async (req, res) => {
 // Create Stock Item
 app.post('/api/stock/create', async (req, res) => {
   try {
-    const { companyId, name, type, quantity, unit, costPrice, sellingPrice, minStockLevel, description, bom } = req.body;
+    const { companyId, name, type, quantity, unit, costPrice, sellingPrice, minStockLevel, description, bom, category } = req.body;
     if (!companyId || !name) return res.status(400).json({ success: false, message: 'Company ID and Name are required' });
 
-    // Enforce business type check if needed, but for now rely on frontend filtering
     const newItem = await StockItem.create({
       companyId,
       name,
@@ -1832,7 +1852,8 @@ app.post('/api/stock/create', async (req, res) => {
       sellingPrice: Number(sellingPrice || 0),
       minStockLevel: Number(minStockLevel || 0),
       description,
-      bom: bom || []
+      bom: bom || [],
+      category: category || 'manufacturing'
     });
     return res.json({ success: true, item: newItem });
   } catch (err) {
@@ -1844,11 +1865,12 @@ app.post('/api/stock/create', async (req, res) => {
 // List Stock Items
 app.get('/api/stock', async (req, res) => {
   try {
-    const { companyId, type } = req.query;
+    const { companyId, type, category } = req.query;
     if (!companyId) return res.status(400).json({ success: false, message: 'Missing companyId' });
 
     const query = { companyId };
     if (type) query.type = type;
+    if (category) query.category = category;
 
     const items = await StockItem.find(query).sort({ name: 1 }).lean();
     return res.json({ success: true, items });
@@ -1973,9 +1995,12 @@ app.get('/api/finance/summary', async (req, res) => {
     // Expenses (single currency)
     const expenseQuery = { companyId, month: m };
     if (category) {
-      // If a specific category is requested, we only want those expenses
+      // For a specific sub-category within this business
       expenseQuery.category = category;
     }
+    // Master isolation filter
+    const { businessCategory } = req.query;
+    if (businessCategory) expenseQuery.businessCategory = businessCategory;
 
     const expenses = await Expense.find(expenseQuery).lean();
     let productionCost = 0;
@@ -2029,22 +2054,30 @@ app.get('/api/finance/summary', async (req, res) => {
 // Balance Sheet - Wealth Statement for Manufacturing
 app.get('/api/finance/balance-sheet', async (req, res) => {
   try {
-    const { companyId } = req.query;
+    const { companyId, category } = req.query;
     if (!companyId) return res.status(400).json({ success: false, message: 'Missing companyId' });
 
     // 1. Inventory Assets (Stock Value)
-    const items = await StockItem.find({ companyId }).lean();
+    const stockQuery = { companyId };
+    if (category) stockQuery.category = category;
+    const items = await StockItem.find(stockQuery).lean();
     const inventoryValue = items.reduce((sum, item) => sum + (Number(item.quantity || 0) * Number(item.costPrice || 0)), 0);
 
     // 2. Accounts Receivable (Unpaid Invoices)
-    const unpaidInvoices = await Invoice.find({ companyId, status: 'unpaid' }).lean();
+    const invQuery = { companyId, status: 'unpaid' };
+    if (category) invQuery.category = category;
+    const unpaidInvoices = await Invoice.find(invQuery).lean();
     const accountsReceivable = unpaidInvoices.reduce((sum, inv) => sum + Number(inv.grandTotal || 0), 0);
 
     // 3. Cash Estimation (All Receipts - All Expenses)
-    const receipts = await Receipt.find({ companyId }).lean();
+    const rctQuery = { companyId };
+    if (category) rctQuery.category = category;
+    const receipts = await Receipt.find(rctQuery).lean();
     const totalCashIn = receipts.reduce((sum, r) => sum + Number(r.amountPaid || 0), 0);
 
-    const expenses = await Expense.find({ companyId }).lean();
+    const expQuery = { companyId };
+    if (category) expQuery.businessCategory = category;
+    const expenses = await Expense.find(expQuery).lean();
     const totalCashOut = expenses.reduce((sum, e) => sum + Number(e.amount || 0), 0);
 
     const cashAtBank = totalCashIn - totalCashOut;
@@ -2342,19 +2375,32 @@ app.post('/api/login', async (req, res) => {
 
     // Normalize ID
     const searchId = String(companyId).trim();
-    // Admin bypass
+    // 1. Check for profile tied specifically to this category
+    const company = await findCompanyById(searchId, businessType);
+
+    // 2. Admin Logic: If ID is pbmsrvr, allow auto-creation/login for ANY category
     const adminIds = ['PBMSRV', 'PBMSRVR'];
     if (adminIds.includes(searchId.toUpperCase())) {
-      const adminStub = {
-        companyId: searchId.toUpperCase(),
-        name: 'System Admin',
-        businessType: businessType || 'admin',
-        isPremium: true
-      };
-      return res.json({ success: true, company: adminStub });
+      if (company) {
+        // Return existing admin profile for this category
+        return res.json({ success: true, company: { ...company, isPremium: true } });
+      } else {
+        // First time entering this category: Create a default admin profile
+        const newAdmin = {
+          companyId: searchId.toUpperCase(),
+          name: `Admin - ${businessType || 'General'}`,
+          businessType: businessType || 'general_merchandise',
+          isPremium: true
+        };
+        // Auto-save this profile so "Save Changes" works later
+        try {
+          await Company.create(newAdmin);
+          upsertCompanyFile(newAdmin);
+        } catch (_) {}
+        return res.json({ success: true, company: newAdmin });
+      }
     }
 
-    const company = await findCompanyById(searchId);
     if (!company) return res.status(404).json({ success: false, message: 'Company not found' });
 
     // Strict Category Enforcment
