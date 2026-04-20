@@ -263,11 +263,10 @@ async function deleteFromUploadcare(url) {
 }
 
 const transporter = nodemailer.createTransport({
-  host: 'smtp-relay.brevo.com',
-  port: 587,
+  service: 'gmail',
   auth: {
-    user: process.env.BREVO_SENDER_EMAIL,
-    pass: process.env.BREVO_API_KEY
+    user: process.env.GMAIL_USER,
+    pass: process.env.GMAIL_APP_PASS
   }
 });
 
@@ -278,7 +277,7 @@ async function sendEmailNotification({ to, subject, text, filename, filePath }) 
   }
   try {
     const mailOptions = {
-      from: `"YMOBooks Notifications" <${process.env.BREVO_SENDER_EMAIL}>`,
+      from: `"YMOBooks Notifications" <${process.env.GMAIL_USER}>`,
       to,
       subject,
       text,
