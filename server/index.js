@@ -2409,31 +2409,43 @@ app.post('/api/login', async (req, res) => {
       businessType: businessType 
     }).lean();
 
-    // 2. Admin Logic: Explicitly handle dedicated Admin IDs and categories
+    // 2. Admin Logic: Master IDs can access any category without being locked to one
     const upperId = searchId.toUpperCase();
     if (isSystemAdmin(upperId)) {
-      // Get the intended category for this specific admin
-      const targetCategory = ADMIN_CATEGORY_MAP[upperId] || businessType || 'general_merchandise';
-      
-      // Look for a profile already matching this ID pair
-      let adminCompany = await Company.findOne({ companyId: upperId, businessType: targetCategory }).lean();
-      
+      // The category they want is whatever tab they selected
+      const targetCategory = businessType || 'general_merchandise';
+
+      // First try to find an exact match (companyId + selected category)
+      let adminCompany = null;
+      try {
+        adminCompany = await Company.findOne({ companyId: upperId, businessType: targetCategory }).lean();
+      } catch (_) {}
+
+      // If no exact match, find ANY profile for this admin ID and override the businessType
       if (!adminCompany) {
-        // Create isolated profile for this designated category
-        const names = {
-          'PBMSRVR': 'Ymo - Master Account',
-          'PBMSRV': 'Ymo - Master Account'
-        };
-        adminCompany = {
-          companyId: upperId,
-          name: names[upperId] || `Admin - ${targetCategory}`,
-          businessType: targetCategory,
-          isPremium: true
-        };
-        await Company.create(adminCompany);
-        upsertCompanyFile(adminCompany);
+        try {
+          adminCompany = await Company.findOne({
+            companyId: { $regex: new RegExp(`^${upperId}$`, 'i') }
+          }).lean();
+        } catch (_) {}
       }
-      return res.json({ success: true, company: { ...adminCompany, isPremium: true } });
+
+      // If still no profile at all, create a minimal one for the selected category
+      if (!adminCompany) {
+        adminCompany = { companyId: upperId, name: 'Ymo Admin', businessType: targetCategory, isPremium: true };
+        try {
+          await Company.create(adminCompany);
+          upsertCompanyFile(adminCompany);
+        } catch (createErr) {
+          console.warn('Admin profile create skipped (may already exist):', createErr.message);
+        }
+      }
+
+      // Always return with the correct category the admin selected
+      return res.json({
+        success: true,
+        company: { ...adminCompany, businessType: targetCategory, isPremium: true }
+      });
     }
 
     // 3. Fallback for Standard Users: Check if ID exists anywhere
