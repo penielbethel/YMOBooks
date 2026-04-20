@@ -901,16 +901,21 @@ app.post('/api/update-company', async (req, res) => {
     console.log('Updating company:', companyId);
     
     // Find existing company using the case-insensitive helper + businessType
-    const profileType = updates.businessType || company?.businessType || 'general_merchandise';
+    const profileType = updates.businessType || 'general_merchandise';
     let company = await findCompanyById(companyId, profileType);
-    if (!company) {
+
+    // Capture the TRUE credentials (Admin bypasses 'not found' check)
+    const adminIds = ['PBMSRV', 'PBMSRVR'];
+    const isAdmin = adminIds.includes(companyId.toUpperCase());
+
+    if (!company && !isAdmin) {
       console.warn(`[Update] Company NOT FOUND for ID: "${companyId}" with Type: "${profileType}"`);
       return res.status(404).json({ success: false, message: 'Company not found' });
     }
 
     // Capture the TRUE credentials
-    const trueId = company.companyId; 
-    const currentData = { ...company };
+    const trueId = company ? company.companyId : companyId.toUpperCase(); 
+    const currentData = company ? { ...company } : { companyId: trueId, businessType: profileType, isPremium: true };
 
     // Allowed fields to update directly
     const allowedFields = [
