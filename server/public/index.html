@@ -107,6 +107,64 @@
             color: var(--primary);
         }
 
+        /* --- Dropdown --- */
+        .dropdown {
+            position: relative;
+            cursor: pointer;
+            padding-bottom: 5px;
+        }
+
+        .dropdown-trigger {
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+        }
+
+        .dropdown-content {
+            display: none;
+            position: absolute;
+            top: 100%;
+            left: -10px;
+            background: white;
+            min-width: 200px;
+            border-radius: 16px;
+            box-shadow: 0 15px 40px rgba(0,0,0,0.1);
+            border: 1px solid var(--gray-100);
+            padding: 0.75rem 0;
+            z-index: 1001;
+            transform-origin: top left;
+            animation: dropdownFade 0.2s ease-out;
+        }
+
+        @keyframes dropdownFade {
+            from { opacity: 0; transform: translateY(10px) scale(0.95); }
+            to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+
+        .dropdown:hover .dropdown-content {
+            display: block;
+        }
+
+        .dropdown-content a {
+            display: flex !important;
+            align-items: center;
+            gap: 10px;
+            padding: 0.8rem 1.25rem !important;
+            color: var(--gray-600) !important;
+            font-size: 0.85rem !important;
+            border-radius: 0 !important;
+            background: transparent !important;
+        }
+
+        .dropdown-content a:hover {
+            background: var(--gray-50) !important;
+            color: var(--primary) !important;
+        }
+
+        .dropdown-content i {
+            color: var(--primary);
+        }
+
         .nav-cta {
             background: var(--primary);
             color: white !important;
@@ -375,7 +433,26 @@
                 </a>
                 <div class="nav-links">
                     <a href="#features">Features</a>
-                    <a href="tax_calculator.html">Tools</a>
+                    <div class="dropdown">
+                        <div class="dropdown-trigger">
+                            <a href="#">Tools</a>
+                            <i data-lucide="chevron-down" size="14" style="color: var(--gray-600); margin-top: 2px;"></i>
+                        </div>
+                        <div class="dropdown-content">
+                            <a href="/app.html">
+                                <i data-lucide="log-in" size="16"></i>
+                                <span>Web App Login</span>
+                            </a>
+                            <a href="/app.html">
+                                <i data-lucide="plus-circle" size="16"></i>
+                                <span>Register Company</span>
+                            </a>
+                            <a href="tax_calculator.html">
+                                <i data-lucide="calculator" size="16"></i>
+                                <span>Tax Calculator</span>
+                            </a>
+                        </div>
+                    </div>
                     <a href="/app.html" class="nav-cta">Go to Web App</a>
                 </div>
             </nav>
