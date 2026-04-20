@@ -2380,30 +2380,35 @@ app.post('/api/login', async (req, res) => {
 
     // Normalize ID
     const searchId = String(companyId).trim();
-    // 1. Check for profile tied specifically to this category
-    const company = await findCompanyById(searchId, businessType);
+    
+    // 1. STRICT match for category (Primary isolation)
+    let company = await Company.findOne({ 
+      companyId: { $regex: new RegExp(`^${searchId}$`, 'i') },
+      businessType: businessType 
+    }).lean();
 
-    // 2. Admin Logic: If ID is pbmsrvr, allow auto-creation/login for ANY category
+    // 2. Admin Logic: Explicitly handle pbmsrvr isolation
     const adminIds = ['PBMSRV', 'PBMSRVR'];
     if (adminIds.includes(searchId.toUpperCase())) {
       if (company) {
-        // Return existing admin profile for this category
         return res.json({ success: true, company: { ...company, isPremium: true } });
       } else {
-        // First time entering this category: Create a default admin profile
+        // Create isolated profile for this category
         const newAdmin = {
           companyId: searchId.toUpperCase(),
           name: `Admin - ${businessType || 'General'}`,
           businessType: businessType || 'general_merchandise',
           isPremium: true
         };
-        // Auto-save this profile so "Save Changes" works later
-        try {
-          await Company.create(newAdmin);
-          upsertCompanyFile(newAdmin);
-        } catch (_) {}
+        await Company.create(newAdmin);
+        upsertCompanyFile(newAdmin);
         return res.json({ success: true, company: newAdmin });
       }
+    }
+
+    // 3. Fallback for Standard Users: Check if ID exists anywhere
+    if (!company) {
+      company = await Company.findOne({ companyId: { $regex: new RegExp(`^${searchId}$`, 'i') } }).lean();
     }
 
     if (!company) return res.status(404).json({ success: false, message: 'Company not found' });

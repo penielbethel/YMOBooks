@@ -230,6 +230,7 @@ const SettingsScreen = ({ navigation }) => {
 
       const payload = {
         companyId: String(company.companyId).trim(),
+        businessType: company.businessType || 'general_merchandise',
         name,
         address,
         email,
@@ -254,7 +255,7 @@ const SettingsScreen = ({ navigation }) => {
         let serverCompany = res?.company;
         if (!serverCompany) {
           try {
-            const refetch = await fetchCompany(company.companyId);
+            const refetch = await fetchCompany(company.companyId, company.businessType);
             serverCompany = refetch?.company || null;
           } catch (_) { }
         }
