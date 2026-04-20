@@ -27,27 +27,39 @@ const WelcomeScreen = ({ navigation }) => {
   const features = [
     {
       icon: 'document-text-outline',
-      title: 'Invoices',
-      description: 'Create professional invoices instantly',
-      color: '#4F46E5'
+      title: 'Pro Invoices',
+      description: 'Professional letterheads',
+      color: '#CC5500'
     },
     {
       icon: 'receipt-outline',
-      title: 'Receipts',
-      description: 'Manage digital receipts easily',
+      title: 'Digital Receipts',
+      description: 'Track all sales instantly',
       color: '#10B981'
     },
     {
-      icon: 'calculator-outline',
-      title: 'Calculator',
-      description: 'Financial tools at your fingertips',
+      icon: 'cube-outline',
+      title: 'Stock Manager',
+      description: 'Inventory & Materials',
       color: '#F59E0B'
     },
     {
-      icon: 'briefcase-outline',
-      title: 'Branding',
-      description: 'Custom logo & signature support',
+      icon: 'bar-chart-outline',
+      title: 'Profit & Loss',
+      description: 'Financial insights',
+      color: '#6366F1'
+    },
+    {
+      icon: 'calculator-outline',
+      title: 'Tax Tools',
+      description: 'Nigeria Tax Calculator',
       color: '#8B5CF6'
+    },
+    {
+      icon: 'business-outline',
+      title: 'Multi-Business',
+      description: 'Isolated categories',
+      color: '#EA580C'
     }
   ];
 

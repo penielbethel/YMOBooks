@@ -191,15 +191,17 @@ const LoginScreen = ({ navigation }) => {
 
             <View style={styles.divider} />
 
-            <Text style={styles.label}>Company ID</Text>
-            <TextInput
-              style={styles.input}
-              value={companyId}
-              onChangeText={setCompanyId}
-              placeholder={`e.g. ${businessTypes.find(t => t.id === selectedType)?.prefix}-12345`}
-              placeholderTextColor={Colors.textSecondary}
-              autoCapitalize="characters"
-            />
+            <View style={styles.inputContainer}>
+              <Ionicons name="business-outline" size={20} color={Colors.primary} style={styles.inputIcon} />
+              <TextInput
+                style={styles.inputWithIcon}
+                value={companyId}
+                onChangeText={setCompanyId}
+                placeholder={`e.g. ${businessTypes.find(t => t.id === selectedType)?.prefix}-12345`}
+                placeholderTextColor={Colors.textSecondary}
+                autoCapitalize="characters"
+              />
+            </View>
             {/* Helper hint */}
             <Text style={styles.helperText}>
               Ensure your ID starts with <Text style={{ fontWeight: 'bold' }}>{businessTypes.find(t => t.id === selectedType)?.prefix}</Text> for this category.
@@ -260,7 +262,23 @@ const styles = StyleSheet.create({
   typeTextActive: { color: Colors.white, fontWeight: 'bold' },
   divider: { height: 1, backgroundColor: Colors.border, marginBottom: Spacing.lg },
   label: { fontSize: Fonts.sizes.md, fontWeight: Fonts.weights.semiBold, color: Colors.text, marginBottom: Spacing.sm },
-  input: { backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border, borderRadius: 8, paddingHorizontal: Spacing.md, paddingVertical: Spacing.md, fontSize: Fonts.sizes.md, color: Colors.text },
+  inputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 12,
+    paddingHorizontal: Spacing.md,
+    marginBottom: Spacing.sm
+  },
+  inputIcon: { marginRight: Spacing.sm },
+  inputWithIcon: { 
+    flex: 1, 
+    paddingVertical: Spacing.md, 
+    fontSize: Fonts.sizes.md, 
+    color: Colors.text 
+  },
   helperText: { fontSize: Fonts.sizes.sm, color: Colors.textSecondary, marginTop: Spacing.xs },
   loginButton: { backgroundColor: Colors.primary, paddingVertical: Spacing.lg, borderRadius: 8, alignItems: 'center', marginTop: Spacing.lg },
   loginButtonDisabled: { opacity: 0.6 },

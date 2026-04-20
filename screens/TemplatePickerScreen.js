@@ -19,11 +19,11 @@ import { WebView } from 'react-native-webview';
 import SubscriptionScreen from './SubscriptionScreen';
 
 const TEMPLATES = [
-  { key: 'classic', title: 'Classic', emoji: '📄', isPro: false },
-  { key: 'modern', title: 'Modern', emoji: '✨', isPro: true },
-  { key: 'minimal', title: 'Minimal', emoji: '🧼', isPro: true },
-  { key: 'bold', title: 'Bold', emoji: '🔥', isPro: true },
-  { key: 'compact', title: 'Compact', emoji: '📦', isPro: true },
+  { key: 'classic', title: 'Classic', icon: 'document-text-outline', isPro: false },
+  { key: 'modern', title: 'Modern', icon: 'sparkles-outline', isPro: true },
+  { key: 'minimal', title: 'Minimal', icon: 'leaf-outline', isPro: true },
+  { key: 'bold', title: 'Bold', icon: 'flame-outline', isPro: true },
+  { key: 'compact', title: 'Compact', icon: 'file-tray-full-outline', isPro: true },
 ];
 
 // --- DI Printing Parameters ---
@@ -887,20 +887,20 @@ export default function TemplatePickerScreen({ navigation, route }) {
     }
   };
 
-  const renderTemplate = (tplKey, title, emoji, isPro, selected, onSelect) => {
+  const renderTemplate = (tplKey, title, iconName, isPro, selected, onSelect) => {
     const locked = isPro && !company?.isPremium && !['pbmsrvr', 'pbmsrv'].includes(company?.companyId?.toLowerCase());
     return (
       <TouchableOpacity
         style={[styles.templateCard, selected && styles.templateSelected, locked && styles.templateLocked]}
         onPress={() => onSelect(tplKey)}
       >
-        <View>
-          <Text style={styles.templateEmoji}>{emoji}</Text>
-          {locked && <View style={styles.lockBadge}><Ionicons name="lock-closed" size={12} color="white" /></View>}
+        <View style={styles.templateIconWrapper}>
+            <Ionicons name={iconName} size={28} color={selected ? Colors.primary : Colors.textSecondary} />
+            {locked && <View style={styles.lockBadge}><Ionicons name="lock-closed" size={12} color="white" /></View>}
         </View>
-        <Text style={styles.templateTitle}>{title}</Text>
+        <Text style={[styles.templateTitle, selected && { color: Colors.primary, fontWeight: '800' }]}>{title}</Text>
         {isPro && <Text style={styles.proLabel}>PRO</Text>}
-        <Text style={styles.templateSubtitle}>{locked ? 'Tap to Unlock' : selected ? 'Selected' : 'Tap to select'}</Text>
+        <Text style={styles.templateSubtitle}>{locked ? 'Tap to Unlock' : selected ? 'Active' : 'Select'}</Text>
       </TouchableOpacity>
     );
   };
@@ -963,7 +963,7 @@ export default function TemplatePickerScreen({ navigation, route }) {
             <View style={styles.grid}>
               {TEMPLATES.map((t) => (
                 <View key={`inv-${t.key}`} style={styles.gridItem}>
-                  {renderTemplate(t.key, t.title, t.emoji, t.isPro, invoiceTemplate === t.key, handleSelectTemplate)}
+                  {renderTemplate(t.key, t.title, t.icon, t.isPro, invoiceTemplate === t.key, handleSelectTemplate)}
                 </View>
               ))}
             </View>
@@ -2136,10 +2136,25 @@ const styles = StyleSheet.create({
   },
   primaryHollowButtonText: { color: Colors.primary, fontSize: 14, fontFamily: Fonts.semiBold },
 
-  // Premium Styles
-  proLabel: { position: 'absolute', top: 8, right: 8, backgroundColor: Colors.primary, color: 'white', fontSize: 9, fontWeight: 'bold', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, overflow: 'hidden' },
-  templateLocked: { opacity: 0.7, backgroundColor: '#f0f0f0' },
-  lockBadge: { position: 'absolute', bottom: -5, right: -5, backgroundColor: Colors.error, borderRadius: 10, width: 20, height: 20, alignItems: 'center', justifyContent: 'center', zIndex: 10 },
+  // Premium Template Styles
+  templateIconWrapper: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 5,
+    elevation: 2,
+    position: 'relative'
+  },
+  proLabel: { position: 'absolute', top: 5, right: 5, backgroundColor: Colors.primary, color: 'white', fontSize: 9, fontWeight: 'bold', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, overflow: 'hidden' },
+  templateLocked: { opacity: 0.6 },
+  lockBadge: { position: 'absolute', bottom: 0, right: 0, backgroundColor: Colors.error, borderRadius: 10, width: 18, height: 18, alignItems: 'center', justifyContent: 'center', zIndex: 10 },
 
   // Configurator Styles
   modalContent: { flex: 1, padding: 20, backgroundColor: '#F8FAFC' },

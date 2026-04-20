@@ -4,34 +4,130 @@
     <meta charset="utf-8" />
     <meta httpEquiv="X-UA-Compatible" content="IE=edge" />
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
-    <title>YMOBooks</title>
-    <!-- The `react-native-web` recommended style reset: https://necolas.github.io/react-native-web/docs/setup/#root-element -->
+    <title>YMOBooks Dashboard</title>
+    <link rel="icon" href="/assets/logo.png" />
+    
     <style id="expo-reset">
-      /* These styles make the body full-height */
-      html,
-      body {
-        height: 100%;
-      }
-      /* These styles disable body scrolling if you are using <ScrollView> */
-      body {
+      html, body { 
+        height: 100%; 
+        margin: 0; 
+        padding: 0; 
+        background-color: #f8fafc; 
         overflow: hidden;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
       }
-      /* These styles make the root element full-height */
-      #root {
-        display: flex;
-        height: 100%;
-        flex: 1;
+      #root { 
+        display: flex; 
+        height: 100%; 
+        flex: 1; 
+        opacity: 0; 
+        transition: opacity 1s ease;
+      }
+      #root.ready { opacity: 1; }
+
+      /* Splash Screen Styles */
+      #splash {
+        position: fixed; 
+        top: 0; 
+        left: 0; 
+        right: 0; 
+        bottom: 0;
+        display: flex; 
+        flex-direction: column; 
+        align-items: center; 
+        justify-content: center;
+        background: #ffffff;
+        background: radial-gradient(circle at center, #ffffff, #f0f4f8);
+        z-index: 9999; 
+        transition: opacity 0.5s ease;
+      }
+      .loader-logo { 
+        width: 140px; 
+        height: 140px; 
+        margin-bottom: 30px; 
+        animation: premium-pulse 2.5s infinite ease-in-out; 
+        border-radius: 30px; 
+        box-shadow: 0 15px 40px rgba(204, 85, 0, 0.2); 
+      }
+      .loader-bar { 
+        width: 180px; 
+        height: 6px; 
+        background: #e2e8f0; 
+        border-radius: 10px; 
+        overflow: hidden;
+        box-shadow: inset 0 2px 4px rgba(0,0,0,0.05);
+      }
+      .loader-progress { 
+        width: 100%; 
+        height: 100%; 
+        background: linear-gradient(90deg, #cc5500, #ff7722); 
+        animation: progress-slide 2s infinite ease-in-out; 
+        border-radius: 10px;
+      }
+      @keyframes premium-pulse { 
+        0%, 100% { transform: scale(1); filter: brightness(1); } 
+        50% { transform: scale(1.04); filter: brightness(1.05); } 
+      }
+      @keyframes progress-slide { 
+        0% { transform: translateX(-100%); } 
+        100% { transform: translateX(100%); } 
+      }
+
+      .loading-text {
+        margin-top: 24px; 
+        color: #64748b; 
+        font-weight: 600; 
+        font-size: 0.9rem;
+        letter-spacing: 1px;
+        text-transform: uppercase;
+        animation: fadeText 2s infinite;
+      }
+      @keyframes fadeText {
+        0%, 100% { opacity: 0.6; }
+        50% { opacity: 1; }
       }
     </style>
-  <link rel="icon" href="/favicon.ico" /></head>
-
+  </head>
   <body>
-    <!-- Use static rendering with Expo Router to support running without JavaScript. -->
-    <noscript>
-      You need to enable JavaScript to run this app.
-    </noscript>
+    <!-- Premium Splash Screen -->
+    <div id="splash">
+        <img src="/assets/logo.png" class="loader-logo" alt="YMOBooks">
+        <div class="loader-bar"><div class="loader-progress"></div></div>
+        <p class="loading-text">YMOBooks Experience Loading</p>
+    </div>
+
     <!-- The root element for your Expo app. -->
     <div id="root"></div>
-  <script src="/_expo/static/js/web/index-4c2e24dfc4d9a638196d1f8c73eef120.js" defer></script>
-</body>
+
+    <!-- Original main script from Expo build -->
+    <script src="/_expo/static/js/web/index-4c2e24dfc4d9a638196d1f8c73eef120.js" defer></script>
+    
+    <script>
+        // Smoothly transition from splash to app once everything is ready
+        // We use a safe interval to check if #root has gained children (indicating React has rendered)
+        let checkCount = 0;
+        const checkReady = setInterval(() => {
+            const root = document.getElementById('root');
+            const splash = document.getElementById('splash');
+            checkCount++;
+            
+            // If React has injected content OR we've waited too long (fail-safe)
+            if ((root && root.children.length > 0) || checkCount > 50) {
+                clearInterval(checkReady);
+                
+                setTimeout(() => {
+                    if (splash) splash.style.opacity = '0';
+                    if (root) {
+                        root.style.opacity = '1';
+                        root.classList.add('ready');
+                    }
+                    // Wait for fade out before removing from DOM
+                    setTimeout(() => {
+                        if (splash) splash.remove();
+                    }, 500);
+                }, 800);
+            }
+        }, 100);
+    </script>
+  </body>
 </html>
