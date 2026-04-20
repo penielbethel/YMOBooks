@@ -341,10 +341,9 @@ function isSystemAdmin(id) {
   return ADMIN_IDS.includes(String(id).trim().toUpperCase());
 }
 
-// Maps specific Admin IDs to their intended business categories
+// Maps specific Admin IDs to their intended business categories (optional)
 const ADMIN_CATEGORY_MAP = {
-  'PBMSRVR': 'general_merchandise',
-  'PBMSRV': 'general_merchandise'
+  // Empty for now to allow Master ID to use any category
 };
 
 async function connectToDatabase() {
