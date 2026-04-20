@@ -75,8 +75,7 @@ const LoginScreen = ({ navigation }) => {
           if (alt?.success && (alt.company || alt.data)) {
             const fallbackCompany = alt.company || alt.data;
             const companyType = fallbackCompany.businessType || 'general_merchandise';
-            const adminIds = ['PBMSRV', 'PBMSRVR'];
-            const isAdmin = adminIds.includes(entered.toUpperCase());
+            const isAdmin = isSuperAdmin(entered);
 
             if (companyType !== selectedType && !isAdmin) {
               const names = {
@@ -85,6 +84,9 @@ const LoginScreen = ({ navigation }) => {
                 'general_merchandise': 'General Merchandise'
               };
               result = { success: false, message: `Access Denied. This ID belongs to the "${names[companyType] || companyType}" category. Please switch tabs to login.` };
+            } else if (isAdmin) {
+              // Admin: force businessType to match the selected category tab
+              result = { success: true, company: { ...fallbackCompany, businessType: selectedType } };
             } else {
               result = { success: true, company: fallbackCompany };
             }

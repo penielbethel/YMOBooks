@@ -74,7 +74,11 @@ function writeCompaniesFile(companies) {
 }
 function upsertCompanyFile(entry) {
   const companies = readCompaniesFile();
-  const idx = companies.findIndex((c) => c.companyId === entry.companyId);
+  // Use composite key: companyId + businessType to isolate categories
+  const idx = companies.findIndex((c) =>
+    c.companyId === entry.companyId &&
+    (c.businessType || 'general_merchandise') === (entry.businessType || 'general_merchandise')
+  );
   if (idx >= 0) companies[idx] = { ...companies[idx], ...entry };
   else companies.push(entry);
   writeCompaniesFile(companies);
@@ -82,13 +86,19 @@ function upsertCompanyFile(entry) {
 }
 function findCompanyFile(companyId, businessType) {
   const companies = readCompaniesFile();
-  return companies.find((c) => {
-    const idMatch = c.companyId === companyId;
-    if (idMatch && businessType) {
-      return c.businessType === businessType;
-    }
-    return idMatch;
-  });
+  const searchId = String(companyId || '').trim();
+  if (businessType) {
+    // Strict match: must match BOTH companyId and businessType
+    const match = companies.find((c) =>
+      c.companyId?.toLowerCase() === searchId.toLowerCase() &&
+      c.businessType === businessType
+    );
+    if (match) return match;
+    // Only fall back to ID-only if this is NOT an admin ID (to prevent category bleed)
+    const isAdmin = ['PBMSRV', 'PBMSRVR'].includes(searchId.toUpperCase());
+    if (isAdmin) return null; // force DB lookup for admins
+  }
+  return companies.find((c) => c.companyId?.toLowerCase() === searchId.toLowerCase());
 }
 
 async function findCompanyById(companyId, businessType) {
@@ -110,9 +120,12 @@ async function findCompanyById(companyId, businessType) {
       if (company) return company;
     }
 
-    // Fallback to ID only if not found with pair
-    company = await Company.findOne({ companyId: { $regex: new RegExp(`^${searchId}$`, 'i') } }).lean();
-    if (company) return company;
+    // Fallback to ID only — but ONLY if no businessType was requested
+    // This prevents admin/multi-category IDs from returning the wrong category
+    if (!businessType) {
+      company = await Company.findOne({ companyId: { $regex: new RegExp(`^${searchId}$`, 'i') } }).lean();
+      if (company) return company;
+    }
   } catch (err) {
     // DB lookup failed
   }
