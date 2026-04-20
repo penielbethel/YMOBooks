@@ -519,14 +519,34 @@ const SettingsScreen = ({ navigation }) => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f5f7fa' },
+  container: {
+    flex: 1,
+    backgroundColor: '#f5f7fa',
+    ...(Platform.OS === 'web' && {
+      backgroundColor: '#f8fafc',
+    })
+  },
   header: { backgroundColor: Colors.primary, paddingTop: Spacing.md, paddingBottom: Spacing.xl, paddingHorizontal: Spacing.lg },
   backButton: { alignSelf: 'flex-start', marginBottom: Spacing.md },
   backButtonText: { color: Colors.white, fontSize: Fonts.sizes.md, fontWeight: Fonts.weights.medium },
   title: { fontSize: Fonts.sizes.title, fontWeight: Fonts.weights.bold, color: Colors.white, marginBottom: Spacing.sm },
   subtitle: { fontSize: Fonts.sizes.md, color: Colors.white, opacity: 0.9 },
 
-  content: { padding: Spacing.lg },
+  content: {
+    padding: Spacing.lg,
+    flexGrow: 1,
+    ...(Platform.OS === 'web' && {
+      maxWidth: 600,
+      alignSelf: 'center',
+      width: '100%',
+      backgroundColor: Colors.white,
+      minHeight: '100%',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 10 },
+      shadowOpacity: 0.05,
+      shadowRadius: 20,
+    })
+  },
 
   card: {
     backgroundColor: Colors.white,

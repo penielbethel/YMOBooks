@@ -392,7 +392,13 @@ const CreateInvoiceScreen = ({ navigation, route }) => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F8FAFC' },
+  container: {
+    flex: 1,
+    backgroundColor: '#F8FAFC',
+    ...(Platform.OS === 'web' && {
+      backgroundColor: '#f8fafc',
+    })
+  },
   header: {
     backgroundColor: Colors.primary,
     flexDirection: 'row',
@@ -409,7 +415,22 @@ const styles = StyleSheet.create({
   title: { fontSize: 20, fontWeight: 'bold', color: Colors.white },
   subtitle: { fontSize: 13, color: 'rgba(255,255,255,0.8)' },
 
-  content: { padding: 20, paddingBottom: 40 },
+  content: {
+    padding: 20,
+    paddingBottom: 40,
+    flexGrow: 1,
+    ...(Platform.OS === 'web' && {
+      maxWidth: 600,
+      alignSelf: 'center',
+      width: '100%',
+      backgroundColor: Colors.white,
+      minHeight: '100%',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 10 },
+      shadowOpacity: 0.05,
+      shadowRadius: 20,
+    })
+  },
 
   summaryCard: {
     backgroundColor: Colors.white,

@@ -120,6 +120,7 @@ const ProfitLossScreen = ({ navigation, route }) => {
 
             <ScrollView
                 style={styles.content}
+                contentContainerStyle={styles.scrollContent}
                 refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
             >
                 {/* Period Selector */}
@@ -286,6 +287,20 @@ const styles = StyleSheet.create({
     headerTitle: { color: '#fff', fontSize: 18, fontWeight: 'bold' },
     backBtn: { padding: 4 },
     content: { flex: 1 },
+    scrollContent: {
+        flexGrow: 1,
+        ...(Platform.OS === 'web' && {
+            maxWidth: 600,
+            alignSelf: 'center',
+            width: '100%',
+            backgroundColor: '#fff',
+            minHeight: '100%',
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 10 },
+            shadowOpacity: 0.05,
+            shadowRadius: 20,
+        })
+    },
     periodSection: { backgroundColor: '#fff', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
     monthScroll: { paddingHorizontal: 16 },
     monthChip: {

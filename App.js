@@ -3,7 +3,7 @@ import { StatusBar } from 'expo-status-bar';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, Platform } from 'react-native';
 
 // Import screens
 import WelcomeScreen from './screens/WelcomeScreen';
@@ -128,127 +128,46 @@ export default function App() {
   return (
     <NavigationContainer>
       <StatusBar style="light" backgroundColor={Colors.primary} />
-      <Stack.Navigator
-        initialRouteName={hasCompanyData ? 'Dashboard' : 'Welcome'}
-        screenOptions={{
-          headerShown: false,
-          cardStyle: { backgroundColor: Colors.background }
-        }}
-      >
-        <Stack.Screen
-          name="Welcome"
-          component={WelcomeScreen}
-          options={{
-            animationEnabled: true,
-          }}
-        />
-        <Stack.Screen
-          name="CompanyRegistration"
-          component={CompanyRegistrationScreen}
-          options={{
-            animationEnabled: true,
-          }}
-        />
-        <Stack.Screen
-          name="Login"
-          component={LoginScreen}
-          options={{
-            animationEnabled: true,
-          }}
-        />
-        <Stack.Screen
-          name="Dashboard"
-          component={DashboardScreen}
-          options={{
-            animationEnabled: true,
-          }}
-        />
-        <Stack.Screen
-          name="Settings"
-          component={SettingsScreen}
-          options={{
-            animationEnabled: true,
-          }}
-        />
-        <Stack.Screen
-          name="SuperAdmin"
-          component={SuperAdminScreen}
-          options={{
-            animationEnabled: true,
-          }}
-        />
-        <Stack.Screen
-          name="CreateInvoice"
-          component={CreateInvoiceScreen}
-          options={{
-            animationEnabled: true,
-          }}
-        />
-        <Stack.Screen
-          name="InvoiceHistory"
-          component={InvoiceHistoryScreen}
-          options={{
-            animationEnabled: true,
-          }}
-        />
-        <Stack.Screen
-          name="LetterheadPreview"
-          component={LetterheadPreviewScreen}
-          options={{
-            animationEnabled: true,
-          }}
-        />
-        <Stack.Screen
-          name="TemplatePicker"
-          component={TemplatePickerScreen}
-          options={{
-            animationEnabled: true,
-          }}
-        />
-        <Stack.Screen
-          name="FinancialCalculator"
-          component={FinancialCalculatorScreen}
-          options={{
-            animationEnabled: true,
-          }}
-        />
-        <Stack.Screen
-          name="Subscription"
-          component={SubscriptionScreen}
-          options={{
-            animationEnabled: true,
-            presentation: 'modal', // Make it slide up like a modal
-          }}
-        />
-        <Stack.Screen
-          name="StockManagement"
-          component={StockManagementScreen}
-          options={{
-            animationEnabled: true,
-          }}
-        />
-        <Stack.Screen
-          name="ProfitLoss"
-          component={ProfitLossScreen}
-          options={{
-            animationEnabled: true,
-          }}
-        />
-        <Stack.Screen
-          name="BalanceSheet"
-          component={BalanceSheetScreen}
-          options={{
-            animationEnabled: true,
-          }}
-        />
-        <Stack.Screen
-          name="PrintingService"
-          component={PrintingServiceScreen}
-          options={{
-            animationEnabled: true,
-          }}
-        />
-      </Stack.Navigator>
+      <View style={{ flex: 1, backgroundColor: Platform.OS === 'web' ? '#f8fafc' : Colors.background }}>
+        <View style={Platform.OS === 'web' ? {
+          flex: 1,
+          maxWidth: 600,
+          width: '100%',
+          alignSelf: 'center',
+          backgroundColor: Colors.background,
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 10 },
+          shadowOpacity: 0.1,
+          shadowRadius: 30,
+          elevation: 10,
+        } : { flex: 1 }}>
+          <Stack.Navigator
+            initialRouteName={hasCompanyData ? 'Dashboard' : 'Welcome'}
+            screenOptions={{
+              headerShown: false,
+              cardStyle: { backgroundColor: Colors.background }
+            }}
+          >
+            {/* ... screens remain the same ... */}
+            <Stack.Screen name="Welcome" component={WelcomeScreen} />
+            <Stack.Screen name="CompanyRegistration" component={CompanyRegistrationScreen} />
+            <Stack.Screen name="Login" component={LoginScreen} />
+            <Stack.Screen name="Dashboard" component={DashboardScreen} />
+            <Stack.Screen name="Settings" component={SettingsScreen} />
+            <Stack.Screen name="SuperAdmin" component={SuperAdminScreen} />
+            <Stack.Screen name="CreateInvoice" component={CreateInvoiceScreen} />
+            <Stack.Screen name="InvoiceHistory" component={InvoiceHistoryScreen} />
+            <Stack.Screen name="LetterheadPreview" component={LetterheadPreviewScreen} />
+            <Stack.Screen name="TemplatePicker" component={TemplatePickerScreen} />
+            <Stack.Screen name="FinancialCalculator" component={FinancialCalculatorScreen} />
+            <Stack.Screen name="Subscription" component={SubscriptionScreen} options={{ presentation: 'modal' }} />
+            <Stack.Screen name="StockManagement" component={StockManagementScreen} />
+            <Stack.Screen name="ProfitLoss" component={ProfitLossScreen} />
+            <Stack.Screen name="BalanceSheet" component={BalanceSheetScreen} />
+            <Stack.Screen name="PrintingService" component={PrintingServiceScreen} />
+          </Stack.Navigator>
+        </View>
+      </View>
     </NavigationContainer>
   );
 }

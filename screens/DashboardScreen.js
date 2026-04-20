@@ -361,10 +361,24 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.background,
+    ...(Platform.OS === 'web' && {
+      backgroundColor: '#f8fafc',
+    })
   },
   scrollContent: {
     flexGrow: 1,
     paddingBottom: Spacing.xl,
+    ...(Platform.OS === 'web' && {
+      maxWidth: 600,
+      alignSelf: 'center',
+      width: '100%',
+      backgroundColor: Colors.white,
+      minHeight: '100%',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 10 },
+      shadowOpacity: 0.05,
+      shadowRadius: 20,
+    })
   },
   loadingContainer: {
     flex: 1,
