@@ -751,7 +751,8 @@ const InvoiceHistoryScreen = ({ navigation, route }) => {
                   let targetUri = file.uri;
                   if (Platform.OS !== 'web') {
                     try {
-                      const baseDir = FileSystem.documentDirectory || FileSystem.cacheDirectory || '';
+                      let baseDir = FileSystem.documentDirectory || FileSystem.cacheDirectory || '';
+                      if (baseDir && !baseDir.endsWith('/')) baseDir += '/';
                       targetUri = `${baseDir}${filename}`;
                       await FileSystemLegacy.moveAsync({ from: file.uri, to: targetUri });
                     } catch (mvErr) {

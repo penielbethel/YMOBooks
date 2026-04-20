@@ -888,20 +888,17 @@ app.post('/api/update-company', async (req, res) => {
     if (!companyId) return res.status(400).json({ success: false, message: 'Company ID is required' });
 
     console.log('Updating company:', companyId);
+    
+    // Find existing company using the case-insensitive helper
+    let company = await findCompanyById(companyId);
+    if (!company) {
+      console.warn(`[Update] Company NOT FOUND for ID: "${companyId}"`);
+      return res.status(404).json({ success: false, message: 'Company not found' });
+    }
 
-    // Find existing company (DB or File)
-    let companyDoc = null;
-    try { companyDoc = await Company.findOne({ companyId }); } catch (_) { }
-
-    let fileCompany = findCompanyFile(companyId);
-    if (!companyDoc && !fileCompany) return res.status(404).json({ success: false, message: 'Company not found' });
-    // ...
-    // ...
-
-
-    // Prepare pure data object
-    // If we have a generic object from file, use it. If DB doc, convert to object.
-    const currentData = companyDoc ? companyDoc.toObject() : (fileCompany || {});
+    // Capture the TRUE companyId from the record (preserving its casing in the DB)
+    const trueId = company.companyId; 
+    const currentData = { ...company };
 
     // Allowed fields to update directly
     const allowedFields = [
@@ -966,10 +963,14 @@ app.post('/api/update-company', async (req, res) => {
     // Save to DB
     try {
       const updatedDoc = await Company.findOneAndUpdate(
-        { companyId },
+        { companyId: trueId },
         { $set: currentData },
         { new: true, upsert: true }
       ).lean();
+      
+      // Update local file fallback as well
+      upsertCompanyFile(currentData);
+
       // Update our local reference to what DB has
       Object.assign(currentData, updatedDoc);
       delete currentData._id; // clean again just in case
