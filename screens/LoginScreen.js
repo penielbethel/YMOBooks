@@ -220,8 +220,23 @@ const LoginScreen = ({ navigation }) => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
-  scrollContent: { flexGrow: 1 },
+  container: {
+    flex: 1,
+    backgroundColor: Colors.background,
+    ...(Platform.OS === 'web' && {
+      backgroundColor: '#f0f2f5',
+    })
+  },
+  scrollContent: {
+    flexGrow: 1,
+    ...(Platform.OS === 'web' && {
+      maxWidth: 600,
+      alignSelf: 'center',
+      width: '100%',
+      backgroundColor: Colors.background,
+      minHeight: '100%',
+    })
+  },
   header: { backgroundColor: Colors.primary, paddingTop: Spacing.md, paddingBottom: Spacing.xl, paddingHorizontal: Spacing.lg },
   backButton: { alignSelf: 'flex-start', marginBottom: Spacing.md },
   backButtonText: { color: Colors.white, fontSize: Fonts.sizes.md, fontWeight: Fonts.weights.medium },

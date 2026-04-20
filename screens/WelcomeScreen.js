@@ -224,9 +224,19 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.background,
+    ...(Platform.OS === 'web' && {
+      backgroundColor: '#f0f2f5',
+    })
   },
   scrollContent: {
     flexGrow: 1,
+    ...(Platform.OS === 'web' && {
+      maxWidth: 600,
+      alignSelf: 'center',
+      width: '100%',
+      backgroundColor: Colors.background,
+      minHeight: '100%',
+    })
   },
   heroSection: {
     alignItems: 'center',

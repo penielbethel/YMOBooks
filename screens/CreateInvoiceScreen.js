@@ -150,6 +150,11 @@ const CreateInvoiceScreen = ({ navigation, route }) => {
     if (!previewUrl) return;
     try {
       setDownloading(true);
+      if (Platform.OS === 'web') {
+        await Linking.openURL(previewUrl);
+        return;
+      }
+
       const fileNameGuess = previewUrl.split('/').pop() || `invoice-${Date.now()}.pdf`;
       const filename = fileNameGuess.replace(/[^a-zA-Z0-9_.-]/g, '_');
       const baseDir = FileSystem.cacheDirectory || FileSystem.documentDirectory || '';

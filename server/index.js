@@ -2494,14 +2494,6 @@ app.get('/api/company/:companyId', async (req, res) => {
   }
 });
 
-app.get('/', (req, res) => {
-  const indexPath = path.join(PUBLIC_DIR, 'index.html');
-  if (fs.existsSync(indexPath)) {
-    res.sendFile(indexPath);
-  } else {
-    res.send('YMOBooks backend is running');
-  }
-});
 
 // Simple health check for connectivity diagnostics
 app.get('/api/health', (req, res) => {
@@ -2746,6 +2738,22 @@ app.post('/api/pay/webhook', async (req, res) => {
   }
   // ... logic to update DB ...
   res.status(200).send('OK');
+});
+// Catch-all route to serve the Expo Web SPA for any non-API request
+app.get('*', (req, res) => {
+  // If it's an API route that reached here, it's a 404
+  if (req.path.startsWith('/api') || req.path.startsWith('/assets') || req.path.startsWith('/files')) {
+    return res.status(404).json({ success: false, message: 'Resource not found' });
+  }
+  
+  // Serve the SPA's index.html
+  const indexPath = path.join(PUBLIC_DIR, 'index.html');
+  if (fs.existsSync(indexPath)) {
+    res.sendFile(indexPath);
+  } else {
+    // If index.html is missing, fallback to a basic response
+    res.status(404).send('YMOBooks: Web App not found. Please contact support.');
+  }
 });
 
 // Vercel serverless: export the Express app instead of listening
