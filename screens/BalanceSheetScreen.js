@@ -83,16 +83,18 @@ const BalanceSheetScreen = ({ navigation }) => {
 
     return (
         <SafeAreaView style={styles.container}>
-            <View style={styles.header}>
-                <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-                    <Ionicons name="arrow-back" size={24} color="#fff" />
-                </TouchableOpacity>
-                <View>
-                    <Text style={styles.headerTitle}>Balance Sheet</Text>
-                    <Text style={styles.headerSubtitle}>Financial Position & Wealth</Text>
+            {Platform.OS !== 'web' && (
+                <View style={styles.header}>
+                    <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+                        <Ionicons name="arrow-back" size={24} color="#fff" />
+                    </TouchableOpacity>
+                    <View>
+                        <Text style={styles.headerTitle}>Balance Sheet</Text>
+                        <Text style={styles.headerSubtitle}>Financial Position & Wealth</Text>
+                    </View>
+                    <View style={{ width: 24 }} />
                 </View>
-                <View style={{ width: 24 }} />
-            </View>
+            )}
 
             <ScrollView
                 style={styles.content}

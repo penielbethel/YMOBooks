@@ -227,15 +227,17 @@ const FinancialCalculatorScreen = ({ navigation }) => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={24} color={Colors.white} />
-        </TouchableOpacity>
-        <View>
-          <Text style={styles.title}>Financials</Text>
-          <Text style={styles.subtitle}>Profit & Loss Calculator</Text>
+      {Platform.OS !== 'web' && (
+        <View style={styles.header}>
+          <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
+            <Ionicons name="arrow-back" size={24} color={Colors.white} />
+          </TouchableOpacity>
+          <View>
+            <Text style={styles.title}>Financials</Text>
+            <Text style={styles.subtitle}>Profit & Loss Calculator</Text>
+          </View>
         </View>
-      </View>
+      )}
 
       {loading ? (
         <View style={styles.loadingBox}><ActivityIndicator size="large" color={Colors.primary} /></View>

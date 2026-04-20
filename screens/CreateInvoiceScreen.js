@@ -189,15 +189,17 @@ const CreateInvoiceScreen = ({ navigation, route }) => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={24} color={Colors.white} />
-        </TouchableOpacity>
-        <View>
-          <Text style={styles.title}>New Invoice</Text>
-          <Text style={styles.subtitle}>Create professional invoice</Text>
+      {Platform.OS !== 'web' && (
+        <View style={styles.header}>
+          <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
+            <Ionicons name="arrow-back" size={24} color={Colors.white} />
+          </TouchableOpacity>
+          <View>
+            <Text style={styles.title}>New Invoice</Text>
+            <Text style={styles.subtitle}>Create professional invoice</Text>
+          </View>
         </View>
-      </View>
+      )}
 
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>

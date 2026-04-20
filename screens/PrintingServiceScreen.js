@@ -157,13 +157,15 @@ const PrintingServiceScreen = ({ navigation, route }) => {
 
     return (
         <SafeAreaView style={styles.container}>
-            <View style={[styles.header, { backgroundColor: serviceInfo.color }]}>
-                <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-                    <Ionicons name="arrow-back" size={24} color="#fff" />
-                </TouchableOpacity>
-                <Text style={styles.headerTitle}>{serviceInfo.title}</Text>
-                <View style={{ width: 24 }} />
-            </View>
+            {Platform.OS !== 'web' && (
+                <View style={[styles.header, { backgroundColor: serviceInfo.color }]}>
+                    <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+                        <Ionicons name="arrow-back" size={24} color="#fff" />
+                    </TouchableOpacity>
+                    <Text style={styles.headerTitle}>{serviceInfo.title}</Text>
+                    <View style={{ width: 24 }} />
+                </View>
+            )}
 
             <ScrollView
                 style={styles.content}

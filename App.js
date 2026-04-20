@@ -144,15 +144,16 @@ export default function App() {
           <Stack.Navigator
             initialRouteName={hasCompanyData ? 'Dashboard' : 'Welcome'}
             screenOptions={{
-              headerShown: false,
+              headerShown: Platform.OS === 'web',
+              headerTitleStyle: { color: Colors.primary, fontWeight: 'bold' },
+              headerTintColor: Colors.primary,
               cardStyle: { backgroundColor: Colors.background }
             }}
           >
-            {/* ... screens remain the same ... */}
-            <Stack.Screen name="Welcome" component={WelcomeScreen} />
+            <Stack.Screen name="Welcome" component={WelcomeScreen} options={{ headerShown: false }} />
             <Stack.Screen name="CompanyRegistration" component={CompanyRegistrationScreen} />
             <Stack.Screen name="Login" component={LoginScreen} />
-            <Stack.Screen name="Dashboard" component={DashboardScreen} />
+            <Stack.Screen name="Dashboard" component={DashboardScreen} options={{ headerShown: false }} />
             <Stack.Screen name="Settings" component={SettingsScreen} />
             <Stack.Screen name="SuperAdmin" component={SuperAdminScreen} />
             <Stack.Screen name="CreateInvoice" component={CreateInvoiceScreen} />
