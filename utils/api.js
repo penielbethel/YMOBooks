@@ -53,8 +53,12 @@ export async function loginCompany(companyId, businessType) {
   return res.json();
 }
 
-export async function fetchCompany(companyId) {
-  const res = await fetch(`${Config.API_BASE_URL}/api/company/${encodeURIComponent(companyId)}`);
+export async function fetchCompany(companyId, businessType) {
+  let url = `${Config.API_BASE_URL}/api/company/${encodeURIComponent(companyId)}`;
+  if (businessType) {
+    url += `?businessType=${encodeURIComponent(businessType)}`;
+  }
+  const res = await fetch(url);
   return res.json();
 }
 

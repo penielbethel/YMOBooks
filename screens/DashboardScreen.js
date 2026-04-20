@@ -90,12 +90,14 @@ const DashboardScreen = ({ navigation }) => {
       // On-demand fetch for missing or suspicious logo/signature
       const isSuspicious = (u) => !u || typeof u !== 'string' || u.includes('undefined') || u.includes('null') || (typeof u === 'string' && u.startsWith('/files/'));
       
-      if ((forceFetch || isSuspicious(parsed?.logo) || isSuspicious(parsed?.signature)) && parsed?.companyId) {
+      // On-demand fetch for missing settings
+      if ((forceFetch || isSuspicious(parsed?.logo)) && parsed?.companyId) {
         try {
           const baseUrl = getApiBaseUrl();
-          const resp = await fetch(`${baseUrl}/api/company/${parsed.companyId}`);
+          const businessType = parsed.businessType || 'general_merchandise';
+          const resp = await fetch(`${baseUrl}/api/company/${parsed.companyId}?businessType=${businessType}`);
           const json = await resp.json();
-          const c = json?.company || json?.data;
+          const c = json?.company;
           if (c) {
             const updated = { ...(parsed || {}), ...c };
             setCompanyData(updated);

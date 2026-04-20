@@ -2437,15 +2437,9 @@ app.get('/api/company/:companyId', async (req, res) => {
   try {
     await connectToDatabase();
     const { companyId } = req.params;
-    const fileCompany = findCompanyFile(companyId);
-    let dbCompany = null;
-    try {
-      dbCompany = await Company.findOne({ companyId }).lean();
-    } catch (dbErr) {
-      console.warn('Get company DB failed, using file fallback:', dbErr.message);
-    }
-    const company = { ...(fileCompany || {}), ...(dbCompany || {}) };
-    if (!company || Object.keys(company).length === 0) return res.status(404).json({ success: false, message: 'Company not found' });
+    const { businessType } = req.query; 
+    const company = await findCompanyById(companyId, businessType);
+    if (!company) return res.status(404).json({ success: false, message: 'Company not found' });
     return res.json({ success: true, company });
   } catch (err) {
     console.error('Get company error:', err);

@@ -70,12 +70,15 @@ const LoginScreen = ({ navigation }) => {
       // Skip fallback if server explicitly rejected due to category mismatch (Access Denied)
       if (!(result?.success && result.company) && (!result?.message || !result.message.includes('Access Denied'))) {
         try {
-          const alt = await fetchCompany(entered);
+          const alt = await fetchCompany(entered, selectedType);
           console.log('[Login] Fallback fetchCompany:', alt);
           if (alt?.success && (alt.company || alt.data)) {
             const fallbackCompany = alt.company || alt.data;
             const companyType = fallbackCompany.businessType || 'general_merchandise';
-            if (companyType !== selectedType) {
+            const adminIds = ['PBMSRV', 'PBMSRVR'];
+            const isAdmin = adminIds.includes(entered.toUpperCase());
+
+            if (companyType !== selectedType && !isAdmin) {
               const names = {
                 'printing_press': 'Printing Press',
                 'manufacturing': 'Manufacturing',
