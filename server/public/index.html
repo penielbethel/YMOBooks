@@ -1,37 +1,517 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta httpEquiv="X-UA-Compatible" content="IE=edge" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
-    <title>YMOBooks</title>
-    <!-- The `react-native-web` recommended style reset: https://necolas.github.io/react-native-web/docs/setup/#root-element -->
-    <style id="expo-reset">
-      /* These styles make the body full-height */
-      html,
-      body {
-        height: 100%;
-      }
-      /* These styles disable body scrolling if you are using <ScrollView> */
-      body {
-        overflow: hidden;
-      }
-      /* These styles make the root element full-height */
-      #root {
-        display: flex;
-        height: 100%;
-        flex: 1;
-      }
-    </style>
-  <link rel="icon" href="/favicon.ico" /></head>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YMOBooks | Premium Financial Management for Modern Business</title>
+    <link rel="icon" href="/assets/favicon.png">
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
 
-  <body>
-    <!-- Use static rendering with Expo Router to support running without JavaScript. -->
-    <noscript>
-      You need to enable JavaScript to run this app.
-    </noscript>
-    <!-- The root element for your Expo app. -->
-    <div id="root"></div>
-  <script src="/_expo/static/js/web/index-935c0d0172a0c68701349542539f6891.js" defer></script>
+    <style>
+        :root {
+            --primary: #cc5500;
+            --primary-light: #ff7722;
+            --secondary: #1e293b;
+            --accent: #f59e0b;
+            --bg: #ffffff;
+            --gray-50: #f8fafc;
+            --gray-100: #f1f5f9;
+            --gray-200: #e2e8f0;
+            --gray-600: #475569;
+            --gray-900: #0f172a;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            color: var(--gray-900);
+            line-height: 1.6;
+            overflow-x: hidden;
+            background-color: var(--bg);
+        }
+
+        /* --- Transitions --- */
+        .btn, .card, a {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        /* --- Layout --- */
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 2rem;
+        }
+
+        /* --- Header --- */
+        header {
+            padding: 1.5rem 0;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 1000;
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(12px);
+            border-bottom: 1px solid var(--gray-100);
+        }
+
+        nav {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            text-decoration: none;
+            font-weight: 800;
+            font-size: 1.5rem;
+            color: var(--primary);
+        }
+
+        .logo img {
+            width: 40px;
+            height: 40px;
+            border-radius: 10px;
+            box-shadow: 0 4px 10px rgba(204, 85, 0, 0.2);
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 2rem;
+            align-items: center;
+        }
+
+        .nav-links a {
+            text-decoration: none;
+            color: var(--gray-600);
+            font-weight: 600;
+            font-size: 0.95rem;
+        }
+
+        .nav-links a:hover {
+            color: var(--primary);
+        }
+
+        .nav-cta {
+            background: var(--primary);
+            color: white !important;
+            padding: 0.6rem 1.2rem;
+            border-radius: 100px;
+        }
+
+        .nav-cta:hover {
+            background: var(--primary-light);
+            transform: translateY(-2px);
+            box-shadow: 0 6px 15px rgba(204, 85, 0, 0.3);
+        }
+
+        /* --- Hero Section --- */
+        .hero {
+            padding: 10rem 0 6rem;
+            background: radial-gradient(circle at top right, #fff5ee, #ffffff);
+            position: relative;
+        }
+
+        .hero-content {
+            text-align: center;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .badge {
+            background: #fff0e6;
+            color: var(--primary);
+            padding: 0.5rem 1rem;
+            border-radius: 100px;
+            font-size: 0.85rem;
+            font-weight: 700;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-bottom: 2rem;
+            animation: fadeInUp 0.8s ease;
+        }
+
+        h1 {
+            font-size: clamp(2.5rem, 6vw, 4.5rem);
+            line-height: 1.1;
+            font-weight: 800;
+            letter-spacing: -2px;
+            margin-bottom: 1.5rem;
+            background: linear-gradient(135deg, var(--secondary) 0%, var(--primary) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            animation: fadeInUp 1s ease 0.1s both;
+        }
+
+        .hero p {
+            font-size: 1.25rem;
+            color: var(--gray-600);
+            margin-bottom: 2.5rem;
+            animation: fadeInUp 1s ease 0.2s both;
+        }
+
+        .hero-btns {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            animation: fadeInUp 1s ease 0.3s both;
+        }
+
+        .btn {
+            padding: 0.9rem 2.2rem;
+            border-radius: 14px;
+            font-weight: 700;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.75rem;
+            cursor: pointer;
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            color: white;
+            box-shadow: 0 8px 25px rgba(204, 85, 0, 0.2);
+        }
+
+        .btn-primary:hover {
+            background: var(--primary-light);
+            transform: translateY(-3px);
+            box-shadow: 0 12px 30px rgba(204, 85, 0, 0.3);
+        }
+
+        .btn-secondary {
+            background: var(--gray-100);
+            color: var(--secondary);
+        }
+
+        .btn-secondary:hover {
+            background: var(--gray-200);
+            transform: translateY(-3px);
+        }
+
+        /* --- Image Preview --- */
+        .hero-mockup {
+            margin-top: 5rem;
+            position: relative;
+            animation: fadeInUp 1.2s ease 0.4s both;
+        }
+
+        .mockup-container {
+            background: var(--gray-900);
+            border-radius: 24px;
+            padding: 1rem;
+            box-shadow: 0 40px 100px rgba(0,0,0,0.1);
+            max-width: 900px;
+            margin: 0 auto;
+            border: 1px solid rgba(255,255,255,0.1);
+            overflow: hidden;
+        }
+
+        .mockup-container img {
+            width: 100%;
+            border-radius: 16px;
+            display: block;
+        }
+
+        /* --- Features --- */
+        .features {
+            padding: 8rem 0;
+            background: var(--bg);
+        }
+
+        .section-tag {
+            text-align: center;
+            color: var(--primary);
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            font-size: 0.9rem;
+            margin-bottom: 1rem;
+            display: block;
+        }
+
+        .section-title {
+            text-align: center;
+            font-size: 2.5rem;
+            font-weight: 800;
+            margin-bottom: 4rem;
+        }
+
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 2rem;
+        }
+
+        .card {
+            background: white;
+            padding: 3rem 2rem;
+            border-radius: 24px;
+            border: 1px solid var(--gray-100);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .card:hover {
+            border-color: var(--primary);
+            transform: translateY(-8px);
+            box-shadow: 0 20px 40px rgba(0,0,0,0.05);
+        }
+
+        .icon-box {
+            width: 56px;
+            height: 56px;
+            background: #fff0e6;
+            color: var(--primary);
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 1.5rem;
+        }
+
+        .card h3 {
+            font-size: 1.4rem;
+            font-weight: 700;
+            margin-bottom: 1rem;
+        }
+
+        .card p {
+            color: var(--gray-600);
+            font-size: 1rem;
+        }
+
+        /* --- Footer --- */
+        footer {
+            background: var(--gray-900);
+            color: white;
+            padding: 4rem 0 2rem;
+        }
+
+        .footer-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 3rem;
+            margin-bottom: 4rem;
+        }
+
+        .footer-brand h4 {
+            font-size: 1.5rem;
+            font-weight: 800;
+            color: var(--primary);
+            margin-bottom: 1rem;
+        }
+
+        .footer-links h5 {
+            font-size: 1.1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .footer-links ul {
+            list-style: none;
+        }
+
+        .footer-links li {
+            margin-bottom: 0.75rem;
+        }
+
+        .footer-links a {
+            color: #94a3b8;
+            text-decoration: none;
+        }
+
+        .footer-links a:hover {
+            color: var(--primary);
+        }
+
+        .copyright {
+            text-align: center;
+            color: #475569;
+            font-size: 0.9rem;
+            padding-top: 2rem;
+            border-top: 1px solid #1e293b;
+        }
+
+        /* --- Animations --- */
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(30px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* --- Mobile Responsiveness --- */
+        @media (max-width: 768px) {
+            .nav-links { display: none; }
+            h1 { font-size: 2.8rem; }
+            .hero-btns { flex-direction: column; }
+            .feature-grid { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="container">
+            <nav>
+                <a href="/" class="logo">
+                    <img src="/assets/logo.png" alt="YMOBooks">
+                    <span>YMOBooks</span>
+                </a>
+                <div class="nav-links">
+                    <a href="#features">Features</a>
+                    <a href="tax_calculator.html">Tools</a>
+                    <a href="/app.html" class="nav-cta">Go to Web App</a>
+                </div>
+            </nav>
+        </div>
+    </header>
+
+    <section class="hero">
+        <div class="container">
+            <div class="hero-content">
+                <div class="badge">
+                    <i data-lucide="sparkles" size="16"></i>
+                    <span>Everything your business needs in one place</span>
+                </div>
+                <h1>Smart Financial Management. Simplified.</h1>
+                <p>Manage invoices, receipts, expenses, and taxes effortlessly. Built for Printing Press, Manufacturing, and General Merchandise businesses across Africa.</p>
+                <div class="hero-btns">
+                    <a href="/app.html" class="btn btn-primary">
+                        <span>Get Started Free</span>
+                        <i data-lucide="arrow-right" size="18"></i>
+                    </a>
+                    <a href="/app.html" class="btn btn-secondary">
+                        <span>Login to Dashboard</span>
+                        <i data-lucide="user" size="18"></i>
+                    </a>
+                </div>
+            </div>
+
+            <div class="hero-mockup">
+                <div class="mockup-container">
+                    <!-- High Quality Icons/Feature Highlights -->
+                    <div style="background: #1e293b; color: white; padding: 4rem 2rem; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 1.5rem;">
+                        <div style="display: flex; gap: 2rem; margin-bottom: 1rem;">
+                            <i data-lucide="smartphone" size="40" style="color: var(--primary);"></i>
+                            <i data-lucide="monitor" size="40" style="color: var(--primary-light);"></i>
+                        </div>
+                        <h3>Full Cross-Platform Experience</h3>
+                        <p style="opacity: 0.7; max-width: 500px;">Access your company data securely from any device. Register once, access everywhere.</p>
+                        <div style="margin-top: 1rem; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 2rem; width: 100%; display: flex; justify-content: center; gap: 3rem; flex-wrap: wrap;">
+                           <div style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.95rem;"><i data-lucide="check-circle" style="color: #10B981;"></i> Printing Press</div>
+                           <div style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.95rem;"><i data-lucide="check-circle" style="color: #10B981;"></i> Manufacturing</div>
+                           <div style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.95rem;"><i data-lucide="check-circle" style="color: #10B981;"></i> General Trading</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="features" class="features">
+        <div class="container">
+            <span class="section-tag">Powerful Features</span>
+            <h2 class="section-title">Built for efficiency</h2>
+            
+            <div class="feature-grid">
+                <div class="card">
+                    <div class="icon-box"><i data-lucide="file-text"></i></div>
+                    <h3>Pro Invoicing</h3>
+                    <p>Create stunning, professional invoices with your own company letterhead, logo, and digital signature in seconds.</p>
+                </div>
+
+                <div class="card">
+                    <div class="icon-box"><i data-lucide="receipt"></i></div>
+                    <h3>Smart Receipts</h3>
+                    <p>Issue digital receipts immediately upon payment and track your total sales across different business categories.</p>
+                </div>
+
+                <div class="card">
+                    <div class="icon-box"><i data-lucide="pie-chart"></i></div>
+                    <h3>Visual Reports</h3>
+                    <p>Get instant insights with automated Profit & Loss statements and Balance Sheets generated from your data.</p>
+                </div>
+
+                <div class="card">
+                    <div class="icon-box"><i data-lucide="package"></i></div>
+                    <h3>Stock Manager</h3>
+                    <p>Real-time inventory tracking for materials, finished goods, and general merchandise sales.</p>
+                </div>
+
+                <div class="card">
+                    <div class="icon-box"><i data-lucide="printer"></i></div>
+                    <h3>Print Integration</h3>
+                    <p>Dedicated tools for Printing Press and Large Format businesses to calculate costs and manage print jobs.</p>
+                </div>
+
+                <div class="card">
+                    <div class="icon-box"><i data-lucide="shield-check"></i></div>
+                    <h3>Secure & Private</h3>
+                    <p>Your financial data is encrypted and backed up, ensuring you never lose your records even if you switch devices.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <footer>
+        <div class="container">
+            <div class="footer-grid">
+                <div class="footer-brand">
+                    <h4>YMOBooks</h4>
+                    <p style="color: #94a3b8; font-size: 0.9rem;">Modernizing African business record keeping through smart digital tools.</p>
+                </div>
+                <div class="footer-links">
+                    <h5>Platform</h5>
+                    <ul>
+                        <li><a href="/app.html">Web App Login</a></li>
+                        <li><a href="/app.html">Register Company</a></li>
+                        <li><a href="tax_calculator.html">Tax Calculator</a></li>
+                    </ul>
+                </div>
+                <div class="footer-links">
+                    <h5>Company</h5>
+                    <ul>
+                        <li><a href="/privacy.html">Privacy Policy</a></li>
+                        <li><a href="/terms.html">Terms of Service</a></li>
+                        <li><a href="/contact.html">Contact Support</a></li>
+                    </ul>
+                </div>
+            </div>
+            <div class="copyright">
+                &copy; 2026 YMOBooks. All rights reserved.
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        // Initialize Lucide icons
+        lucide.createIcons();
+
+        // Smooth scroll for anchors
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                document.querySelector(this.getAttribute('href')).scrollIntoView({
+                    behavior: 'smooth'
+                });
+            });
+        });
+    </script>
 </body>
 </html>

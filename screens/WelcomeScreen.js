@@ -225,7 +225,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.background,
     ...(Platform.OS === 'web' && {
-      backgroundColor: '#f0f2f5',
+      backgroundColor: '#f8fafc', // lighter, cleaner blue-gray
     })
   },
   scrollContent: {
@@ -234,8 +234,13 @@ const styles = StyleSheet.create({
       maxWidth: 600,
       alignSelf: 'center',
       width: '100%',
-      backgroundColor: Colors.background,
+      backgroundColor: Colors.white,
       minHeight: '100%',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 10 },
+      shadowOpacity: 0.05,
+      shadowRadius: 20,
+      elevation: 5,
     })
   },
   heroSection: {
