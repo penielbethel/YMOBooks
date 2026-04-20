@@ -753,7 +753,7 @@ const InvoiceHistoryScreen = ({ navigation, route }) => {
                     try {
                       const baseDir = FileSystem.documentDirectory || FileSystem.cacheDirectory || '';
                       targetUri = `${baseDir}${filename}`;
-                      await FileSystem.moveAsync({ from: file.uri, to: targetUri });
+                      await FileSystemLegacy.moveAsync({ from: file.uri, to: targetUri });
                     } catch (mvErr) {
                       console.warn('[History] Rename failed:', mvErr);
                       targetUri = file.uri;
