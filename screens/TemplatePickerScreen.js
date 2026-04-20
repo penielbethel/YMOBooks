@@ -1194,7 +1194,7 @@ export default function TemplatePickerScreen({ navigation, route }) {
                             } catch { }
                             if (Platform.OS === 'web') {
                               try {
-                                const resp = await fetch('/logo.png');
+                                const resp = await fetch('/assets/logo.png');
                                 if (resp.ok) {
                                   const blob = await resp.blob();
                                   const reader = new FileReader();

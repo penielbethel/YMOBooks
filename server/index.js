@@ -85,6 +85,31 @@ function findCompanyFile(companyId) {
   return companies.find((c) => c.companyId === companyId);
 }
 
+async function findCompanyById(companyId) {
+  if (!companyId) return null;
+  const searchId = String(companyId).trim();
+  
+  // 1. Try JSON local file first (fastest fallback)
+  let company = findCompanyFile(searchId);
+  if (company) return company;
+
+  // 2. Try MongoDB match if connected
+  try {
+    // Only attempt DB if Mongo is definitely used or we try it and it catches
+    // Exact match
+    company = await Company.findOne({ companyId: searchId }).lean();
+    if (company) return company;
+
+    // Case-insensitive match (crucial for ensuring logins work regardless of casing)
+    company = await Company.findOne({ companyId: { $regex: new RegExp(`^${searchId}$`, 'i') } }).lean();
+    if (company) return company;
+  } catch (err) {
+    // DB lookup failed or no connection, proceed to return null if not in file
+  }
+
+  return null;
+}
+
 // Local file fallback store for expenses when Mongo is unavailable
 const EXPENSES_FILE = process.env.EXPENSES_FILE || path.join(WRITABLE_ROOT, 'expenses.json');
 function readExpensesFile() {
@@ -1315,17 +1340,16 @@ app.post('/api/invoice/create', async (req, res) => {
       companyId, invoiceNumber, invoiceDate, dueDate, customer = {},
       items = [], template, brandColor, companyOverride, category = 'general'
     } = req.body;
+    console.log(`[Invoice] Creating for CompanyID: "${companyId}"`);
     if (!companyId) return res.status(400).json({ success: false, message: 'companyId is required' });
-    let company;
-    try {
-      company = await Company.findOne({ companyId }).lean();
-    } catch (dbErr) {
-      console.warn('Fetch company for invoice DB failed, using file fallback:', dbErr.message);
+    
+    let company = await findCompanyById(companyId);
+    if (company) {
+      console.log(`[Invoice] Company found: "${company.name}"`);
+    } else {
+      console.warn(`[Invoice] Company NOT FOUND for ID: "${companyId}"`);
+      return res.status(404).json({ success: false, message: 'Company not found' });
     }
-    if (!company) {
-      company = findCompanyFile(companyId);
-    }
-    if (!company) return res.status(404).json({ success: false, message: 'Company not found' });
 
     const invNo = invoiceNumber || `INV-${companyId}-${Date.now()}`;
     const filename = `${invNo}.pdf`.replace(/[^a-zA-Z0-9_.-]/g, '_');
@@ -1468,15 +1492,16 @@ app.post('/api/receipt/create', async (req, res) => {
       companyId, invoiceNumber, receiptNumber, receiptDate, customer = {},
       amountPaid, items = [], category = 'general'
     } = req.body;
+    console.log(`[Receipt] Creating for CompanyID: "${companyId}"`);
     if (!companyId) return res.status(400).json({ success: false, message: 'companyId is required' });
-    let company;
-    try {
-      company = await Company.findOne({ companyId }).lean();
-    } catch (dbErr) {
-      console.warn('Fetch company for receipt DB failed, using file fallback:', dbErr.message);
+    
+    let company = await findCompanyById(companyId);
+    if (company) {
+      console.log(`[Receipt] Company found: "${company.name}"`);
+    } else {
+      console.warn(`[Receipt] Company NOT FOUND for ID: "${companyId}"`);
+      return res.status(404).json({ success: false, message: 'Company not found' });
     }
-    if (!company) company = findCompanyFile(companyId);
-    if (!company) return res.status(404).json({ success: false, message: 'Company not found' });
 
     // Optionally load invoice to derive amount or customer
     let derivedCustomer = customer;
@@ -2328,21 +2353,8 @@ app.post('/api/login', async (req, res) => {
       return res.json({ success: true, company: adminStub });
     }
 
-    let fileCompany = findCompanyFile(searchId);
-    let dbCompany = null;
-    try {
-      // Try exact match first
-      dbCompany = await Company.findOne({ companyId: searchId }).lean();
-
-      // If not found, try case-insensitive
-      if (!dbCompany) {
-        dbCompany = await Company.findOne({ companyId: { $regex: new RegExp(`^${searchId}$`, 'i') } }).lean();
-      }
-    } catch (dbErr) {
-      console.warn('Login DB query failed, using file fallback:', dbErr.message);
-    }
-    const company = { ...(fileCompany || {}), ...(dbCompany || {}) };
-    if (!company || Object.keys(company).length === 0) return res.status(404).json({ success: false, message: 'Company not found' });
+    const company = await findCompanyById(searchId);
+    if (!company) return res.status(404).json({ success: false, message: 'Company not found' });
 
     // Strict Category Enforcment
     if (businessType) {

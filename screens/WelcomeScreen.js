@@ -106,7 +106,7 @@ const WelcomeScreen = ({ navigation }) => {
         <View style={styles.heroSection}>
           <View style={styles.logoContainer}>
             <Image
-              source={require('../logo.png')}
+              source={require('../assets/logo.png')}
               style={styles.logo}
               resizeMode="contain"
             />
