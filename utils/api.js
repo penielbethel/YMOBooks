@@ -61,10 +61,17 @@ export async function loginCompany(companyId, businessType) {
 
 export async function fetchCompany(companyId, businessType) {
   let url = `${Config.API_BASE_URL}/api/company/${encodeURIComponent(companyId)}`;
+  url += `?_t=${Date.now()}`;
   if (businessType) {
-    url += `?businessType=${encodeURIComponent(businessType)}`;
+    url += `&businessType=${encodeURIComponent(businessType)}`;
   }
-  const res = await fetch(url);
+  const res = await fetch(url, {
+    headers: {
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0'
+    }
+  });
   return res.json();
 }
 

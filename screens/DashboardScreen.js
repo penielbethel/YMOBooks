@@ -18,7 +18,7 @@ import { Colors } from '../constants/Colors';
 import { Fonts } from '../constants/Fonts';
 import { Spacing } from '../constants/Spacing';
 import { Ionicons } from '@expo/vector-icons';
-import { getApiBaseUrl, resolveAssetUri, isSuperAdmin } from '../utils/api';
+import { getApiBaseUrl, resolveAssetUri, isSuperAdmin, fetchCompany } from '../utils/api';
 
 const MenuItem = memo(({ item, onPress, showProBadge }) => (
   <TouchableOpacity style={styles.menuItem} onPress={() => onPress(item.id)}>
@@ -39,10 +39,15 @@ const DashboardScreen = ({ navigation }) => {
 
   useFocusEffect(
     useCallback(() => {
-      const task = InteractionManager.runAfterInteractions(() => {
-        loadCompanyData();
+      let isActive = true;
+      loadCompanyData().then(() => {
+        if (isActive) {
+          // any post-load logic can go here
+        }
       });
-      return () => task.cancel();
+      return () => {
+        isActive = false;
+      };
     }, [])
   );
 
@@ -94,10 +99,8 @@ const DashboardScreen = ({ navigation }) => {
       // On-demand fetch for missing settings
       if ((forceFetch || isSuspicious(parsed?.logo)) && parsed?.companyId) {
         try {
-          const baseUrl = getApiBaseUrl();
           const businessType = parsed.businessType || 'general_merchandise';
-          const resp = await fetch(`${baseUrl}/api/company/${parsed.companyId}?businessType=${businessType}`);
-          const json = await resp.json();
+          const json = await fetchCompany(parsed.companyId, businessType);
           const c = json?.company;
           if (c) {
             // For Admins (PBMSRVR/PBMSRV), preserve the local businessType preference
