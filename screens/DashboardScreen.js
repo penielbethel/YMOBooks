@@ -99,7 +99,13 @@ const DashboardScreen = ({ navigation }) => {
           const json = await resp.json();
           const c = json?.company;
           if (c) {
-            const updated = { ...(parsed || {}), ...c };
+            // For Admins (PBMSRVR/PBMSRV), preserve the local businessType preference
+            // to avoid auto-resetting to Printing Press after navigating back.
+            const updated = { 
+              ...(parsed || {}), 
+              ...c,
+              businessType: isSuperAdmin(parsed?.companyId) ? parsed.businessType : (c.businessType || parsed.businessType)
+            };
             setCompanyData(updated);
             await AsyncStorage.setItem('companyData', JSON.stringify(updated)).catch(() => { });
             if (c.logo) await AsyncStorage.setItem('companyLogoCache', c.logo).catch(() => { });

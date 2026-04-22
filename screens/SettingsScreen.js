@@ -5,7 +5,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { Colors } from '../constants/Colors';
 import { Fonts } from '../constants/Fonts';
 import { Spacing } from '../constants/Spacing';
-import { updateCompany, fetchCompany, resolveAssetUri } from '../utils/api';
+import { updateCompany, fetchCompany, resolveAssetUri, isSuperAdmin } from '../utils/api';
 import { uploadToUploadcare } from '../utils/uploadcare';
 
 import { Modal } from 'react-native';
@@ -264,6 +264,7 @@ const SettingsScreen = ({ navigation }) => {
         const updated = {
           ...(company || {}),
           ...(serverCompany || {}),
+          businessType: isSuperAdmin(company?.companyId) ? (company.businessType || 'general_merchandise') : (serverCompany?.businessType || company?.businessType || 'general_merchandise'),
           companyName: name,
           name,
           address,
