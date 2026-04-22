@@ -11,6 +11,7 @@ import {
   SafeAreaView,
   Alert,
   RefreshControl,
+  Platform,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors } from '../constants/Colors';
