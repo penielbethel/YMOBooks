@@ -216,29 +216,13 @@ const DashboardScreen = ({ navigation }) => {
         isPro: true,
       });
     } else {
-      // General Merchandise
+      // General Merchandise: only 3 core features
       items.push({
         id: 'calculator',
         title: 'Financial Calculator',
         description: 'Perform financial calculations',
         icon: 'calculator-outline',
         tint: Colors.success,
-        isPro: true,
-      });
-      items.push({
-        id: 'profit_loss',
-        title: 'Profit & Loss',
-        description: 'Check business profitability',
-        icon: 'bar-chart-outline',
-        tint: '#10B981',
-        isPro: true,
-      });
-      items.push({
-        id: 'balance_sheet',
-        title: 'Wealth Statement',
-        description: 'Balance Sheet & Assets',
-        icon: 'briefcase-outline',
-        tint: '#6366F1',
         isPro: true,
       });
     }
