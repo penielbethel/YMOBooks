@@ -196,7 +196,7 @@ const DashboardScreen = ({ navigation }) => {
         title: 'Stock Manager',
         description: 'Manage materials and products',
         icon: 'cube-outline',
-        tint: '#F59E0B', // Amber
+        tint: '#F59E0B',
         isPro: true,
       });
       items.push({
@@ -204,7 +204,7 @@ const DashboardScreen = ({ navigation }) => {
         title: 'Profit & Loss',
         description: 'Check business profitability',
         icon: 'bar-chart-outline',
-        tint: '#10B981', // Emerald
+        tint: '#10B981',
         isPro: true,
       });
       items.push({
@@ -212,10 +212,11 @@ const DashboardScreen = ({ navigation }) => {
         title: 'Wealth Statement',
         description: 'Balance Sheet & Assets',
         icon: 'briefcase-outline',
-        tint: '#6366F1', // Indigo
+        tint: '#6366F1',
         isPro: true,
       });
     } else {
+      // General Merchandise
       items.push({
         id: 'calculator',
         title: 'Financial Calculator',
@@ -224,12 +225,37 @@ const DashboardScreen = ({ navigation }) => {
         tint: Colors.success,
         isPro: true,
       });
+      items.push({
+        id: 'profit_loss',
+        title: 'Profit & Loss',
+        description: 'Check business profitability',
+        icon: 'bar-chart-outline',
+        tint: '#10B981',
+        isPro: true,
+      });
+      items.push({
+        id: 'balance_sheet',
+        title: 'Wealth Statement',
+        description: 'Balance Sheet & Assets',
+        icon: 'briefcase-outline',
+        tint: '#6366F1',
+        isPro: true,
+      });
     }
     const isSuperAdminUser = isSuperAdmin(companyData?.companyId);
+    // For non-premium non-admin users, PRO items still show (with badge) — clicking triggers upgrade prompt
     return items;
   }, [companyData]);
 
   const handleMenuPress = useCallback((itemId) => {
+    // PRO gate: non-premium, non-admin users see upgrade prompt
+    const item = menuItems.find(i => i.id === itemId);
+    const isAdminUser = isSuperAdmin(companyData?.companyId);
+    if (item?.isPro && !companyData?.isPremium && !isAdminUser) {
+      navigation.navigate('Subscription');
+      return;
+    }
+
     switch (itemId) {
       case 'invoice':
         navigation.navigate('TemplatePicker');
@@ -262,10 +288,9 @@ const DashboardScreen = ({ navigation }) => {
         navigation.navigate('PrintingService', { service: 'photo_frames' });
         break;
       default:
-        // For other features, show coming soon alert
         Alert.alert('Coming Soon', `${itemId} feature will be available soon!`);
     }
-  }, [navigation]);
+  }, [navigation, menuItems, companyData]);
 
   if (!companyData) {
     return (

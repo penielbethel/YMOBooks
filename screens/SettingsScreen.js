@@ -223,14 +223,16 @@ const SettingsScreen = ({ navigation }) => {
       return;
     }
     setSaving(true);
-    try {
-      // Re-compress if needed (e.g. if they just picked uncompressed) - generally already handled in pickImage/onOK
-      // but let's be safe. Though compressToDataUrl aims to handle raw URIs. 
-      // Existing data URLs are fast-pathed.
 
+    // Capture admin's current businessType BEFORE any async operations
+    // so we can restore it even if the server overwrites it
+    const adminIsLoggedIn = isSuperAdmin(company?.companyId);
+    const lockedBusinessType = adminIsLoggedIn ? company.businessType : null;
+
+    try {
       const payload = {
         companyId: String(company.companyId).trim(),
-        businessType: company.businessType || 'general_merchandise',
+        businessType: lockedBusinessType || company.businessType || 'general_merchandise',
         name,
         address,
         email,
@@ -238,12 +240,11 @@ const SettingsScreen = ({ navigation }) => {
         bankName,
         accountName,
         accountNumber,
-        bankAccountName: accountName, // legacy support
-        bankAccountNumber: accountNumber, // legacy support
+        bankAccountName: accountName,
+        bankAccountNumber: accountNumber,
         country: String(country || '').trim() || undefined,
         currencySymbol,
         currencyCode: symbolToCode(currencySymbol),
-        // Use logic that preserves existing data on server if we don't have a new upload ready
         logo: logo === null ? null : (logo.startsWith('http') ? logo : await compressToDataUrl(logo, 'logo')),
         signature: signature === null ? null : (signature.startsWith('http') ? signature : await compressToDataUrl(signature, 'signature'))
       };
@@ -251,25 +252,24 @@ const SettingsScreen = ({ navigation }) => {
       const res = await updateCompany(payload);
 
       if (res?.success) {
-        // Prefer authoritative data from server immediately after update
         let serverCompany = res?.company;
         if (!serverCompany) {
           try {
-            const refetch = await fetchCompany(company.companyId, company.businessType);
+            const refetch = await fetchCompany(company.companyId, payload.businessType);
             serverCompany = refetch?.company || null;
           } catch (_) { }
         }
 
-        // Consolidated object for local storage
+        // Build the merged object, then explicitly pin businessType for admins LAST
+        // so no server spread can override the active category selection
         const updated = {
           ...(company || {}),
           ...(serverCompany || {}),
-          businessType: isSuperAdmin(company?.companyId) ? (company.businessType || 'general_merchandise') : (serverCompany?.businessType || company?.businessType || 'general_merchandise'),
           companyName: name,
           name,
           address,
           email,
-          phoneNumber: phone, // legacy key
+          phoneNumber: phone,
           phone,
           bankName,
           bankAccountName: accountName,
@@ -280,10 +280,13 @@ const SettingsScreen = ({ navigation }) => {
           logo: serverCompany?.logo || payload.logo,
           signature: serverCompany?.signature || payload.signature,
           hasLogo: !!(serverCompany?.logo || payload.logo),
-          hasSignature: !!(serverCompany?.signature || payload.signature)
+          hasSignature: !!(serverCompany?.signature || payload.signature),
+          // MUST be last: admin businessType is pinned from pre-save capture
+          businessType: adminIsLoggedIn
+            ? (lockedBusinessType || 'general_merchandise')
+            : (serverCompany?.businessType || company?.businessType || 'general_merchandise'),
         };
 
-        // Cache optimization: Store logo separately if possible, or just as is
         if (updated.logo) {
           AsyncStorage.setItem('companyLogoCache', updated.logo).catch(() => { });
         }
