@@ -83,7 +83,12 @@ const SettingsScreen = ({ navigation }) => {
             const fetched = await fetchCompany(c.companyId);
             const full = fetched?.company || fetched?.data;
             if (full) {
-              const merged = { ...c, ...full };
+              const adminIsLoggedIn = isSuperAdmin(c.companyId);
+              const merged = { 
+                ...c, 
+                ...full,
+                businessType: adminIsLoggedIn ? c.businessType : (full.businessType || c.businessType)
+              };
               populateFields(merged);
               await AsyncStorage.setItem('companyData', JSON.stringify(merged)).catch(() => { });
               if (full.logo) await AsyncStorage.setItem('companyLogoCache', full.logo).catch(() => { });
