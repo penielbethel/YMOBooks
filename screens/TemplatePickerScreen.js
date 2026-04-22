@@ -7,7 +7,7 @@ import * as FileSystemLegacy from 'expo-file-system/legacy';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import * as ImagePicker from 'expo-image-picker';
-import { createInvoice, getApiBaseUrl, resolveAssetUri } from '../utils/api';
+import { createInvoice, getApiBaseUrl, resolveAssetUri, isSuperAdmin } from '../utils/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors } from '../constants/Colors';
 import { Fonts } from '../constants/Fonts';
@@ -863,7 +863,7 @@ export default function TemplatePickerScreen({ navigation, route }) {
     const templateConfig = TEMPLATES.find(t => t.key === tplKey);
     const isPro = templateConfig?.isPro;
 
-    if (isPro && !company?.isPremium) {
+    if (isPro && !company?.isPremium && !isSuperAdmin(company?.companyId)) {
       Alert.alert(
         'Premium Template',
         'This template is available for Pro users only. Upgrade now to unlock all premium templates and features.',
@@ -888,7 +888,7 @@ export default function TemplatePickerScreen({ navigation, route }) {
   };
 
   const renderTemplate = (tplKey, title, iconName, isPro, selected, onSelect) => {
-    const locked = isPro && !company?.isPremium && !['pbmsrvr', 'pbmsrv'].includes(company?.companyId?.toLowerCase());
+    const locked = isPro && !company?.isPremium && !isSuperAdmin(company?.companyId);
     return (
       <TouchableOpacity
         style={[styles.templateCard, selected && styles.templateSelected, locked && styles.templateLocked]}
