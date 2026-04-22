@@ -102,10 +102,12 @@ const DashboardScreen = ({ navigation }) => {
           if (c) {
             // For Admins (PBMSRVR/PBMSRV), preserve the local businessType preference
             // to avoid auto-resetting to Printing Press after navigating back.
-            const updated = { 
-              ...(parsed || {}), 
+            const adminIsLoggedIn = isSuperAdmin(parsed?.companyId || companyData?.companyId);
+            const preservedBusinessType = adminIsLoggedIn ? (parsed?.businessType || companyData?.businessType) : null;
+            const updated = {
+              ...(parsed || {}),
               ...c,
-              businessType: isSuperAdmin(parsed?.companyId) ? parsed.businessType : (c.businessType || parsed.businessType)
+              businessType: adminIsLoggedIn ? preservedBusinessType : (c.businessType || parsed?.businessType)
             };
             setCompanyData(updated);
             await AsyncStorage.setItem('companyData', JSON.stringify(updated)).catch(() => { });
