@@ -18,7 +18,7 @@ import { Colors } from '../constants/Colors';
 import { Fonts } from '../constants/Fonts';
 import { Spacing } from '../constants/Spacing';
 import { Ionicons } from '@expo/vector-icons';
-import { getApiBaseUrl, resolveAssetUri, isSuperAdmin, fetchCompany } from '../utils/api';
+import { getApiBaseUrl, resolveAssetUri, isSuperAdmin, isAdmin, fetchCompany } from '../utils/api';
 
 const MenuItem = memo(({ item, onPress, showProBadge }) => (
   <TouchableOpacity style={styles.menuItem} onPress={() => onPress(item.id)}>
@@ -105,7 +105,7 @@ const DashboardScreen = ({ navigation }) => {
           if (c) {
             // For Admins (PBMSRVR/PBMSRV), preserve the local businessType preference
             // to avoid auto-resetting to Printing Press after navigating back.
-            const adminIsLoggedIn = isSuperAdmin(parsed?.companyId || companyData?.companyId);
+            const adminIsLoggedIn = isAdmin(parsed?.companyId || companyData?.companyId);
             const preservedBusinessType = adminIsLoggedIn ? (parsed?.businessType || companyData?.businessType) : null;
             const updated = {
               ...(parsed || {}),
@@ -231,7 +231,7 @@ const DashboardScreen = ({ navigation }) => {
         isPro: true,
       });
     }
-    const isSuperAdminUser = isSuperAdmin(companyData?.companyId);
+    const isSuperAdminUser = isAdmin(companyData?.companyId);
     // For non-premium non-admin users, PRO items still show (with badge) — clicking triggers upgrade prompt
     return items;
   }, [companyData]);
@@ -239,7 +239,7 @@ const DashboardScreen = ({ navigation }) => {
   const handleMenuPress = useCallback((itemId) => {
     // PRO gate: non-premium, non-admin users see upgrade prompt
     const item = menuItems.find(i => i.id === itemId);
-    const isAdminUser = isSuperAdmin(companyData?.companyId);
+    const isAdminUser = isAdmin(companyData?.companyId);
     if (item?.isPro && !companyData?.isPremium && !isAdminUser) {
       navigation.navigate('Subscription');
       return;
@@ -247,22 +247,22 @@ const DashboardScreen = ({ navigation }) => {
 
     switch (itemId) {
       case 'invoice':
-        navigation.navigate('TemplatePicker');
+        navigation.navigate('TemplatePicker', { category: companyData?.businessType });
         break;
       case 'history':
-        navigation.navigate('InvoiceHistory');
+        navigation.navigate('InvoiceHistory', { category: companyData?.businessType });
         break;
       case 'calculator':
         navigation.navigate('FinancialCalculator');
         break;
       case 'stock':
-        navigation.navigate('StockManagement');
+        navigation.navigate('StockManagement', { category: companyData?.businessType });
         break;
       case 'profit_loss':
-        navigation.navigate('ProfitLoss');
+        navigation.navigate('ProfitLoss', { category: companyData?.businessType });
         break;
       case 'balance_sheet':
-        navigation.navigate('BalanceSheet');
+        navigation.navigate('BalanceSheet', { category: companyData?.businessType });
         break;
       case 'large_format':
         navigation.navigate('PrintingService', { service: 'large_format' });
@@ -366,7 +366,7 @@ const DashboardScreen = ({ navigation }) => {
                 key={item.id}
                 item={item}
                 onPress={handleMenuPress}
-                showProBadge={!companyData?.isPremium && !isSuperAdmin(companyData?.companyId)}
+                showProBadge={!companyData?.isPremium && !isAdmin(companyData?.companyId)}
               />
             ))}
           </View>

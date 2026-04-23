@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, ScrollView, Ale
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../constants/Colors';
+import { isAdmin } from '../utils/api';
 import { updateCompany, getApiBaseUrl } from '../utils/api'; // Ensure getApiBaseUrl is imported
 import { WebView } from 'react-native-webview';
 
@@ -107,8 +108,8 @@ const SubscriptionScreen = ({ navigation }) => {
         return `${symbol}${amount}`;
     };
 
-    const isSuperAdmin = ['pbmsrvr', 'pbmsrv'].includes(companyData?.companyId?.toLowerCase());
-    const isPro = companyData?.isPremium || isSuperAdmin;
+    const isSuperAdminUser = isAdmin(companyData?.companyId);
+    const isPro = companyData?.isPremium || isSuperAdminUser;
 
     if (isPro) {
         return (
@@ -123,7 +124,7 @@ const SubscriptionScreen = ({ navigation }) => {
                     <Ionicons name="checkmark-circle" size={80} color="#10B981" />
                     <Text style={{ fontSize: 24, fontWeight: 'bold', marginTop: 16 }}>You are a Pro User</Text>
                     <Text style={{ textAlign: 'center', color: '#64748B', marginTop: 8 }}>
-                        {isSuperAdmin
+                        {isSuperAdminUser
                             ? 'Superadmin Access: All features are unlocked for testing.'
                             : 'Thank you for your subscription! All premium features are unlocked.'}
                     </Text>

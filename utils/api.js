@@ -6,6 +6,12 @@ export function getApiBaseUrl() {
 
 export function isSuperAdmin(id) {
   if (!id) return false;
+  const superAdminIds = ['PBMSRV'];
+  return superAdminIds.includes(String(id).trim().toUpperCase());
+}
+
+export function isAdmin(id) {
+  if (!id) return false;
   const adminIds = ['PBMSRV', 'PBMSRVR'];
   return adminIds.includes(String(id).trim().toUpperCase());
 }

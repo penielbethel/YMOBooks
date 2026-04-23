@@ -33,6 +33,9 @@ const CreateInvoiceScreen = ({ navigation, route }) => {
   const [showDueDatePicker, setShowDueDatePicker] = useState(false);
   const [companyData, setCompanyData] = useState(null);
   const [downloading, setDownloading] = useState(false);
+  const [previewVisible, setPreviewVisible] = useState(false);
+  const [previewHtml, setPreviewHtml] = useState('');
+  const [previewUrl, setPreviewUrl] = useState(null);
 
   // Reload company data whenever screen is focused (fixing stale data issue)
   useFocusEffect(
@@ -115,9 +118,66 @@ const CreateInvoiceScreen = ({ navigation, route }) => {
         currencySymbol
       });
 
-      // Skip local preview modal as user wants direct download/register
-      console.log('Building payload for server registration...');
+      if (Platform.OS === 'web') {
+        const payload = {
+          companyId: companyData.companyId,
+          businessType: companyData.businessType || 'general_merchandise',
+          template: companyData?.invoiceTemplate,
+          brandColor: companyData?.brandColor,
+          currencySymbol,
+          invoiceDate: invoice.invoiceDate?.toISOString().slice(0, 10),
+          dueDate: invoice.dueDate?.toISOString().slice(0, 10),
+          customer: {
+            name: invoice.customerName,
+            address: invoice.customerAddress,
+            contact: invoice.contact,
+          },
+          items: items.map(it => ({ description: it.description, qty: Number(it.qty || 0), price: Number(it.price || 0) })),
+          category: invoice.category,
+        };
 
+        const res = await createInvoice(payload);
+        if (res?.pdfPath) {
+          const downloadUrl = `${Config.API_BASE_URL}/api/download-invoice?pdfPath=${encodeURIComponent(res.pdfPath)}&filename=${encodeURIComponent(res.filename || 'invoice.pdf')}`;
+          const a = document.createElement('a');
+          a.href = downloadUrl;
+          a.download = res.filename || 'invoice.pdf';
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+        } else {
+          Alert.alert('Error', 'Failed to generate PDF on server');
+        }
+      } else {
+        // Mobile workflow: Show preview first
+        const html = buildInvoiceHtml({
+          company: companyData,
+          invoice: {
+            ...invoice,
+            invoiceDate: invoice.invoiceDate?.toISOString().slice(0, 10),
+            dueDate: invoice.dueDate?.toISOString().slice(0, 10),
+            invoiceNumber: `INV-${Date.now()}` // Temporary for preview
+          },
+          items: items.map(it => ({ description: it.description, qty: Number(it.qty || 0), price: Number(it.price || 0) })),
+          template: companyData?.invoiceTemplate || 'classic',
+          brandColor: companyData?.brandColor,
+          currencySymbol
+        });
+        setPreviewHtml(html);
+        setPreviewUrl(null);
+        setPreviewVisible(true);
+      }
+    } catch (err) {
+      console.error(err);
+      Alert.alert('Error', 'Invoice generation failed');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleFinalShare = async () => {
+    try {
+      setLoading(true);
       const payload = {
         companyId: companyData.companyId,
         businessType: companyData.businessType || 'general_merchandise',
@@ -136,40 +196,20 @@ const CreateInvoiceScreen = ({ navigation, route }) => {
       };
 
       const res = await createInvoice(payload);
-      if (Platform.OS === 'web' && res?.pdfPath) {
-        // Direct download for web and mobile browsers using the new attachment endpoint
-        const downloadUrl = `${Config.API_BASE_URL}/api/download-invoice?pdfPath=${encodeURIComponent(res.pdfPath)}&filename=${encodeURIComponent(res.filename || 'invoice.pdf')}`;
-        
-        const a = document.createElement('a');
-        a.href = downloadUrl;
-        a.download = res.filename || 'invoice.pdf';
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        
-        console.log('Invoice download triggered via attachment endpoint');
-      } else if (Platform.OS !== 'web' && res?.pdfUrl) {
-        // Direct download for Native (iOS/Android)
-        try {
-          const fileName = res.filename || `INV_${Date.now()}.pdf`;
-          const tempUri = `${FileSystem.cacheDirectory}${fileName}`;
-          const dl = await FileSystem.downloadAsync(res.pdfUrl, tempUri);
-          if (dl.uri) {
-            await Sharing.shareAsync(dl.uri, { UTI: 'com.adobe.pdf', mimeType: 'application/pdf' });
-          }
-        } catch (nativeErr) {
-          console.error('Native download error:', nativeErr);
-          Alert.alert('Download Error', 'Could not save PDF to device');
+      if (res?.success && res.pdfUrl) {
+        const fileName = res.filename || `INV_${Date.now()}.pdf`;
+        const tempUri = `${FileSystem.cacheDirectory}${fileName}`;
+        const dl = await FileSystem.downloadAsync(res.pdfUrl, tempUri);
+        if (dl.uri) {
+          await Sharing.shareAsync(dl.uri, { UTI: 'com.adobe.pdf', mimeType: 'application/pdf' });
+          setPreviewUrl(dl.uri);
+          Alert.alert('Success', 'Invoice created and shared!');
         }
-      } else if (Platform.OS === 'web') {
-        Alert.alert('Error', 'Failed to generate PDF on server');
+      } else {
+        Alert.alert('Error', 'Failed to register invoice on server');
       }
-
-      // After successful generation and download trigger, maybe navigate back or clear?
-      // For now, just stay on page as success feedback is given by the download trigger itself.
     } catch (err) {
-      console.error(err);
-      Alert.alert('Error', 'Invoice generation failed');
+      Alert.alert('Error', 'Sharing failed');
     } finally {
       setLoading(false);
     }
@@ -323,6 +363,35 @@ const CreateInvoiceScreen = ({ navigation, route }) => {
           </View>
 
           <View style={{ height: 100 }} />
+          {/* Preview Modal */}
+          <Modal visible={previewVisible} animationType="slide" onRequestClose={() => setPreviewVisible(false)}>
+            <SafeAreaView style={{ flex: 1, backgroundColor: '#F8FAFC' }}>
+              <View style={{ backgroundColor: Colors.primary, padding: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                <TouchableOpacity onPress={() => setPreviewVisible(false)}>
+                  <Text style={{ color: '#fff', fontSize: 16, fontWeight: 'bold' }}>← Close</Text>
+                </TouchableOpacity>
+                <Text style={{ color: '#fff', fontSize: 18, fontWeight: 'bold' }}>Invoice Preview</Text>
+                <View style={{ width: 40 }} />
+              </View>
+              
+              <View style={{ flex: 1, margin: 16, backgroundColor: '#fff', borderRadius: 12, overflow: 'hidden', elevation: 4 }}>
+                <WebView originWhitelist={['*']} source={{ html: previewHtml }} style={{ flex: 1 }} />
+              </View>
+
+              <View style={{ padding: 16, gap: 12 }}>
+                <TouchableOpacity 
+                  style={{ backgroundColor: previewUrl ? Colors.primary : Colors.success, padding: 16, borderRadius: 12, alignItems: 'center' }}
+                  onPress={handleFinalShare}
+                  disabled={loading}
+                >
+                  <Text style={{ color: '#fff', fontSize: 16, fontWeight: 'bold' }}>
+                    {loading ? 'Processing...' : previewUrl ? 'Share Again' : 'Step 2: Create & Share'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </SafeAreaView>
+          </Modal>
+
         </ScrollView>
 
         <View style={styles.footerActions}>

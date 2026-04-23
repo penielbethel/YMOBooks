@@ -16,7 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../constants/Colors';
 import { Fonts } from '../constants/Fonts';
 import { Spacing } from '../constants/Spacing';
-import { loginCompany, pingBackend, getApiBaseUrl, fetchCompany, isSuperAdmin } from '../utils/api';
+import { loginCompany, pingBackend, getApiBaseUrl, fetchCompany, isSuperAdmin, isAdmin } from '../utils/api';
 
 const LoginScreen = ({ navigation }) => {
   const [companyId, setCompanyId] = useState('');
@@ -37,8 +37,8 @@ const LoginScreen = ({ navigation }) => {
     setLoading(true);
     try {
       const entered = companyId.trim();
-      // Admin check - case insensitive
-      if (entered.toUpperCase() === 'PBMSRV' || entered.toUpperCase() === 'PBMSRVR') {
+      // Only PBMSRV goes to management dashboard
+      if (entered.toUpperCase() === 'PBMSRV') {
         navigation.navigate('SuperAdmin');
         return;
       }
@@ -121,7 +121,7 @@ const LoginScreen = ({ navigation }) => {
           bankAccountNumber: result.company.accountNumber || result.company.bankAccountNumber || '',
           brandColor: result.company.brandColor || null,
           currencySymbol: result.company.currencySymbol || '$',
-          businessType: typeof isSuperAdmin !== 'undefined' && isSuperAdmin(result.company.companyId) ? selectedType : (result.company.businessType || selectedType),
+          businessType: isAdmin(result.company.companyId) ? selectedType : (result.company.businessType || selectedType),
           // Hint for on-demand signature fetch to avoid huge AsyncStorage writes
           hasSignature: !!result.company.signature,
           hasLogo: !!(result.company.logo || previousLogo || cachedLogo),

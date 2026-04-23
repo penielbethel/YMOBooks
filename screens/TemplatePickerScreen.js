@@ -7,7 +7,7 @@ import * as FileSystemLegacy from 'expo-file-system/legacy';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import * as ImagePicker from 'expo-image-picker';
-import { createInvoice, getApiBaseUrl, resolveAssetUri, isSuperAdmin } from '../utils/api';
+import { createInvoice, getApiBaseUrl, resolveAssetUri, isSuperAdmin, isAdmin } from '../utils/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors } from '../constants/Colors';
 import { Fonts } from '../constants/Fonts';
@@ -530,7 +530,7 @@ function renderFullInvoicePreview(company, template, brandColor, liveInvoice) {
 
 export default function TemplatePickerScreen({ navigation, route }) {
   const [company, setCompany] = useState(null);
-  const [category, setCategory] = useState(route?.params?.category || 'general');
+  const [category, setCategory] = useState(route?.params?.category || company?.businessType || 'general');
   const [invoiceTemplate, setInvoiceTemplate] = useState('classic');
   const [brandColor, setBrandColor] = useState('');
   // Currency is globally determined by company settings
@@ -607,6 +607,9 @@ export default function TemplatePickerScreen({ navigation, route }) {
           if (stored) {
             const parsed = JSON.parse(stored);
             setCompany(parsed);
+            if (!route?.params?.category) {
+              setCategory(parsed.businessType || 'general');
+            }
           }
           // Load DI Presets
           const presets = await AsyncStorage.getItem('di_printing_presets');
@@ -863,7 +866,7 @@ export default function TemplatePickerScreen({ navigation, route }) {
     const templateConfig = TEMPLATES.find(t => t.key === tplKey);
     const isPro = templateConfig?.isPro;
 
-    if (isPro && !company?.isPremium && !isSuperAdmin(company?.companyId)) {
+    if (isPro && !company?.isPremium && !isAdmin(company?.companyId)) {
       Alert.alert(
         'Premium Template',
         'This template is available for Pro users only. Upgrade now to unlock all premium templates and features.',
@@ -888,7 +891,7 @@ export default function TemplatePickerScreen({ navigation, route }) {
   };
 
   const renderTemplate = (tplKey, title, iconName, isPro, selected, onSelect) => {
-    const locked = isPro && !company?.isPremium && !isSuperAdmin(company?.companyId);
+    const locked = isPro && !company?.isPremium && !isAdmin(company?.companyId);
     return (
       <TouchableOpacity
         style={[styles.templateCard, selected && styles.templateSelected, locked && styles.templateLocked]}
@@ -981,6 +984,16 @@ export default function TemplatePickerScreen({ navigation, route }) {
         }
       }
 
+      // Step 2: Share logic for Mobile
+      if (pdfReadyUri && Platform.OS !== 'web') {
+        if (await Sharing.isAvailableAsync()) {
+          await Sharing.shareAsync(pdfReadyUri, { UTI: 'com.adobe.pdf', mimeType: 'application/pdf' });
+        } else {
+          Alert.alert('Sharing Unavailable', 'No sharing options found on this device');
+        }
+        return;
+      }
+
       if (company?.companyId) {
         const payload = {
           companyId: company.companyId,
@@ -994,7 +1007,7 @@ export default function TemplatePickerScreen({ navigation, route }) {
           items: items.map((it) => ({ description: it.description, qty: Number(it.qty || 0), price: Number(it.price || 0) })),
           template: invoiceTemplate,
           brandColor,
-          category: category || 'general',
+          category: category || company?.businessType || 'general',
           businessType: company?.businessType || 'general_merchandise',
           currencySymbol: companyCurrencySymbol,
           companyOverride: {
@@ -1036,7 +1049,9 @@ export default function TemplatePickerScreen({ navigation, route }) {
           
           setPdfReadyUri(targetUri);
           Alert.alert('Success', 'Invoice created and registered!');
-          setPreviewVisible(false);
+          if (Platform.OS === 'web') {
+            setPreviewVisible(false);
+          }
         }
       }
     } catch (err) {

@@ -94,7 +94,7 @@ const InvoiceHistoryScreen = ({ navigation, route }) => {
           return;
         }
         setCompanyId(effectiveId);
-        const category = route?.params?.category;
+        const category = route?.params?.category || parsed?.businessType;
         await (async () => {
           const [invRes, rctRes] = await Promise.all([
             fetchInvoices(effectiveId, 60, category),
@@ -125,7 +125,7 @@ const InvoiceHistoryScreen = ({ navigation, route }) => {
     if (!companyId) return;
     setRefreshing(true);
     try {
-      const category = route?.params?.category;
+      const category = route?.params?.category || company?.businessType;
       const [invRes, rctRes] = await Promise.all([
         fetchInvoices(companyId, 12, category),
         fetchReceipts(companyId, 12, category),

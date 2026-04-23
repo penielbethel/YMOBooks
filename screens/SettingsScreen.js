@@ -5,7 +5,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { Colors } from '../constants/Colors';
 import { Fonts } from '../constants/Fonts';
 import { Spacing } from '../constants/Spacing';
-import { updateCompany, fetchCompany, resolveAssetUri, isSuperAdmin } from '../utils/api';
+import { updateCompany, fetchCompany, resolveAssetUri, isSuperAdmin, isAdmin } from '../utils/api';
 import { uploadToUploadcare } from '../utils/uploadcare';
 
 import { Modal } from 'react-native';
@@ -130,7 +130,7 @@ const SettingsScreen = ({ navigation }) => {
             const fetched = await fetchCompany(c.companyId);
             const full = fetched?.company || fetched?.data;
             if (full) {
-              const adminIsLoggedIn = isSuperAdmin(c.companyId);
+              const adminIsLoggedIn = isAdmin(c.companyId);
               const merged = { 
                 ...c, 
                 ...full,
@@ -304,7 +304,7 @@ const SettingsScreen = ({ navigation }) => {
 
     // Capture admin's current businessType BEFORE any async operations
     // so we can restore it even if the server overwrites it
-    const adminIsLoggedIn = isSuperAdmin(company?.companyId);
+    const adminIsLoggedIn = isAdmin(company?.companyId);
     const lockedBusinessType = adminIsLoggedIn ? company.businessType : null;
 
     try {

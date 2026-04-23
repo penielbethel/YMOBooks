@@ -49,7 +49,9 @@ const ProfitLossScreen = ({ navigation, route }) => {
         if (!companyData?.companyId) return;
         setLoading(true);
         try {
-            const category = route?.params?.category;
+            // Priority 1: Specific sub-service (large_format, etc.) from route params
+            // Priority 2: The current businessType the user is logged into (standalone category)
+            const category = route?.params?.category || companyData?.businessType;
             const res = await fetchFinanceSummary(companyData.companyId, month, category);
             if (res && res.success) {
                 setSummary(res.summary);
