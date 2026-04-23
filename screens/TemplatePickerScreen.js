@@ -1104,13 +1104,21 @@ export default function TemplatePickerScreen({ navigation, route }) {
               <View style={{ flex: 1 }}>
                 <View style={{ flex: 1, marginHorizontal: Spacing.lg, marginBottom: Spacing.md, borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 8, overflow: 'hidden' }}>
                   {previewHtml ? (
-                    <WebView
-                      source={{ html: previewHtml }}
-                      originWhitelist={['*']}
-                      style={{ flex: 1 }}
-                      javaScriptEnabled={true}
-                      domStorageEnabled={true}
-                    />
+                    Platform.OS === 'web' ? (
+                      <iframe
+                        srcDoc={previewHtml}
+                        style={{ width: '100%', height: '100%', border: 'none', backgroundColor: 'white' }}
+                        title="Invoice Preview"
+                      />
+                    ) : (
+                      <WebView
+                        source={{ html: previewHtml }}
+                        originWhitelist={['*']}
+                        style={{ flex: 1 }}
+                        javaScriptEnabled={true}
+                        domStorageEnabled={true}
+                      />
+                    )
                   ) : (
                     <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}><Text style={{ color: '#888' }}>Generating Preview...</Text></View>
                   )}

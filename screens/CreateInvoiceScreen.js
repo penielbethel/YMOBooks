@@ -363,13 +363,21 @@ const CreateInvoiceScreen = ({ navigation, route }) => {
 
           <View style={styles.webviewContainer}>
             {previewUrl ? (
-              <WebView
-                ref={webviewRef}
-                source={{ uri: previewUrl }}
-                startInLoadingState
-                renderLoading={() => <ActivityIndicator size="large" color={Colors.primary} style={{ position: 'absolute', alignSelf: 'center', top: '40%' }} />}
-                style={{ flex: 1 }}
-              />
+              Platform.OS === 'web' ? (
+                <iframe
+                  src={previewUrl}
+                  style={{ width: '100%', height: '100%', border: 'none', backgroundColor: 'white' }}
+                  title="Invoice Preview"
+                />
+              ) : (
+                <WebView
+                  ref={webviewRef}
+                  source={{ uri: previewUrl }}
+                  startInLoadingState
+                  renderLoading={() => <ActivityIndicator size="large" color={Colors.primary} style={{ position: 'absolute', alignSelf: 'center', top: '40%' }} />}
+                  style={{ flex: 1 }}
+                />
+              )
             ) : (
               <ActivityIndicator size="large" color={Colors.primary} />
             )}

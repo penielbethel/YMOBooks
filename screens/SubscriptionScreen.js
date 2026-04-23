@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, ScrollView, Alert, ActivityIndicator, Modal } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, ScrollView, Alert, ActivityIndicator, Modal, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../constants/Colors';
@@ -209,12 +209,20 @@ const SubscriptionScreen = ({ navigation }) => {
                         </TouchableOpacity>
                     </View>
                     {paymentLink && (
-                        <WebView
-                            source={{ uri: paymentLink }}
-                            onNavigationStateChange={handleWebViewNavigation}
-                            startInLoadingState
-                            renderLoading={() => <ActivityIndicator size="large" color={Colors.primary} style={{ flex: 1 }} />}
-                        />
+                        Platform.OS === 'web' ? (
+                            <iframe
+                                src={paymentLink}
+                                style={{ flex: 1, border: 'none', width: '100%', height: '100%' }}
+                                title="Payment Gateway"
+                            />
+                        ) : (
+                            <WebView
+                                source={{ uri: paymentLink }}
+                                onNavigationStateChange={handleWebViewNavigation}
+                                startInLoadingState
+                                renderLoading={() => <ActivityIndicator size="large" color={Colors.primary} style={{ flex: 1 }} />}
+                            />
+                        )
                     )}
                 </SafeAreaView>
             </Modal>

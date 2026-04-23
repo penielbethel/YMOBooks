@@ -717,7 +717,15 @@ const InvoiceHistoryScreen = ({ navigation, route }) => {
           </View>
           <View style={{ flex: 1, margin: Spacing.lg, backgroundColor: '#fff', borderRadius: 8, overflow: 'hidden' }}>
             {!!previewHtml ? (
-              <WebView originWhitelist={["*"]} source={{ html: previewHtml }} />
+              Platform.OS === 'web' ? (
+                <iframe
+                  srcDoc={previewHtml}
+                  style={{ width: '100%', height: '100%', border: 'none', backgroundColor: 'white' }}
+                  title="Document Preview"
+                />
+              ) : (
+                <WebView originWhitelist={["*"]} source={{ html: previewHtml }} />
+              )
             ) : (
               <View style={styles.loadingBox}><ActivityIndicator color={Colors.primary} /></View>
             )}

@@ -14,6 +14,53 @@ import * as FileSystem from 'expo-file-system';
 import * as FileSystemLegacy from 'expo-file-system/legacy';
 import * as ImageManipulator from 'expo-image-manipulator';
 
+const SIGNATURE_PAD_HTML = `
+<!DOCTYPE html>
+<html>
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <style>
+        body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #fff; }
+        #signature-pad { width: 100%; height: 100%; cursor: crosshair; touch-action: none; }
+        .buttons { position: absolute; bottom: 10px; right: 10px; display: flex; gap: 10px; }
+        button { padding: 8px 16px; border-radius: 4px; border: 1px solid #ccc; background: #f0f0f0; cursor: pointer; font-family: sans-serif; font-weight: bold; }
+        .save { background: #007AFF; color: #fff; border: none; }
+    </style>
+</head>
+<body>
+    <canvas id="signature-pad"></canvas>
+    <div class="buttons">
+        <button onclick="clearPad()">Clear</button>
+        <button class="save" onclick="savePad()">Save Signature</button>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/signature_pad@4.1.5/dist/signature_pad.umd.min.js"></script>
+    <script>
+        const canvas = document.getElementById('signature-pad');
+        const signaturePad = new SignaturePad(canvas, { backgroundColor: 'rgb(255, 255, 255)' });
+        
+        function resizeCanvas() {
+            const ratio = Math.max(window.devicePixelRatio || 1, 1);
+            canvas.width = canvas.offsetWidth * ratio;
+            canvas.height = canvas.offsetHeight * ratio;
+            canvas.getContext("2d").scale(ratio, ratio);
+            signaturePad.clear();
+        }
+        window.onresize = resizeCanvas;
+        setTimeout(resizeCanvas, 100);
+
+        function clearPad() { signaturePad.clear(); }
+        function savePad() {
+            if (signaturePad.isEmpty()) {
+                window.parent.postMessage({ type: 'SIGNATURE_EMPTY' }, '*');
+            } else {
+                window.parent.postMessage({ type: 'SIGNATURE_OK', data: signaturePad.toDataURL() }, '*');
+            }
+        }
+    </script>
+</body>
+</html>
+`;
+
 const SettingsScreen = ({ navigation }) => {
   // State for form fields
   const [name, setName] = useState('');
@@ -101,6 +148,32 @@ const SettingsScreen = ({ navigation }) => {
     };
     init();
   }, []);
+
+  useEffect(() => {
+    if (Platform.OS === 'web' && signatureModalVisible) {
+      const handleMessage = async (event) => {
+        if (event.data?.type === 'SIGNATURE_OK') {
+          const sig = event.data.data;
+          setSignatureModalVisible(false);
+          setSaving(true);
+          try {
+            const compact = await compressToDataUrl(sig, 'signature');
+            const cdnUrl = await uploadToUploadcare(compact || sig);
+            setSignature(cdnUrl || compact || sig);
+            Alert.alert('Signature Captured', 'Your signature has been optimized and saved to the form.');
+          } catch (e) {
+            setSignature(sig);
+          } finally {
+            setSaving(false);
+          }
+        } else if (event.data?.type === 'SIGNATURE_EMPTY') {
+          Alert.alert('No Signature', 'Please draw your signature before saving.');
+        }
+      };
+      window.addEventListener('message', handleMessage);
+      return () => window.removeEventListener('message', handleMessage);
+    }
+  }, [signatureModalVisible]);
 
   const reloadCompanyData = async () => {
     try {
@@ -492,32 +565,40 @@ const SettingsScreen = ({ navigation }) => {
             <Text style={{ color: Colors.textSecondary, marginBottom: Spacing.md }}>
               Use a stylus or your finger to sign in the area below. Your signature will be saved to your profile and used on generated documents.
             </Text>
-            <View style={{ flex: 1, backgroundColor: Colors.white, borderWidth: 1, borderColor: Colors.border, borderRadius: 8 }}>
-              <SignatureCanvas
-                onOK={async (sig) => {
-                  setSignatureModalVisible(false);
-                  setSaving(true);
-                  try {
-                    // sig is a base64 data URL; recompress for smaller payload
-                    const compact = await compressToDataUrl(sig, 'signature');
-                    const cdnUrl = await uploadToUploadcare(compact || sig);
-                    setSignature(cdnUrl || compact || sig);
-                    Alert.alert('Signature Captured', 'Your signature has been optimized and saved to the form.');
-                  } catch (e) {
-                    setSignature(sig);
-                  } finally {
-                    setSaving(false);
-                  }
-                }}
-                onEmpty={() => {
-                  Alert.alert('No Signature', 'Please draw your signature before saving.');
-                }}
-                descriptionText="Sign here"
-                clearText="Clear"
-                confirmText="Save Signature"
-                webStyle=".m-signature-pad--footer {box-shadow: none;}"
-                backgroundColor={Colors.white}
-              />
+            <View style={{ flex: 1, backgroundColor: Colors.white, borderWidth: 1, borderColor: Colors.border, borderRadius: 8, overflow: 'hidden' }}>
+              {Platform.OS === 'web' ? (
+                <iframe
+                  srcDoc={SIGNATURE_PAD_HTML}
+                  style={{ width: '100%', height: '100%', border: 'none' }}
+                  title="Signature Pad"
+                />
+              ) : (
+                <SignatureCanvas
+                  onOK={async (sig) => {
+                    setSignatureModalVisible(false);
+                    setSaving(true);
+                    try {
+                      // sig is a base64 data URL; recompress for smaller payload
+                      const compact = await compressToDataUrl(sig, 'signature');
+                      const cdnUrl = await uploadToUploadcare(compact || sig);
+                      setSignature(cdnUrl || compact || sig);
+                      Alert.alert('Signature Captured', 'Your signature has been optimized and saved to the form.');
+                    } catch (e) {
+                      setSignature(sig);
+                    } finally {
+                      setSaving(false);
+                    }
+                  }}
+                  onEmpty={() => {
+                    Alert.alert('No Signature', 'Please draw your signature before saving.');
+                  }}
+                  descriptionText="Sign here"
+                  clearText="Clear"
+                  confirmText="Save Signature"
+                  webStyle=".m-signature-pad--footer {box-shadow: none;}"
+                  backgroundColor={Colors.white}
+                />
+              )}
             </View>
             <TouchableOpacity style={[styles.uploadedBtn, { marginTop: Spacing.lg, padding: 15, alignItems: 'center', backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border, borderRadius: 8 }]} onPress={() => setSignatureModalVisible(false)}>
               <Text style={{ fontWeight: '600', color: Colors.text }}>Cancel</Text>
