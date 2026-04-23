@@ -8,6 +8,117 @@ export function buildReceiptHtml(opts) {
   return buildDocumentHtml({ ...opts, type: 'receipt' });
 }
 
+export function buildRegistrationHtml(company) {
+  const safe = (v) => (v == null ? '' : String(v));
+  const name = safe(company.name || company.companyName || 'Your Company');
+  const companyId = safe(company.companyId || '');
+  const address = safe(company.address || '');
+  const email = safe(company.email || '');
+  const phone = safe(company.phone || company.phoneNumber || '');
+  const logo = resolveAssetUri(safe(company.logo || ''));
+  const brandColor = safe(company.brandColor || '#1e3050');
+  const businessType = safe(company.businessType || 'general_merchandise').replace(/_/g, ' ').toUpperCase();
+
+  const logoImg = logo ? `<img src="${logo}" style="max-height: 80px; margin-bottom: 20px;" />` : `<div style="width: 80px; height: 80px; background: ${brandColor}; color: white; display: flex; align-items: center; justify-content: center; border-radius: 40px; font-size: 40px; font-weight: bold; margin-bottom: 20px;">${name.charAt(0)}</div>`;
+
+  return `
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no" />
+        <style>
+          @page { size: A4; margin: 0; }
+          body { font-family: 'Helvetica', sans-serif; margin: 0; padding: 0; background: #f4f7f9; }
+          .page-container { width: 210mm; min-height: 297mm; margin: 20px auto; background: white; padding: 40px; box-sizing: border-box; box-shadow: 0 0 10px rgba(0,0,0,0.1); position: relative; }
+          .header { border-bottom: 2px solid ${brandColor}; padding-bottom: 20px; margin-bottom: 30px; display: flex; justify-content: space-between; align-items: flex-start; }
+          .company-info h1 { margin: 0; color: ${brandColor}; font-size: 28px; }
+          .company-info p { margin: 5px 0; color: #666; font-size: 14px; }
+          .registration-badge { background: ${brandColor}; color: white; padding: 10px 20px; border-radius: 5px; font-weight: bold; font-size: 18px; margin-top: 10px; display: inline-block; }
+          .section { margin-bottom: 30px; }
+          .section-title { font-size: 18px; font-weight: bold; color: ${brandColor}; border-bottom: 1px solid #eee; padding-bottom: 10px; margin-bottom: 15px; text-transform: uppercase; }
+          .detail-row { display: flex; margin-bottom: 10px; border-bottom: 1px solid #fafafa; padding-bottom: 5px; }
+          .detail-label { width: 200px; font-weight: bold; color: #555; font-size: 14px; }
+          .detail-value { flex: 1; color: #333; font-size: 14px; }
+          .footer { position: absolute; bottom: 40px; left: 40px; right: 40px; text-align: center; color: #999; font-size: 12px; border-top: 1px solid #eee; padding-top: 20px; }
+          @media print {
+            body { background: white; }
+            .page-container { margin: 0; box-shadow: none; width: 100%; }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="page-container">
+          <div class="header">
+            <div class="company-info">
+              ${logoImg}
+              <h1>${name}</h1>
+              <p>${address}</p>
+              <p>${email} | ${phone}</p>
+            </div>
+            <div style="text-align: right;">
+              <div style="font-size: 12px; color: #999; margin-bottom: 5px;">COMPANY PROFILE</div>
+              <div style="font-size: 14px; font-weight: bold; color: #333;">Registered on ${new Date().toLocaleDateString()}</div>
+            </div>
+          </div>
+
+          <div class="section">
+            <div class="section-title">Registration Details</div>
+            <div class="detail-row">
+              <div class="detail-label">Company ID</div>
+              <div class="detail-value"><span style="font-family: monospace; font-weight: bold; font-size: 16px; background: #f0f0f0; padding: 2px 6px; border-radius: 4px;">${companyId}</span></div>
+            </div>
+            <div class="detail-row">
+              <div class="detail-label">Business Type</div>
+              <div class="detail-value">${businessType}</div>
+            </div>
+          </div>
+
+          <div class="section">
+            <div class="section-title">Contact Information</div>
+            <div class="detail-row">
+              <div class="detail-label">Official Email</div>
+              <div class="detail-value">${email}</div>
+            </div>
+            <div class="detail-row">
+              <div class="detail-label">Phone Number</div>
+              <div class="detail-value">${phone}</div>
+            </div>
+            <div class="detail-row">
+              <div class="detail-label">Office Address</div>
+              <div class="detail-value">${address}</div>
+            </div>
+          </div>
+
+          <div class="section">
+            <div class="section-title">Banking & Finance</div>
+            <div class="detail-row">
+              <div class="detail-label">Bank Name</div>
+              <div class="detail-value">${safe(company.bankName)}</div>
+            </div>
+            <div class="detail-row">
+              <div class="detail-label">Account Name</div>
+              <div class="detail-value">${safe(company.bankAccountName || company.accountName)}</div>
+            </div>
+            <div class="detail-row">
+              <div class="detail-label">Account Number</div>
+              <div class="detail-value">${safe(company.bankAccountNumber || company.accountNumber)}</div>
+            </div>
+            <div class="detail-row">
+              <div class="detail-label">Preferred Currency</div>
+              <div class="detail-value">${safe(company.currencySymbol)} (${safe(company.currencyCode || 'NGN')})</div>
+            </div>
+          </div>
+
+          <div class="footer">
+            <p>Generated by YMOBooks - Professional Invoicing & Accounting</p>
+            <p>This is an official registration document. Please keep your Company ID secure.</p>
+          </div>
+        </div>
+      </body>
+    </html>
+  `;
+}
+
 function buildDocumentHtml({
   company = {},
   invoice = {},

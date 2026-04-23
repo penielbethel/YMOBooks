@@ -16,6 +16,8 @@ import { Modal } from 'react-native';
 import * as FileSystem from 'expo-file-system';
 import * as FileSystemLegacy from 'expo-file-system/legacy';
 import * as Clipboard from 'expo-clipboard';
+import * as Print from 'expo-print';
+import * as Sharing from 'expo-sharing';
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
 import SignatureCanvas from 'react-native-signature-canvas';
@@ -25,6 +27,7 @@ import { Fonts } from '../constants/Fonts';
 import { Spacing } from '../constants/Spacing';
 import { registerCompany, updateCompany, fetchCompany } from '../utils/api';
 import { uploadToUploadcare } from '../utils/uploadcare';
+import { buildRegistrationHtml } from '../utils/invoiceHtml';
 
 const SIGNATURE_PAD_HTML = `
 <!DOCTYPE html>
@@ -472,6 +475,38 @@ const CompanyRegistrationScreen = ({ navigation, route }) => {
     } catch { }
   };
 
+  const downloadProfile = async () => {
+    try {
+      setLoading(true);
+      const html = buildRegistrationHtml({
+        ...formData,
+        companyId: generatedCompanyId,
+      });
+
+      if (Platform.OS === 'web') {
+        const { uri } = await Print.printToFileAsync({ html });
+        const resp = await fetch(uri);
+        const blob = await resp.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `Company_Profile_${generatedCompanyId}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 1500);
+      } else {
+        const { uri } = await Print.printToFileAsync({ html });
+        await Sharing.shareAsync(uri);
+      }
+    } catch (err) {
+      console.error('[DownloadProfile] Failed:', err);
+      Alert.alert('Error', 'Failed to generate profile PDF');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <>
       <SafeAreaView style={styles.container}>
@@ -736,6 +771,9 @@ const CompanyRegistrationScreen = ({ navigation, route }) => {
                 <TouchableOpacity style={styles.copyButton} onPress={copyCompanyId}>
                   <Text style={styles.copyButtonText}>Copy ID</Text>
                 </TouchableOpacity>
+                <TouchableOpacity style={styles.downloadButton} onPress={downloadProfile}>
+                  <Text style={styles.downloadButtonText}>Download Profile</Text>
+                </TouchableOpacity>
                 <TouchableOpacity style={styles.continueButton} onPress={() => { setSuccessModalVisible(false); navigation.navigate('Dashboard'); }}>
                   <Text style={styles.continueButtonText}>Go to Dashboard</Text>
                 </TouchableOpacity>
@@ -909,13 +947,11 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   modalActions: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    flexDirection: 'column',
+    gap: Spacing.md,
     marginTop: Spacing.lg,
   },
   copyButton: {
-    flex: 1,
-    marginRight: Spacing.sm,
     backgroundColor: Colors.white,
     borderWidth: 1,
     borderColor: Colors.primary,
@@ -928,9 +964,18 @@ const styles = StyleSheet.create({
     fontSize: Fonts.sizes.md,
     fontWeight: Fonts.weights.bold,
   },
+  downloadButton: {
+    backgroundColor: Colors.secondary || '#10b981',
+    paddingVertical: Spacing.md,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  downloadButtonText: {
+    color: Colors.white,
+    fontSize: Fonts.sizes.md,
+    fontWeight: Fonts.weights.bold,
+  },
   continueButton: {
-    flex: 1,
-    marginLeft: Spacing.sm,
     backgroundColor: Colors.primary,
     paddingVertical: Spacing.md,
     borderRadius: 8,

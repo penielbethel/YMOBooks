@@ -116,10 +116,8 @@ const CreateInvoiceScreen = ({ navigation, route }) => {
         currencySymbol
       });
 
-      let uri = null;
       if (Platform.OS !== 'web') {
-        const printRes = await Print.printToFileAsync({ html });
-        uri = printRes.uri;
+        const { uri } = await Print.printToFileAsync({ html });
         setPreviewUrl(uri);
         setPreviewVisible(true);
       }
@@ -153,7 +151,6 @@ const CreateInvoiceScreen = ({ navigation, route }) => {
         a.click();
         a.remove();
         setTimeout(() => URL.revokeObjectURL(url), 1500);
-        Alert.alert('Success', 'Invoice generated and downloaded!');
       } else if (Platform.OS === 'web') {
         Alert.alert('Error', 'Failed to generate PDF on server');
       }

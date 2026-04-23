@@ -333,29 +333,16 @@ const InvoiceHistoryScreen = ({ navigation, route }) => {
           a.click();
           a.remove();
           setTimeout(() => URL.revokeObjectURL(url), 1500);
-          Alert.alert('Success', 'Receipt generated and downloaded!');
           await refetch();
         } else {
           throw new Error(res?.message || 'Failed to generate receipt on server');
         }
       } else {
-        // Fallback for mobile
-        if (Platform.OS !== 'web') {
-          const file = await Print.printToFileAsync({ html });
-          const resp = await fetch(file.uri);
-          const blob = await resp.blob();
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = filename.replace(/[^a-zA-Z0-9_.-]/g, '_');
-          document.body.appendChild(a);
-          a.click();
-          a.remove();
-          setTimeout(() => URL.revokeObjectURL(url), 1500);
-        } else {
-          // On Web, if no pdfUrl, we try to create it by calling createReceipt if type is receipt
-          // For invoices, if pdfUrl is missing, we can't easily generate on client without Print
+        if (Platform.OS === 'web') {
           Alert.alert('Download Error', 'No server PDF link found for this document. Please try refreshing.');
+        } else {
+          const { uri } = await Print.printToFileAsync({ html });
+          await Sharing.shareAsync(uri);
         }
       }
     } catch (err) {
