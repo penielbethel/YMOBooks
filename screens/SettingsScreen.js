@@ -127,7 +127,8 @@ const SettingsScreen = ({ navigation }) => {
         const isSuspicious = (u) => !u || typeof u !== 'string' || u.includes('undefined') || u.includes('null') || (typeof u === 'string' && u.startsWith('/files/'));
         if ((isSuspicious(c.logo) || isSuspicious(c.signature)) && c.companyId) {
           try {
-            const fetched = await fetchCompany(c.companyId);
+            // CRITICAL: Always pass businessType to avoid defaulting to Printing Press for admins like pbmsrvr
+            const fetched = await fetchCompany(c.companyId, c.businessType);
             const full = fetched?.company || fetched?.data;
             if (full) {
               const adminIsLoggedIn = isAdmin(c.companyId);

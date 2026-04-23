@@ -105,12 +105,16 @@ const DashboardScreen = ({ navigation }) => {
           if (c) {
             // For Admins (PBMSRVR/PBMSRV), preserve the local businessType preference
             // to avoid auto-resetting to Printing Press after navigating back.
+            // On Web, we check both the parsed storage and existing state for maximum robustness.
             const adminIsLoggedIn = isAdmin(parsed?.companyId || companyData?.companyId);
-            const preservedBusinessType = adminIsLoggedIn ? (parsed?.businessType || companyData?.businessType) : null;
+            const currentType = parsed?.businessType || companyData?.businessType || businessType;
+            const preservedBusinessType = adminIsLoggedIn ? currentType : null;
+            
             const updated = {
               ...(parsed || {}),
               ...c,
-              businessType: adminIsLoggedIn ? preservedBusinessType : (c.businessType || parsed?.businessType)
+              // Pin the businessType for admins so server defaults cannot override the active selection
+              businessType: adminIsLoggedIn ? preservedBusinessType : (c.businessType || currentType)
             };
             setCompanyData(updated);
             await AsyncStorage.setItem('companyData', JSON.stringify(updated)).catch(() => { });
