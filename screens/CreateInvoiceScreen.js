@@ -120,6 +120,9 @@ const CreateInvoiceScreen = ({ navigation, route }) => {
         const { uri } = await Print.printToFileAsync({ html });
         setPreviewUrl(uri);
         setPreviewVisible(true);
+      } else {
+        // Log for debugging
+        console.log('Skipping preview modal on web/mobile-browser as direct download is used.');
       }
 
       const payload = {
@@ -141,16 +144,22 @@ const CreateInvoiceScreen = ({ navigation, route }) => {
 
       const res = await createInvoice(payload);
       if (Platform.OS === 'web' && res?.pdfUrl) {
+        // Direct download for web and mobile browsers
         const resp = await fetch(res.pdfUrl);
         const blob = await resp.blob();
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `INV_${Date.now()}.pdf`;
+        // Use the actual filename from server if possible, else generic
+        const serverFilename = res.pdfPath ? res.pdfPath.split('/').pop() : `INV_${Date.now()}.pdf`;
+        a.download = serverFilename;
         document.body.appendChild(a);
         a.click();
         a.remove();
         setTimeout(() => URL.revokeObjectURL(url), 1500);
+        
+        // Success feedback without blocking
+        console.log('Invoice downloaded successfully');
       } else if (Platform.OS === 'web') {
         Alert.alert('Error', 'Failed to generate PDF on server');
       }

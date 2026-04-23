@@ -299,12 +299,15 @@ const InvoiceHistoryScreen = ({ navigation, route }) => {
       }
 
       if (type === 'invoice' && item.pdfUrl) {
+        // Direct download for web and mobile browsers
         const resp = await fetch(item.pdfUrl);
         const blob = await resp.blob();
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = filename.replace(/[^a-zA-Z0-9_.-]/g, '_');
+        // Use filename from server if available
+        const serverFilename = item.pdfPath ? item.pdfPath.split('/').pop() : filename;
+        a.download = serverFilename.replace(/[^a-zA-Z0-9_.-]/g, '_');
         document.body.appendChild(a);
         a.click();
         a.remove();
@@ -328,7 +331,9 @@ const InvoiceHistoryScreen = ({ navigation, route }) => {
           const url = URL.createObjectURL(blob);
           const a = document.createElement('a');
           a.href = url;
-          a.download = filename.replace(/[^a-zA-Z0-9_.-]/g, '_');
+          // Use filename from server if available
+          const serverFilename = res.pdfPath ? res.pdfPath.split('/').pop() : filename;
+          a.download = serverFilename.replace(/[^a-zA-Z0-9_.-]/g, '_');
           document.body.appendChild(a);
           a.click();
           a.remove();
@@ -502,13 +507,14 @@ const InvoiceHistoryScreen = ({ navigation, route }) => {
         const res = await deleteInvoice(companyId, item.invoiceNumber);
         if (res?.success) {
           setInvoices((prev) => prev.filter((x) => x.invoiceNumber !== item.invoiceNumber));
-          try { await refetch(); } catch (_) { }
+          try { await (refetch ? refetch() : (refreshInvoices && refreshInvoices())); } catch (_) { }
           Alert.alert('Deleted', 'Invoice removed from history');
         } else {
           Alert.alert('Failed', res?.message || 'Could not delete invoice');
         }
       } catch (e) {
-        Alert.alert('Error', 'Delete failed');
+        console.error('Delete invoice failed:', e);
+        Alert.alert('Error', 'Delete failed: ' + (e.message || 'Unknown error'));
       }
     };
 
@@ -557,7 +563,7 @@ const InvoiceHistoryScreen = ({ navigation, route }) => {
         if (successCount > 0) {
           setInvoices((prev) => prev.filter((x) => !selectedInvoicesMap[x.invoiceNumber]));
           clearSelection();
-          try { await refetch(); } catch (_) { }
+          try { await (refetch ? refetch() : (refreshInvoices && refreshInvoices())); } catch (_) { }
           Alert.alert('Deleted', `Removed ${successCount} invoice${successCount === 1 ? '' : 's'} from history`);
         } else {
           Alert.alert('Failed', 'Could not delete selected invoices');
@@ -624,12 +630,13 @@ const InvoiceHistoryScreen = ({ navigation, route }) => {
                     if (res?.success) {
                       setReceiptsByInvoice((prev) => ({ ...prev, [item.invoiceNumber]: false }));
                       Alert.alert('Deleted', 'Receipt removed and revenue synced');
-                      await refetch();
+                      try { await (refetch ? refetch() : (refreshInvoices && refreshInvoices())); } catch (_) { }
                     } else {
                       Alert.alert('Failed', res?.message || 'Could not delete receipt');
                     }
-                  } catch (_e) {
-                    Alert.alert('Error', 'Delete failed');
+                  } catch (e) {
+                    console.error('Delete receipt failed:', e);
+                    Alert.alert('Error', 'Delete failed: ' + (e.message || 'Unknown error'));
                   }
                 };
 
