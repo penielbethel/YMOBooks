@@ -36,7 +36,6 @@ const InvoiceHistoryScreen = ({ navigation, route }) => {
   const [selectMode, setSelectMode] = useState(false);
   const [selectedInvoicesMap, setSelectedInvoicesMap] = useState({});
   const [bulkDeleting, setBulkDeleting] = useState(false);
-  const [confirmModal, setConfirmModal] = useState({ visible: false, title: '', message: '', onConfirm: null });
 
   // Reload company data on focus to ensure receipts have latest settings
   useFocusEffect(
@@ -226,6 +225,19 @@ const InvoiceHistoryScreen = ({ navigation, route }) => {
 
   const handleDirectDownload = async (item, type = 'invoice') => {
     try {
+      if (type === 'invoice' && item.pdfPath && Platform.OS === 'web') {
+        // Direct download for web and mobile browsers using the secure attachment endpoint
+        const downloadUrl = `${getApiBaseUrl()}/api/download-invoice?pdfPath=${encodeURIComponent(item.pdfPath)}&filename=${encodeURIComponent(item.pdfPath.split('/').pop() || 'invoice.pdf')}`;
+        
+        const a = document.createElement('a');
+        a.href = downloadUrl;
+        a.download = item.pdfPath.split('/').pop() || 'invoice.pdf';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        return;
+      }
+
       setLoading(true);
       const stored = await AsyncStorage.getItem('companyData');
       let companyObj = stored ? JSON.parse(stored) : {};
@@ -299,19 +311,31 @@ const InvoiceHistoryScreen = ({ navigation, route }) => {
       }
 
       if (type === 'invoice' && item.pdfUrl) {
-        // Direct download for web and mobile browsers
-        const resp = await fetch(item.pdfUrl);
-        const blob = await resp.blob();
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        // Use filename from server if available
-        const serverFilename = item.pdfPath ? item.pdfPath.split('/').pop() : filename;
-        a.download = serverFilename.replace(/[^a-zA-Z0-9_.-]/g, '_');
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        setTimeout(() => URL.revokeObjectURL(url), 1500);
+        // Use the secure attachment endpoint if pdfPath is available
+        if (item.pdfPath && Platform.OS === 'web') {
+          const downloadUrl = `${getApiBaseUrl()}/api/download-invoice?pdfPath=${encodeURIComponent(item.pdfPath)}&filename=${encodeURIComponent(item.pdfPath.split('/').pop() || 'invoice.pdf')}`;
+          const a = document.createElement('a');
+          a.href = downloadUrl;
+          a.download = item.pdfPath.split('/').pop() || 'invoice.pdf';
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          return;
+        }
+        // Fallback for web if only pdfUrl is present
+        if (Platform.OS === 'web') {
+          const resp = await fetch(item.pdfUrl);
+          const blob = await resp.blob();
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = (item.pdfPath ? item.pdfPath.split('/').pop() : filename).replace(/[^a-zA-Z0-9_.-]/g, '_');
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          setTimeout(() => URL.revokeObjectURL(url), 1500);
+          return;
+        }
       } else if (type === 'receipt' && companyId && item) {
         const payload = {
           companyId,
@@ -326,19 +350,20 @@ const InvoiceHistoryScreen = ({ navigation, route }) => {
         };
         const res = await createReceipt(payload);
         if (res?.success && res.pdfUrl) {
-          const resp = await fetch(res.pdfUrl);
-          const blob = await resp.blob();
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url;
-          // Use filename from server if available
-          const serverFilename = res.pdfPath ? res.pdfPath.split('/').pop() : filename;
-          a.download = serverFilename.replace(/[^a-zA-Z0-9_.-]/g, '_');
-          document.body.appendChild(a);
-          a.click();
-          a.remove();
-          setTimeout(() => URL.revokeObjectURL(url), 1500);
+          if (Platform.OS === 'web') {
+            const downloadUrl = res.pdfPath 
+              ? `${getApiBaseUrl()}/api/download-invoice?pdfPath=${encodeURIComponent(res.pdfPath)}&filename=${encodeURIComponent(res.filename || res.pdfPath.split('/').pop() || 'receipt.pdf')}`
+              : res.pdfUrl;
+            
+            const a = document.createElement('a');
+            a.href = downloadUrl;
+            a.download = res.filename || (res.pdfPath ? res.pdfPath.split('/').pop() : 'receipt.pdf');
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+          }
           await refetch();
+          return;
         } else {
           throw new Error(res?.message || 'Failed to generate receipt on server');
         }
@@ -499,32 +524,51 @@ const InvoiceHistoryScreen = ({ navigation, route }) => {
   };
 
   const onDeleteInvoice = (item) => {
-    if (!companyId) return Alert.alert('Missing Company', 'Company ID not found');
+    if (!companyId) {
+      if (Platform.OS === 'web') {
+        window.alert('Company ID not found');
+      } else {
+        Alert.alert('Missing Company', 'Company ID not found');
+      }
+      return;
+    }
     const msg = `Are you sure you want to delete ${item.invoiceNumber}?`;
-    
+
     const performDelete = async () => {
       try {
         const res = await deleteInvoice(companyId, item.invoiceNumber);
         if (res?.success) {
           setInvoices((prev) => prev.filter((x) => x.invoiceNumber !== item.invoiceNumber));
           try { await (refetch ? refetch() : (refreshInvoices && refreshInvoices())); } catch (_) { }
-          Alert.alert('Deleted', 'Invoice removed from history');
+          if (Platform.OS === 'web') {
+            window.alert('Invoice removed from history');
+          } else {
+            Alert.alert('Deleted', 'Invoice removed from history');
+          }
         } else {
-          Alert.alert('Failed', res?.message || 'Could not delete invoice');
+          const failMsg = res?.message || 'Could not delete invoice';
+          if (Platform.OS === 'web') {
+            window.alert(failMsg);
+          } else {
+            Alert.alert('Failed', failMsg);
+          }
         }
       } catch (e) {
         console.error('Delete invoice failed:', e);
-        Alert.alert('Error', 'Delete failed: ' + (e.message || 'Unknown error'));
+        const errMsg = 'Delete failed: ' + (e.message || 'Unknown error');
+        if (Platform.OS === 'web') {
+          window.alert(errMsg);
+        } else {
+          Alert.alert('Error', errMsg);
+        }
       }
     };
 
     if (Platform.OS === 'web') {
-      setConfirmModal({
-        visible: true,
-        title: 'Delete Invoice',
-        message: msg,
-        onConfirm: performDelete
-      });
+      if (window.confirm(msg)) {
+        console.log('User confirmed delete on web, performing delete for:', item.invoiceNumber);
+        performDelete();
+      }
     } else {
       Alert.alert('Delete Invoice', msg, [
         { text: 'Cancel', style: 'cancel' },
@@ -564,9 +608,18 @@ const InvoiceHistoryScreen = ({ navigation, route }) => {
           setInvoices((prev) => prev.filter((x) => !selectedInvoicesMap[x.invoiceNumber]));
           clearSelection();
           try { await (refetch ? refetch() : (refreshInvoices && refreshInvoices())); } catch (_) { }
-          Alert.alert('Deleted', `Removed ${successCount} invoice${successCount === 1 ? '' : 's'} from history`);
+          const successMsg = `Removed ${successCount} invoice${successCount === 1 ? '' : 's'} from history`;
+          if (Platform.OS === 'web') {
+            window.alert(successMsg);
+          } else {
+            Alert.alert('Deleted', successMsg);
+          }
         } else {
-          Alert.alert('Failed', 'Could not delete selected invoices');
+          if (Platform.OS === 'web') {
+            window.alert('Could not delete selected invoices');
+          } else {
+            Alert.alert('Failed', 'Could not delete selected invoices');
+          }
         }
       } finally {
         setBulkDeleting(false);
@@ -629,24 +682,36 @@ const InvoiceHistoryScreen = ({ navigation, route }) => {
                     const res = await deleteReceiptByInvoice(companyId, item.invoiceNumber);
                     if (res?.success) {
                       setReceiptsByInvoice((prev) => ({ ...prev, [item.invoiceNumber]: false }));
-                      Alert.alert('Deleted', 'Receipt removed and revenue synced');
+                      if (Platform.OS === 'web') {
+                        window.alert('Receipt removed and revenue synced');
+                      } else {
+                        Alert.alert('Deleted', 'Receipt removed and revenue synced');
+                      }
                       try { await (refetch ? refetch() : (refreshInvoices && refreshInvoices())); } catch (_) { }
                     } else {
-                      Alert.alert('Failed', res?.message || 'Could not delete receipt');
+                      const failMsg = res?.message || 'Could not delete receipt';
+                      if (Platform.OS === 'web') {
+                        window.alert(failMsg);
+                      } else {
+                        Alert.alert('Failed', failMsg);
+                      }
                     }
                   } catch (e) {
                     console.error('Delete receipt failed:', e);
-                    Alert.alert('Error', 'Delete failed: ' + (e.message || 'Unknown error'));
+                    const errMsg = 'Delete failed: ' + (e.message || 'Unknown error');
+                    if (Platform.OS === 'web') {
+                      window.alert(errMsg);
+                    } else {
+                      Alert.alert('Error', errMsg);
+                    }
                   }
                 };
 
                 if (Platform.OS === 'web') {
-                  setConfirmModal({
-                    visible: true,
-                    title: 'Delete Receipt',
-                    message: msg,
-                    onConfirm: performDeleteReceipt
-                  });
+                  if (window.confirm(msg)) {
+                    console.log('User confirmed delete receipt on web for:', item.invoiceNumber);
+                    performDeleteReceipt();
+                  }
                 } else {
                   Alert.alert('Delete Receipt', msg, [
                     { text: 'Cancel', style: 'cancel' },
@@ -996,24 +1061,6 @@ const InvoiceHistoryScreen = ({ navigation, route }) => {
           </View>
         </SafeAreaView>
       </Modal>
-      {/* Confirmation Modal for Web */}
-      <Modal visible={confirmModal.visible} transparent animationType="fade">
-        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' }}>
-          <View style={{ backgroundColor: '#fff', padding: 24, borderRadius: 12, width: '85%', maxWidth: 400 }}>
-            <Text style={{ fontSize: 18, fontWeight: 'bold', marginBottom: 12 }}>{confirmModal.title}</Text>
-            <Text style={{ fontSize: 14, color: '#666', marginBottom: 24 }}>{confirmModal.message}</Text>
-            <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 12 }}>
-              <TouchableOpacity onPress={() => setConfirmModal({ ...confirmModal, visible: false })} style={{ padding: 12 }}>
-                <Text style={{ color: '#666', fontWeight: '600' }}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity onPress={() => { confirmModal.onConfirm?.(); setConfirmModal({ ...confirmModal, visible: false }); }} style={{ backgroundColor: Colors.error || '#ef4444', paddingVertical: 12, paddingHorizontal: 20, borderRadius: 8 }}>
-                <Text style={{ color: '#fff', fontWeight: 'bold' }}>Delete</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
-
     </SafeAreaView>
   );
 };

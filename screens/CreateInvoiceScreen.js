@@ -9,7 +9,9 @@ import { Fonts } from '../constants/Fonts';
 import { Spacing } from '../constants/Spacing';
 import { createInvoice } from '../utils/api';
 import { Linking } from 'react-native';
+import { Config } from '../constants/Config';
 import * as FileSystem from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
 import * as FileSystemLegacy from 'expo-file-system/legacy';
 import { WebView } from 'react-native-webview';
 import * as Print from 'expo-print';
@@ -30,9 +32,6 @@ const CreateInvoiceScreen = ({ navigation, route }) => {
   const [showInvoiceDatePicker, setShowInvoiceDatePicker] = useState(false);
   const [showDueDatePicker, setShowDueDatePicker] = useState(false);
   const [companyData, setCompanyData] = useState(null);
-  const [previewVisible, setPreviewVisible] = useState(false);
-  const [previewUrl, setPreviewUrl] = useState(null);
-  const webviewRef = useRef(null);
   const [downloading, setDownloading] = useState(false);
 
   // Reload company data whenever screen is focused (fixing stale data issue)
@@ -116,14 +115,8 @@ const CreateInvoiceScreen = ({ navigation, route }) => {
         currencySymbol
       });
 
-      if (Platform.OS !== 'web') {
-        const { uri } = await Print.printToFileAsync({ html });
-        setPreviewUrl(uri);
-        setPreviewVisible(true);
-      } else {
-        // Log for debugging
-        console.log('Skipping preview modal on web/mobile-browser as direct download is used.');
-      }
+      // Skip local preview modal as user wants direct download/register
+      console.log('Building payload for server registration...');
 
       const payload = {
         companyId: companyData.companyId,
@@ -143,86 +136,42 @@ const CreateInvoiceScreen = ({ navigation, route }) => {
       };
 
       const res = await createInvoice(payload);
-      if (Platform.OS === 'web' && res?.pdfUrl) {
-        // Direct download for web and mobile browsers
-        const resp = await fetch(res.pdfUrl);
-        const blob = await resp.blob();
-        const url = URL.createObjectURL(blob);
+      if (Platform.OS === 'web' && res?.pdfPath) {
+        // Direct download for web and mobile browsers using the new attachment endpoint
+        const downloadUrl = `${Config.API_BASE_URL}/api/download-invoice?pdfPath=${encodeURIComponent(res.pdfPath)}&filename=${encodeURIComponent(res.filename || 'invoice.pdf')}`;
+        
         const a = document.createElement('a');
-        a.href = url;
-        // Use the actual filename from server if possible, else generic
-        const serverFilename = res.pdfPath ? res.pdfPath.split('/').pop() : `INV_${Date.now()}.pdf`;
-        a.download = serverFilename;
+        a.href = downloadUrl;
+        a.download = res.filename || 'invoice.pdf';
         document.body.appendChild(a);
         a.click();
         a.remove();
-        setTimeout(() => URL.revokeObjectURL(url), 1500);
         
-        // Success feedback without blocking
-        console.log('Invoice downloaded successfully');
+        console.log('Invoice download triggered via attachment endpoint');
+      } else if (Platform.OS !== 'web' && res?.pdfUrl) {
+        // Direct download for Native (iOS/Android)
+        try {
+          const fileName = res.filename || `INV_${Date.now()}.pdf`;
+          const tempUri = `${FileSystem.cacheDirectory}${fileName}`;
+          const dl = await FileSystem.downloadAsync(res.pdfUrl, tempUri);
+          if (dl.uri) {
+            await Sharing.shareAsync(dl.uri, { UTI: 'com.adobe.pdf', mimeType: 'application/pdf' });
+          }
+        } catch (nativeErr) {
+          console.error('Native download error:', nativeErr);
+          Alert.alert('Download Error', 'Could not save PDF to device');
+        }
       } else if (Platform.OS === 'web') {
         Alert.alert('Error', 'Failed to generate PDF on server');
       }
 
+      // After successful generation and download trigger, maybe navigate back or clear?
+      // For now, just stay on page as success feedback is given by the download trigger itself.
     } catch (err) {
       console.error(err);
       Alert.alert('Error', 'Invoice generation failed');
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleDownload = async () => {
-    if (!previewUrl) return;
-    if (Platform.OS === 'web') {
-      const resp = await fetch(previewUrl);
-      const blob = await resp.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `INV_${Date.now()}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 1500);
-      return;
-    }
-    try {
-      setDownloading(true);
-      if (Platform.OS === 'web') {
-        await Linking.openURL(previewUrl);
-        return;
-      }
-
-      const fileNameGuess = previewUrl.split('/').pop() || `invoice-${Date.now()}.pdf`;
-      const filename = fileNameGuess.replace(/[^a-zA-Z0-9_.-]/g, '_');
-      const baseDir = FileSystem.cacheDirectory || FileSystem.documentDirectory || '';
-      const tempUri = `${baseDir}${filename}`;
-      const dl = await FileSystemLegacy.downloadAsync(previewUrl, tempUri);
-
-      if (Platform.OS === 'android') {
-        try {
-          const perm = await FileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync();
-          if (perm.granted && perm.directoryUri) {
-            const fileUri = await FileSystem.StorageAccessFramework.createFileAsync(perm.directoryUri, filename, 'application/pdf');
-            const base64 = await FileSystemLegacy.readAsStringAsync(dl.uri, { encoding: 'base64' });
-            await FileSystem.StorageAccessFramework.writeAsStringAsync(fileUri, base64, { encoding: 'base64' });
-            Alert.alert('Saved', 'Invoice PDF saved to selected folder.');
-          } else {
-            const contentUri = await FileSystem.getContentUriAsync(dl.uri);
-            await Linking.openURL(contentUri);
-          }
-        } catch (e) {
-          const contentUri = await FileSystem.getContentUriAsync(dl.uri);
-          await Linking.openURL(contentUri);
-        }
-      } else {
-        await Linking.openURL(dl.uri);
-      }
-    } catch (e) {
-      Alert.alert('Download failed', String(e?.message || 'Could not save invoice to device'));
-    } finally {
-      setDownloading(false);
     }
   };
 
@@ -380,62 +329,13 @@ const CreateInvoiceScreen = ({ navigation, route }) => {
           <TouchableOpacity style={[styles.generateButton, loading && styles.disabledBtn]} disabled={loading} onPress={handleGenerate}>
             {loading ? <ActivityIndicator color="#fff" /> : (
               <>
-                <Ionicons name="document-text-outline" size={20} color="#fff" style={{ marginRight: 8 }} />
-                <Text style={styles.generateButtonText}>Generate Invoice</Text>
+                <Ionicons name="cloud-download-outline" size={20} color="#fff" style={{ marginRight: 8 }} />
+                <Text style={styles.generateButtonText}>Generate & Download</Text>
               </>
             )}
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
-
-      {/* Preview Modal */}
-      <Modal visible={!!previewVisible} animationType="slide" onRequestClose={() => setPreviewVisible(false)}>
-        <SafeAreaView style={styles.previewContainer}>
-          <View style={styles.previewHeader}>
-            <TouchableOpacity style={styles.closePreviewBtn} onPress={() => setPreviewVisible(false)}>
-              <Ionicons name="close" size={24} color={Colors.text} />
-            </TouchableOpacity>
-            <Text style={styles.previewTitle}>Preview</Text>
-            <View style={{ width: 24 }} />
-          </View>
-
-          <View style={styles.webviewContainer}>
-            {previewUrl ? (
-              Platform.OS === 'web' ? (
-                <iframe
-                  src={previewUrl}
-                  style={{ width: '100%', height: '100%', border: 'none', backgroundColor: 'white' }}
-                  title="Invoice Preview"
-                />
-              ) : (
-                <WebView
-                  ref={webviewRef}
-                  source={{ uri: previewUrl }}
-                  startInLoadingState
-                  renderLoading={() => <ActivityIndicator size="large" color={Colors.primary} style={{ position: 'absolute', alignSelf: 'center', top: '40%' }} />}
-                  style={{ flex: 1 }}
-                />
-              )
-            ) : (
-              <ActivityIndicator size="large" color={Colors.primary} />
-            )}
-          </View>
-
-          <View style={styles.previewFooter}>
-            <TouchableOpacity style={[styles.pActionBtn, styles.pDownloadBtn]} disabled={downloading} onPress={handleDownload}>
-              {downloading ? <ActivityIndicator color="#fff" /> : <Ionicons name="download-outline" size={20} color="#fff" />}
-              <Text style={styles.pActionText}>{downloading ? 'Saving...' : 'Download PDF'}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={[styles.pActionBtn, styles.pPrintBtn]} onPress={() => {
-              try { webviewRef.current?.injectJavaScript('window.print(); true;'); }
-              catch (_) { if (previewUrl) Linking.openURL(previewUrl); }
-            }}>
-              <Ionicons name="print-outline" size={20} color={Colors.primary} />
-              <Text style={[styles.pActionText, { color: Colors.primary }]}>Print</Text>
-            </TouchableOpacity>
-          </View>
-        </SafeAreaView>
-      </Modal>
     </SafeAreaView>
   );
 };

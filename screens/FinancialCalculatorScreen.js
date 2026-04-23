@@ -355,16 +355,32 @@ const FinancialCalculatorScreen = ({ navigation }) => {
               <SummaryRow label={`Net Profit/Loss`} value={`${currency}${Number(monthlyTotals.net).toLocaleString()}`} isNet />
 
               <TouchableOpacity style={styles.purgeButton} onPress={() => {
-                Alert.alert('Clear Month?', 'This will optimize the database by removing zero-value expense records for this month.', [
-                  { text: 'Cancel', style: 'cancel' },
-                  {
-                    text: 'Optimize', onPress: async () => {
-                      await deleteExpenses(companyData.companyId, month);
-                      loadData();
-                      showToast('Optimized', 'success');
+                const msg = 'This will optimize the database by removing zero-value expense records for this month.';
+                const performPurge = async () => {
+                  try {
+                    await deleteExpenses(companyData.companyId, month);
+                    loadData();
+                    showToast('Optimized', 'success');
+                  } catch (e) {
+                    console.error('Purge expenses failed:', e);
+                    if (Platform.OS === 'web') {
+                      window.alert('Failed to optimize database');
+                    } else {
+                      Alert.alert('Error', 'Failed to optimize database');
                     }
                   }
-                ]);
+                };
+
+                if (Platform.OS === 'web') {
+                  if (window.confirm(msg)) {
+                    performPurge();
+                  }
+                } else {
+                  Alert.alert('Clear Month?', msg, [
+                    { text: 'Cancel', style: 'cancel' },
+                    { text: 'Optimize', onPress: performPurge }
+                  ]);
+                }
               }}>
                 <Text style={styles.purgeText}>Optimize Database Records</Text>
               </TouchableOpacity>

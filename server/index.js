@@ -1142,6 +1142,73 @@ async function drawInvoiceByTemplate(doc, company, invNo, invoiceDate, dueDate, 
   doc.fontSize(8).fillColor('#94a3b8').text(footerText, pageLeft, doc.page.height - 40, { align: 'center', width: pageWidth });
 }
 
+async function drawProfilePDF(doc, company) {
+  const theme = {
+    primary: company.brandColor || '#1e3050',
+    text: '#1e293b',
+    muted: '#64748b',
+    light: '#f8fafc'
+  };
+
+  const pageLeft = doc.page.margins.left;
+  const pageWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
+  let y = 60;
+
+  // Header background
+  doc.rect(0, 0, doc.page.width, 140).fill(theme.primary);
+
+  // Logo
+  try {
+    const logoBuffer = await getImageBuffer(company.logo);
+    if (logoBuffer) {
+      doc.image(logoBuffer, pageLeft, 40, { height: 60 });
+    } else {
+      doc.fontSize(40).fillColor('#ffffff').text((company.name || 'C').charAt(0), pageLeft, 50);
+    }
+  } catch (_) { }
+
+  // Title
+  doc.fontSize(24).fillColor('#ffffff').text('COMPANY PROFILE', pageLeft, 40, { align: 'right', width: pageWidth });
+  doc.fontSize(12).text(`Generated on ${new Date().toLocaleDateString()}`, { align: 'right', width: pageWidth });
+
+  y = 160;
+
+  // Company Section
+  doc.fontSize(18).fillColor(theme.primary).text('REGISTRATION DETAILS', pageLeft, y);
+  doc.moveTo(pageLeft, y + 22).lineTo(pageLeft + pageWidth, y + 22).stroke(theme.primary);
+  y += 40;
+
+  const drawRow = (label, value) => {
+    doc.fontSize(10).fillColor(theme.muted).text(label, pageLeft, y);
+    doc.fontSize(12).fillColor(theme.text).text(value || 'N/A', pageLeft + 150, y, { width: pageWidth - 150 });
+    y += 30;
+    if (y > doc.page.height - 100) {
+      doc.addPage();
+      y = 50;
+    }
+  };
+
+  drawRow('Company Name', company.name || company.companyName);
+  drawRow('Company ID', company.companyId);
+  drawRow('Business Type', (company.businessType || 'General').replace(/_/g, ' ').toUpperCase());
+  drawRow('Official Email', company.email);
+  drawRow('Phone Number', company.phone || company.phoneNumber);
+  drawRow('Office Address', company.address);
+
+  y += 20;
+  doc.fontSize(18).fillColor(theme.primary).text('BANKING & FINANCE', pageLeft, y);
+  doc.moveTo(pageLeft, y + 22).lineTo(pageLeft + pageWidth, y + 22).stroke(theme.primary);
+  y += 40;
+
+  drawRow('Bank Name', company.bankName);
+  drawRow('Account Name', company.accountName || company.bankAccountName);
+  drawRow('Account Number', company.accountNumber || company.bankAccountNumber);
+  drawRow('Currency', `${company.currencySymbol || '₦'} (${company.currencyCode || 'NGN'})`);
+
+  // Footer
+  doc.fontSize(8).fillColor(theme.muted).text('This profile is generated via YMOBooks Accounting. All details are as provided by the company owner.', pageLeft, doc.page.height - 50, { align: 'center', width: pageWidth });
+}
+
 // Helper: draw receipt by template style
 async function drawReceiptByTemplate(doc, company, rctNo, receiptDate, invoiceNumber, customer, amountPaid, items = []) {
   const template = (company.receiptTemplate || company.invoiceTemplate || 'modern').toLowerCase();
@@ -1704,6 +1771,7 @@ app.get('/api/receipts', async (req, res) => {
 // Delete a single receipt by receiptNumber and sync invoice status
 app.delete('/api/receipts/:receiptNumber', async (req, res) => {
   try {
+    await connectToDatabase();
     const { companyId } = req.query;
     const { receiptNumber } = req.params;
     if (!companyId) return res.status(400).json({ success: false, message: 'companyId is required' });
@@ -1748,6 +1816,7 @@ app.delete('/api/receipts/:receiptNumber', async (req, res) => {
 // Delete all receipts for a specific invoice and sync invoice status
 app.delete('/api/receipts/by-invoice/:invoiceNumber', async (req, res) => {
   try {
+    await connectToDatabase();
     const { companyId } = req.query;
     const { invoiceNumber } = req.params;
     if (!companyId) return res.status(400).json({ success: false, message: 'companyId is required' });
@@ -1826,6 +1895,7 @@ app.post('/api/expenses/create', async (req, res) => {
 // Fetch expenses for a company and month
 app.get('/api/expenses', async (req, res) => {
   try {
+    await connectToDatabase();
     const { companyId, month, businessCategory } = req.query;
     if (!companyId) return res.status(400).json({ success: false, message: 'Missing companyId' });
     const query = { companyId };
@@ -1849,6 +1919,7 @@ app.get('/api/expenses', async (req, res) => {
 // Purge expenses for a company (optional: by month and/or category)
 app.delete('/api/expenses', async (req, res) => {
   try {
+    await connectToDatabase();
     const { companyId, month, category, businessCategory } = req.query;
     if (!companyId) return res.status(400).json({ success: false, message: 'Missing companyId' });
     const query = { companyId };
@@ -1902,6 +1973,7 @@ app.post('/api/stock/create', async (req, res) => {
 // List Stock Items
 app.get('/api/stock', async (req, res) => {
   try {
+    await connectToDatabase();
     const { companyId, type, category } = req.query;
     if (!companyId) return res.status(400).json({ success: false, message: 'Missing companyId' });
 
@@ -1920,6 +1992,7 @@ app.get('/api/stock', async (req, res) => {
 // Update Stock Item (Edit details or adjust quantity)
 app.post('/api/stock/update', async (req, res) => {
   try {
+    await connectToDatabase();
     const { id, updates } = req.body;
     if (!id || !updates) return res.status(400).json({ success: false, message: 'Item ID and updates required' });
 
@@ -1936,6 +2009,7 @@ app.post('/api/stock/update', async (req, res) => {
 // Delete Stock Item
 app.delete('/api/stock/:id', async (req, res) => {
   try {
+    await connectToDatabase();
     const { id } = req.params;
     const deleted = await StockItem.findByIdAndDelete(id);
     if (!deleted) return res.status(404).json({ success: false, message: 'Stock item not found' });
@@ -1949,6 +2023,7 @@ app.delete('/api/stock/:id', async (req, res) => {
 // Record Production
 app.post('/api/production/record', async (req, res) => {
   try {
+    await connectToDatabase();
     const { companyId, finishedGoodId, quantityProduced, materialsUsed, notes } = req.body;
     if (!companyId || !finishedGoodId || !quantityProduced) {
       return res.status(400).json({ success: false, message: 'Missing required production data' });
@@ -1988,6 +2063,7 @@ app.post('/api/production/record', async (req, res) => {
 // List Production Logs
 app.get('/api/production/history', async (req, res) => {
   try {
+    await connectToDatabase();
     const { companyId } = req.query;
     if (!companyId) return res.status(400).json({ success: false, message: 'Missing companyId' });
 
@@ -2008,6 +2084,7 @@ app.get('/api/production/history', async (req, res) => {
 // Finance summary by currency for a month
 app.get('/api/finance/summary', async (req, res) => {
   try {
+    await connectToDatabase();
     const { companyId, month, category } = req.query;
     if (!companyId) return res.status(400).json({ success: false, message: 'Missing companyId' });
     const m = String(month || dayjs().format('YYYY-MM'));
@@ -2091,6 +2168,7 @@ app.get('/api/finance/summary', async (req, res) => {
 // Balance Sheet - Wealth Statement for Manufacturing
 app.get('/api/finance/balance-sheet', async (req, res) => {
   try {
+    await connectToDatabase();
     const { companyId, category } = req.query;
     if (!companyId) return res.status(400).json({ success: false, message: 'Missing companyId' });
 
@@ -2157,6 +2235,7 @@ app.get('/api/finance/balance-sheet', async (req, res) => {
 // Daily revenue totals from receipts for a given month (31 days)
 app.get('/api/finance/revenue-daily', async (req, res) => {
   try {
+    await connectToDatabase();
     const { companyId, month, category } = req.query;
     if (!companyId) return res.status(400).json({ success: false, message: 'Missing companyId' });
     const m = String(month || dayjs().format('YYYY-MM'));
@@ -2201,6 +2280,7 @@ app.get('/api/finance/revenue-daily', async (req, res) => {
 // Daily expenses totals for a given month (31 days)
 app.get('/api/finance/expenses-daily', async (req, res) => {
   try {
+    await connectToDatabase();
     const { companyId, month } = req.query;
     if (!companyId) return res.status(400).json({ success: false, message: 'Missing companyId' });
     const m = String(month || dayjs().format('YYYY-MM'));
@@ -2264,6 +2344,66 @@ app.post('/api/finance/expenses-daily', async (req, res) => {
 });
 
 // Fetch invoice history for last N months (default 6)
+app.get('/api/download-invoice', async (req, res) => {
+  try {
+    const { pdfPath, filename } = req.query;
+    if (!pdfPath) return res.status(400).send('Missing pdfPath');
+    
+    // Security: ensure pdfPath starts with /files/invoices/ or /files/receipts/
+    if (!pdfPath.startsWith('/files/invoices/') && !pdfPath.startsWith('/files/receipts/')) {
+      return res.status(403).send('Invalid path');
+    }
+
+    const relative = pdfPath.replace(/^\/?files\//, '');
+    const fullPath = path.join(GENERATED_DIR, relative);
+
+    if (!fs.existsSync(fullPath)) {
+      return res.status(404).send('File not found');
+    }
+
+    const downloadName = filename || pdfPath.split('/').pop() || 'invoice.pdf';
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${downloadName}"`);
+    
+    const fileStream = fs.createReadStream(fullPath);
+    fileStream.pipe(res);
+  } catch (err) {
+    console.error('Download error:', err);
+    res.status(500).send('Server error');
+  }
+});
+
+// Download Company Profile as PDF
+app.get('/api/download-profile', async (req, res) => {
+  try {
+    await connectToDatabase();
+    const { companyId, businessType } = req.query;
+    if (!companyId) return res.status(400).json({ success: false, message: 'companyId is required' });
+
+    let company = await Company.findOne({ companyId, businessType }).lean();
+    if (!company && businessType) {
+      // Try fallback without businessType or search by category
+      company = await Company.findOne({ companyId }).lean();
+    }
+    
+    if (!company) company = findCompanyFile(companyId);
+    if (!company) return res.status(404).json({ success: false, message: 'Company not found' });
+
+    const doc = new PDFDocument({ size: 'A4', margin: 40 });
+    const filename = `Profile_${companyId}.pdf`.replace(/[^a-zA-Z0-9_.-]/g, '_');
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+
+    doc.pipe(res);
+    await drawProfilePDF(doc, company);
+    doc.end();
+  } catch (err) {
+    console.error('Profile download error:', err);
+    res.status(500).json({ success: false, message: 'Server error generating profile' });
+  }
+});
+
 app.get('/api/invoices', async (req, res) => {
   try {
     await connectToDatabase();
@@ -2348,6 +2488,7 @@ app.post('/api/admin/backfill-currency', async (req, res) => {
 // Delete an invoice by invoiceNumber for a company
 app.delete('/api/invoices/:invoiceNumber', async (req, res) => {
   try {
+    await connectToDatabase();
     const { companyId } = req.query;
     const { invoiceNumber } = req.params;
     if (!companyId || !invoiceNumber) {
@@ -2513,6 +2654,7 @@ app.get('/api/health', (req, res) => {
 // Admin endpoints (developer-only; gated by adminId === 'pbmsrvr')
 app.get('/api/admin/companies', async (req, res) => {
   try {
+    await connectToDatabase();
     const { adminId } = req.query;
     if (!isSystemAdmin(adminId)) return res.status(403).json({ success: false, message: 'Forbidden' });
     let companies = [];
@@ -2535,6 +2677,7 @@ app.get('/api/admin/companies', async (req, res) => {
 // Admin: migrate file-based companies into DB (logos/signatures included)
 app.post('/api/admin/migrate-files-to-db', async (req, res) => {
   try {
+    await connectToDatabase();
     const { adminId } = req.query;
     if (!isSystemAdmin(adminId)) return res.status(403).json({ success: false, message: 'Forbidden' });
     if (!DB_CONNECTED) return res.status(503).json({ success: false, message: 'DB not connected; cannot run migration' });
@@ -2560,6 +2703,7 @@ app.post('/api/admin/migrate-files-to-db', async (req, res) => {
 // Admin: scan duplicates across DB (preferred) or file fallback
 app.get('/api/admin/duplicates', async (req, res) => {
   try {
+    await connectToDatabase();
     const { adminId } = req.query;
     if (!isSystemAdmin(adminId)) return res.status(403).json({ success: false, message: 'Forbidden' });
     let list = [];
@@ -2600,6 +2744,7 @@ app.get('/api/admin/duplicates', async (req, res) => {
 
 app.delete('/api/admin/company/:companyId', async (req, res) => {
   try {
+    await connectToDatabase();
     const { adminId } = req.query;
     if (!isSystemAdmin(adminId)) return res.status(403).json({ success: false, message: 'Forbidden' });
     const { companyId } = req.params;
@@ -2631,6 +2776,7 @@ app.delete('/api/admin/company/:companyId', async (req, res) => {
 
 app.get('/api/admin/stats', async (req, res) => {
   try {
+    await connectToDatabase();
     const { adminId } = req.query;
     if (!isSystemAdmin(adminId)) return res.status(403).json({ success: false, message: 'Forbidden' });
     let totalCompanies = 0;

@@ -38,7 +38,7 @@ const LoginScreen = ({ navigation }) => {
     try {
       const entered = companyId.trim();
       // Admin check - case insensitive
-      if (entered.toUpperCase() === 'PBMSRV') {
+      if (entered.toUpperCase() === 'PBMSRV' || entered.toUpperCase() === 'PBMSRVR') {
         navigation.navigate('SuperAdmin');
         return;
       }

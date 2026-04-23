@@ -446,6 +446,11 @@ const CompanyRegistrationScreen = ({ navigation, route }) => {
           setTimeout(() => {
             setProgressVisible(false);
             setSuccessModalVisible(true);
+            // Proactively trigger profile download for web users
+            if (Platform.OS === 'web') {
+              console.log('Auto-triggering profile download for web');
+              downloadProfile();
+            }
           }, 400);
         } else {
           if (Array.isArray(result?.conflicts) && result.conflicts.length > 0) {
@@ -478,30 +483,27 @@ const CompanyRegistrationScreen = ({ navigation, route }) => {
   const downloadProfile = async () => {
     try {
       setLoading(true);
-      const html = buildRegistrationHtml({
-        ...formData,
-        companyId: generatedCompanyId,
-      });
-
+      
       if (Platform.OS === 'web') {
-        const { uri } = await Print.printToFileAsync({ html });
-        const resp = await fetch(uri);
-        const blob = await resp.blob();
-        const url = URL.createObjectURL(blob);
+        const downloadUrl = `${Config.API_BASE_URL}/api/download-profile?companyId=${generatedCompanyId}&businessType=${formData.businessType}`;
         const a = document.createElement('a');
-        a.href = url;
+        a.href = downloadUrl;
         a.download = `Company_Profile_${generatedCompanyId}.pdf`;
         document.body.appendChild(a);
         a.click();
         a.remove();
-        setTimeout(() => URL.revokeObjectURL(url), 1500);
+        console.log('Company profile download triggered via backend endpoint');
       } else {
+        const html = buildRegistrationHtml({
+          ...formData,
+          companyId: generatedCompanyId,
+        });
         const { uri } = await Print.printToFileAsync({ html });
-        await Sharing.shareAsync(uri);
+        await Sharing.shareAsync(uri, { UTI: 'com.adobe.pdf', mimeType: 'application/pdf' });
       }
-    } catch (err) {
-      console.error('[DownloadProfile] Failed:', err);
-      Alert.alert('Error', 'Failed to generate profile PDF');
+    } catch (error) {
+      console.error('Download Profile error:', error);
+      Alert.alert('Download Error', 'Could not generate company profile PDF');
     } finally {
       setLoading(false);
     }

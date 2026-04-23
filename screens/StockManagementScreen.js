@@ -239,24 +239,39 @@ const StockManagementScreen = ({ navigation }) => {
 
 
     const handleDelete = async (id) => {
-        Alert.alert('Confirm Delete', 'Are you sure you want to delete this item?', [
-            { text: 'Cancel', style: 'cancel' },
-            {
-                text: 'Delete',
-                style: 'destructive',
-                onPress: async () => {
-                    setLoading(true);
-                    try {
-                        await deleteStock(id);
-                        setStockItems(prev => prev.filter(i => i._id !== id));
-                    } catch (e) {
-                        Alert.alert('Error', 'Failed to delete item');
-                    } finally {
-                        setLoading(false);
-                    }
+        const msg = 'Are you sure you want to delete this item?';
+        const performDelete = async () => {
+            setLoading(true);
+            try {
+                await deleteStock(id);
+                setStockItems(prev => prev.filter(i => i._id !== id));
+                if (Platform.OS === 'web') {
+                    window.alert('Item deleted');
+                } else {
+                    Alert.alert('Success', 'Item deleted');
                 }
+            } catch (e) {
+                console.error('Delete stock failed:', e);
+                if (Platform.OS === 'web') {
+                    window.alert('Failed to delete item');
+                } else {
+                    Alert.alert('Error', 'Failed to delete item');
+                }
+            } finally {
+                setLoading(false);
             }
-        ]);
+        };
+
+        if (Platform.OS === 'web') {
+            if (window.confirm(msg)) {
+                performDelete();
+            }
+        } else {
+            Alert.alert('Confirm Delete', msg, [
+                { text: 'Cancel', style: 'cancel' },
+                { text: 'Delete', style: 'destructive', onPress: performDelete }
+            ]);
+        }
     };
 
     const openAddModal = () => {
