@@ -1281,6 +1281,7 @@ export default function TemplatePickerScreen({ navigation, route }) {
                                 template: invoiceTemplate,
                                 brandColor,
                                 category: category || 'general',
+                                businessType: company?.businessType || 'general_merchandise',
                                 currencySymbol: companyCurrencySymbol,
                                 companyOverride: {
                                   name: company?.companyName,
@@ -1341,6 +1342,7 @@ export default function TemplatePickerScreen({ navigation, route }) {
                           template: invoiceTemplate,
                           brandColor,
                           category: category || 'general',
+                          businessType: company?.businessType || 'general_merchandise',
                           // currency set by server/company settings
                           companyOverride: {
                             name: company?.companyName,

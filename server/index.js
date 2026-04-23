@@ -1378,12 +1378,17 @@ app.post('/api/invoice/create', async (req, res) => {
   try {
     const {
       companyId, invoiceNumber, invoiceDate, dueDate, customer = {},
-      items = [], template, brandColor, companyOverride, category = 'general'
+      items = [], template, brandColor, companyOverride, category = 'general', businessType
     } = req.body;
-    console.log(`[Invoice] Creating for CompanyID: "${companyId}" with Category: "${category}"`);
+    console.log(`[Invoice] Creating for CompanyID: "${companyId}" with Category: "${category}", BusinessType: "${businessType || 'N/A'}"`);
     if (!companyId) return res.status(400).json({ success: false, message: 'companyId is required' });
     
-    let company = await findCompanyById(companyId, category);
+    // First try with the exact businessType, fallback to checking category (for backwards compatibility)
+    let company = null;
+    if (businessType) company = await findCompanyById(companyId, businessType);
+    if (!company) company = await findCompanyById(companyId, category);
+    if (!company) company = await findCompanyById(companyId); // Ultimate fallback
+    
     if (company) {
       console.log(`[Invoice] Company found: "${company.name}"`);
     } else {
@@ -1530,12 +1535,17 @@ app.post('/api/receipt/create', async (req, res) => {
   try {
     const {
       companyId, invoiceNumber, receiptNumber, receiptDate, customer = {},
-      amountPaid, items = [], category = 'general'
+      amountPaid, items = [], category = 'general', businessType
     } = req.body;
-    console.log(`[Receipt] Creating for CompanyID: "${companyId}" with Category: "${category}"`);
+    console.log(`[Receipt] Creating for CompanyID: "${companyId}" with Category: "${category}", BusinessType: "${businessType || 'N/A'}"`);
     if (!companyId) return res.status(400).json({ success: false, message: 'companyId is required' });
     
-    let company = await findCompanyById(companyId, category);
+    // First try exact businessType, then fallback to category, then ultimate fallback
+    let company = null;
+    if (businessType) company = await findCompanyById(companyId, businessType);
+    if (!company) company = await findCompanyById(companyId, category);
+    if (!company) company = await findCompanyById(companyId);
+    
     if (company) {
       console.log(`[Receipt] Company found: "${company.name}"`);
     } else {

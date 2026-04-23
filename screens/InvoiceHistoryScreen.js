@@ -791,6 +791,7 @@ const InvoiceHistoryScreen = ({ navigation, route }) => {
                         currencySymbol: resolveCurrencySymbol(invoiceItem, company),
                         currencyCode: invoiceItem.currencyCode,
                         category: invoiceItem.category || 'general',
+                        businessType: company?.businessType || 'general_merchandise',
                       };
                       const res = await createReceipt(payload);
                       if (res?.success) {

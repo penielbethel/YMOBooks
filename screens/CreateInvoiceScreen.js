@@ -122,6 +122,7 @@ const CreateInvoiceScreen = ({ navigation, route }) => {
 
       const payload = {
         companyId: companyData.companyId,
+        businessType: companyData.businessType || 'general_merchandise',
         template: companyData?.invoiceTemplate,
         brandColor: companyData?.brandColor,
         currencySymbol,
