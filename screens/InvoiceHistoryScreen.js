@@ -223,7 +223,122 @@ const InvoiceHistoryScreen = ({ navigation, route }) => {
     return full;
   };
 
+  const handleDirectDownload = async (item, type = 'invoice') => {
+    try {
+      setLoading(true);
+      const stored = await AsyncStorage.getItem('companyData');
+      let companyObj = stored ? JSON.parse(stored) : {};
+      companyObj = await fetchFullCompanyDataIfNeeded(companyObj);
+      const resolvedLogo = await toDataUrl(companyObj?.logo);
+      const resolvedSignature = await toDataUrl(companyObj?.signature);
+      const currencySymbol = resolveCurrencySymbol(item, companyObj);
+
+      let html = '';
+      let filename = '';
+      const invNo = item.invoiceNumber || 'document';
+
+      if (type === 'invoice') {
+        html = buildInvoiceHtml({
+          company: {
+            name: companyObj?.name || companyObj?.companyName,
+            address: companyObj?.address,
+            email: companyObj?.email,
+            phone: companyObj?.phone || companyObj?.phoneNumber,
+            bankName: companyObj?.bankName,
+            accountName: companyObj?.accountName || companyObj?.bankAccountName,
+            accountNumber: companyObj?.accountNumber || companyObj?.bankAccountNumber,
+            logo: resolvedLogo,
+            signature: resolvedSignature,
+          },
+          invoice: {
+            customerName: item?.customer?.name,
+            customerAddress: item?.customer?.address,
+            customerContact: item?.customer?.contact,
+            invoiceDate: dayjs(item.invoiceDate || item.createdAt).format('YYYY-MM-DD'),
+            dueDate: item.dueDate ? dayjs(item.dueDate).format('YYYY-MM-DD') : undefined,
+            invoiceNumber: item.invoiceNumber,
+          },
+          items: (item.items || []).map((it) => ({ description: it.description, qty: Number(it.qty || 0), price: Number(it.price || 0) })),
+          template: item?.invoiceTemplate || companyObj?.invoiceTemplate || 'classic',
+          brandColor: companyObj?.brandColor || '',
+          currencySymbol,
+        });
+        filename = `INV_${invNo}.pdf`;
+      } else {
+        const receiptDate = dayjs().format('YYYY-MM-DD');
+        html = buildReceiptHtml({
+          company: {
+            name: companyObj?.name || companyObj?.companyName,
+            address: companyObj?.address,
+            email: companyObj?.email,
+            phone: companyObj?.phone || companyObj?.phoneNumber,
+            bankName: companyObj?.bankName,
+            accountName: companyObj?.accountName || companyObj?.bankAccountName,
+            accountNumber: companyObj?.accountNumber || companyObj?.bankAccountNumber,
+            logo: resolvedLogo,
+            signature: resolvedSignature,
+            brandColor: companyObj?.brandColor,
+            termsAndConditions: companyObj?.termsAndConditions,
+          },
+          invoice: {
+            customerName: item?.customer?.name,
+            customerAddress: item?.customer?.address,
+            customerContact: item?.customer?.contact,
+            invoiceNumber: item.invoiceNumber,
+          },
+          items: item.items || [],
+          receiptNumber: `RCT-${companyObj?.companyId || 'LOCAL'}-${Date.now()}`,
+          receiptDate,
+          amountPaid: Number(item.grandTotal || 0),
+          currencySymbol,
+          template: companyObj?.receiptTemplate || 'classic',
+          brandColor: companyObj.brandColor || '#16a34a',
+        });
+        filename = `RCT_${invNo}.pdf`;
+      }
+
+      const file = await Print.printToFileAsync({ html });
+      const resp = await fetch(file.uri);
+      const blob = await resp.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename.replace(/[^a-zA-Z0-9_.-]/g, '_');
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1500);
+
+      if (type === 'receipt' && companyId && item) {
+        const payload = {
+          companyId,
+          invoiceNumber: item.invoiceNumber,
+          receiptDate: new Date().toISOString().slice(0, 10),
+          customer: item.customer || {},
+          amountPaid: Number(item.grandTotal || 0),
+          currencySymbol: resolveCurrencySymbol(item, companyObj),
+          currencyCode: item.currencyCode,
+          category: item.category || 'general',
+          businessType: companyObj?.businessType || 'general_merchandise',
+        };
+        const res = await createReceipt(payload);
+        if (res?.success) {
+          Alert.alert('Success', 'Receipt generated and registered!');
+          await refetch();
+        }
+      }
+    } catch (err) {
+      console.error('[WebExport] Failed:', err);
+      Alert.alert('Export Error', 'Could not generate PDF on Web');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const openInvoicePreview = async (item) => {
+    if (Platform.OS === 'web') {
+      return handleDirectDownload(item, 'invoice');
+    }
     try {
       const stored = await AsyncStorage.getItem('companyData');
       let company = stored ? JSON.parse(stored) : {};
@@ -317,6 +432,9 @@ const InvoiceHistoryScreen = ({ navigation, route }) => {
 
   const onGenerateReceipt = async (item) => {
     if (!companyId) return Alert.alert('Missing Company', 'Company ID not found');
+    if (Platform.OS === 'web') {
+      return handleDirectDownload(item, 'receipt');
+    }
     await openReceiptPreview(item);
   };
 

@@ -117,8 +117,22 @@ const CreateInvoiceScreen = ({ navigation, route }) => {
       });
 
       const { uri } = await Print.printToFileAsync({ html });
-      setPreviewUrl(uri);
-      setPreviewVisible(true);
+      if (Platform.OS === 'web') {
+        const resp = await fetch(uri);
+        const blob = await resp.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `INV_${Date.now()}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 1500);
+        Alert.alert('Success', 'Invoice generated and downloaded!');
+      } else {
+        setPreviewUrl(uri);
+        setPreviewVisible(true);
+      }
 
       const payload = {
         companyId: companyData.companyId,
@@ -149,6 +163,19 @@ const CreateInvoiceScreen = ({ navigation, route }) => {
 
   const handleDownload = async () => {
     if (!previewUrl) return;
+    if (Platform.OS === 'web') {
+      const resp = await fetch(previewUrl);
+      const blob = await resp.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `INV_${Date.now()}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1500);
+      return;
+    }
     try {
       setDownloading(true);
       if (Platform.OS === 'web') {

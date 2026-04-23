@@ -904,6 +904,132 @@ export default function TemplatePickerScreen({ navigation, route }) {
       </TouchableOpacity>
     );
   };
+  const toDataUrl = async (rawUri) => {
+    const uri = resolveAssetUri(rawUri);
+    if (!uri || typeof uri !== 'string') return '';
+    if (uri.startsWith('data:')) return uri;
+    try {
+      if (Platform.OS === 'web') {
+        const resp = await fetch(uri);
+        const blob = await resp.blob();
+        return new Promise((res, rej) => {
+          const reader = new FileReader();
+          reader.onloadend = () => res(reader.result);
+          reader.onerror = rej;
+          reader.readAsDataURL(blob);
+        });
+      } else {
+        const pathPart = uri.split(/[#?]/)[0];
+        let ext = (pathPart.split('.').pop() || '').toLowerCase();
+        if (ext.length > 4 || !ext || ext.includes('/')) ext = 'png';
+        const mime = ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : (ext === 'jpg' || ext === 'jpeg') ? 'image/jpeg' : 'image/png';
+        const filePath = uri.startsWith('/') ? `file://${uri}` : uri;
+        const base64 = await FileSystemLegacy.readAsStringAsync(filePath, { encoding: 'base64' });
+        return `data:${mime};base64,${base64.replace(/\s/g, '')}`;
+      }
+    } catch (err) {
+      return uri;
+    }
+  };
+
+  const handleFinalSaveAndDownload = async () => {
+    try {
+      setSavingHtmlPdf(true);
+      const resolvedLogo = await toDataUrl(tempPdfLogo || company?.logo);
+      const resolvedSignature = await toDataUrl(company?.signature);
+      const invNo = invoice.invoiceNumber || `INV-${(company?.companyId || 'LOCAL')}-${Date.now()}`;
+
+      const html = buildInvoiceHtml({
+        company: {
+          name: company?.companyName,
+          address: company?.address,
+          email: company?.email,
+          phone: company?.phoneNumber,
+          bankName: company?.bankName,
+          accountName: company?.bankAccountName,
+          accountNumber: company?.bankAccountNumber,
+          logo: resolvedLogo,
+          signature: resolvedSignature,
+        },
+        invoice: {
+          customerName: invoice.customerName,
+          customerAddress: invoice.customerAddress,
+          customerContact: invoice.customerContact,
+          invoiceDate: invoice.invoiceDate?.toISOString().slice(0, 10),
+          dueDate: invoice.dueDate?.toISOString().slice(0, 10),
+          invoiceNumber: invNo,
+        },
+        items: items.map((it) => ({ description: it.description, qty: Number(it.qty || 0), price: Number(it.price || 0) })),
+        template: invoiceTemplate,
+        brandColor,
+        currencySymbol: companyCurrencySymbol,
+      });
+
+      const file = await Print.printToFileAsync({ html });
+      const safeName = `${invNo}.pdf`.replace(/[^a-zA-Z0-9_.-]/g, '_');
+
+      let targetUri = file.uri;
+      if (Platform.OS === 'web') {
+        const resp = await fetch(file.uri);
+        const blob = await resp.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = safeName;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 1500);
+      } else {
+        try {
+          let baseDir = FileSystem.documentDirectory || FileSystem.cacheDirectory || '';
+          if (baseDir && !baseDir.endsWith('/')) baseDir += '/';
+          targetUri = `${baseDir}${safeName}`;
+          await FileSystemLegacy.moveAsync({ from: file.uri, to: targetUri });
+        } catch (mvErr) {
+          targetUri = file.uri;
+        }
+      }
+
+      if (company?.companyId) {
+        const payload = {
+          companyId: company.companyId,
+          invoiceDate: invoice.invoiceDate?.toISOString().slice(0, 10),
+          dueDate: invoice.dueDate?.toISOString().slice(0, 10),
+          customer: {
+            name: invoice.customerName,
+            address: invoice.customerAddress,
+            contact: invoice.customerContact,
+          },
+          items: items.map((it) => ({ description: it.description, qty: Number(it.qty || 0), price: Number(it.price || 0) })),
+          template: invoiceTemplate,
+          brandColor,
+          category: category || 'general',
+          businessType: company?.businessType || 'general_merchandise',
+          currencySymbol: companyCurrencySymbol,
+          companyOverride: {
+            name: company?.companyName,
+            address: company?.address,
+            email: company?.email,
+            phone: company?.phoneNumber,
+            logo: company?.logo,
+            signature: company?.signature,
+          },
+          invoiceNumber: invNo,
+        };
+        const res = await createInvoice(payload);
+        if (res?.success) {
+          setPdfReadyUri(targetUri);
+          Alert.alert('Success', 'Invoice created and registered!');
+          setPreviewVisible(false);
+        }
+      }
+    } catch (err) {
+      Alert.alert('Export failed', String(err?.message || err));
+    } finally {
+      setSavingHtmlPdf(false);
+    }
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -1085,8 +1211,20 @@ export default function TemplatePickerScreen({ navigation, route }) {
               <TouchableOpacity onPress={addItem} style={[styles.secondaryButton, { flex: 1 }]}>
                 <Text style={styles.secondaryButtonText}>+ Add Item</Text>
               </TouchableOpacity>
-              <TouchableOpacity onPress={() => setPreviewVisible(true)} style={[styles.primaryHollowButton, { flex: 1 }]}>
-                <Text style={styles.primaryHollowButtonText}>Preview</Text>
+              <TouchableOpacity 
+                onPress={() => {
+                  if (Platform.OS === 'web') {
+                    handleFinalSaveAndDownload();
+                  } else {
+                    setPreviewVisible(true);
+                  }
+                }} 
+                style={[styles.primaryHollowButton, { flex: 1, backgroundColor: Platform.OS === 'web' ? Colors.success : 'transparent' }]}
+                disabled={savingHtmlPdf}
+              >
+                <Text style={[styles.primaryHollowButtonText, Platform.OS === 'web' && { color: '#fff' }]}>
+                  {Platform.OS === 'web' ? (savingHtmlPdf ? 'Saving...' : 'Save & Download PDF') : 'Preview'}
+                </Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1126,330 +1264,13 @@ export default function TemplatePickerScreen({ navigation, route }) {
                 <View style={{ paddingHorizontal: Spacing.lg, paddingBottom: Spacing.lg }}>
                   <View style={{ flexDirection: 'row', gap: 10, flexWrap: 'wrap' }}>
                     <TouchableOpacity
-                      onPress={async () => {
-                        if (pdfReadyUri) {
-                          if (Platform.OS === 'web') {
-                            await Linking.openURL(pdfReadyUri);
-                          } else {
-                            if (await Sharing.isAvailableAsync()) {
-                              await Sharing.shareAsync(pdfReadyUri, { UTI: 'com.adobe.pdf', mimeType: 'application/pdf' });
-                            } else {
-                              await Linking.openURL(pdfReadyUri);
-                            }
-                          }
-                          return;
-                        }
-                        // Trigger generation (this block is already the onPress of this button, but I'll make it explicit)
-                        // Actually, I'll just let the original logic run but set pdfReadyUri at the end.
-                        try {
-                          setSavingHtmlPdf(true);
-
-                          const guessMime = (u) => {
-                            const ext = (u || '').split('?')[0].split('#')[0].split('.').pop()?.toLowerCase() || '';
-                            if (ext === 'jpg' || ext === 'jpeg') return 'image/jpeg';
-                            if (ext === 'png') return 'image/png';
-                            if (ext === 'gif') return 'image/gif';
-                            if (ext === 'webp') return 'image/webp';
-                            return 'image/*';
-                          };
-
-                          const toDataUrl = async (rawUri) => {
-                            const uri = resolveAssetUri(rawUri);
-                            if (!uri || typeof uri !== 'string') return '';
-                            if (uri.startsWith('data:')) return uri;
-                            try {
-                              if (Platform.OS === 'web') {
-                                return uri;
-                              } else {
-                                const pathPart = uri.split(/[#?]/)[0];
-                                let ext = (pathPart.split('.').pop() || '').toLowerCase();
-                                if (ext.length > 4 || !ext || ext.includes('/')) {
-                                  ext = 'png';
-                                }
-                                const mime = ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : (ext === 'jpg' || ext === 'jpeg') ? 'image/jpeg' : 'image/png';
-
-                                if (uri.startsWith('file:') || uri.startsWith('/')) {
-                                  const filePath = uri.startsWith('/') ? `file://${uri}` : uri;
-                                  const base64 = await FileSystemLegacy.readAsStringAsync(filePath, { encoding: 'base64' });
-                                  return `data:${mime};base64,${base64.replace(/\s/g, '')}`;
-                                } else {
-                                  let cacheDir = FileSystem.cacheDirectory || FileSystemLegacy.cacheDirectory || '';
-                                  if (!cacheDir && Platform.OS !== 'web') cacheDir = `${FileSystem.documentDirectory}cache/`;
-                                  if (!cacheDir.endsWith('/')) cacheDir += '/';
-                                  const tmp = `${cacheDir}sh_to_data_uri_${Date.now()}_${Math.floor(Math.random() * 1000)}.${ext}`;
-                                  const dl = await FileSystemLegacy.downloadAsync(uri, tmp);
-                                  const base64 = await FileSystemLegacy.readAsStringAsync(dl.uri, { encoding: 'base64' });
-                                  await FileSystemLegacy.deleteAsync(tmp, { idempotent: true });
-                                  return `data:${mime};base64,${base64.replace(/\s/g, '')}`;
-                                }
-                              }
-                            } catch (err) {
-                              console.warn('[Share.toDataUrl] Failed:', err.message);
-                              return uri;
-                            }
-                          };
-
-                          // Resolve logo/signature robustly: prefer in-memory, then AsyncStorage caches, then a web asset
-                          const getCachedLogo = async () => {
-                            try {
-                              const existingRaw = await AsyncStorage.getItem('companyData');
-                              const existing = existingRaw ? JSON.parse(existingRaw) : null;
-                              if (existing?.logo) return existing.logo;
-                            } catch { }
-                            try {
-                              const cache = await AsyncStorage.getItem('companyLogoCache');
-                              if (cache) return cache;
-                            } catch { }
-                            if (Platform.OS === 'web') {
-                              try {
-                                const resp = await fetch('/assets/logo.png');
-                                if (resp.ok) {
-                                  const blob = await resp.blob();
-                                  const reader = new FileReader();
-                                  const dataUrl = await new Promise((resolve) => { reader.onloadend = () => resolve(reader.result); reader.readAsDataURL(blob); });
-                                  return String(dataUrl);
-                                }
-                              } catch { }
-                            }
-                            return '';
-                          };
-
-                          let logoCandidate = tempPdfLogo || company?.logo || await getCachedLogo();
-                          const resolvedLogo = await toDataUrl(logoCandidate);
-                          const resolvedSignature = await toDataUrl(company?.signature);
-
-                          // Generate a client-side invoice number for HTML export (server has its own sequence)
-                          const invNo = invoice.invoiceNumber || `INV-${(company?.companyId || 'LOCAL')}-${Date.now()}`;
-
-                          const html = buildInvoiceHtml({
-                            company: {
-                              name: company?.companyName,
-                              address: company?.address,
-                              email: company?.email,
-                              phone: company?.phoneNumber,
-                              bankName: company?.bankName,
-                              accountName: company?.bankAccountName,
-                              accountNumber: company?.bankAccountNumber,
-                              logo: resolvedLogo,
-                              signature: resolvedSignature,
-                            },
-                            invoice: {
-                              customerName: invoice.customerName,
-                              customerAddress: invoice.customerAddress,
-                              customerContact: invoice.customerContact,
-                              invoiceDate: invoice.invoiceDate?.toISOString().slice(0, 10),
-                              dueDate: invoice.dueDate?.toISOString().slice(0, 10),
-                              invoiceNumber: invNo,
-                            },
-                            items: items.map((it) => ({ description: it.description, qty: Number(it.qty || 0), price: Number(it.price || 0) })),
-                            template: invoiceTemplate,
-                            brandColor,
-                            currencySymbol: companyCurrencySymbol,
-                          });
-
-                          if (Platform.OS === 'web') {
-                            const withPrint = html.replace('</body>', '<script>setTimeout(()=>{try{window.print()}catch(_){}},300)</script></body>');
-                            const dataUrl = 'data:text/html;charset=utf-8,' + encodeURIComponent(withPrint);
-                            await Linking.openURL(dataUrl);
-                            // Do not return here; continue to register history below
-                          }
-
-                          const file = await Print.printToFileAsync({ html });
-                          const safeName = `${invNo}.pdf`.replace(/[^a-zA-Z0-9_.-]/g, '_');
-
-                          let targetUri = file.uri;
-                          if (Platform.OS !== 'web') {
-                            try {
-                              let baseDir = FileSystem.documentDirectory || FileSystem.cacheDirectory || '';
-                              if (baseDir && !baseDir.endsWith('/')) baseDir += '/';
-                              targetUri = `${baseDir}${safeName}`;
-                              await FileSystemLegacy.moveAsync({ from: file.uri, to: targetUri });
-                            } catch (mvErr) {
-                              console.warn('[TemplatePicker] Rename failed:', mvErr);
-                              targetUri = file.uri;
-                            }
-                          }
-
-                          // After client-side generation/sharing, register invoice history on server
-                          try {
-                            if (!company?.companyId) {
-                              console.warn('[TemplatePicker][HTML->PDF] Skipping history registration: missing companyId');
-                              setPdfReadyUri(targetUri); // Still allow share if local gen worked but no companyId
-                            } else {
-                              const payload = {
-                                companyId: company.companyId,
-                                invoiceDate: invoice.invoiceDate?.toISOString().slice(0, 10),
-                                dueDate: invoice.dueDate?.toISOString().slice(0, 10),
-                                customer: {
-                                  name: invoice.customerName,
-                                  address: invoice.customerAddress,
-                                  contact: invoice.customerContact,
-                                },
-                                items: items.map((it) => ({ description: it.description, qty: Number(it.qty || 0), price: Number(it.price || 0) })),
-                                template: invoiceTemplate,
-                                brandColor,
-                                category: category || 'general',
-                                businessType: company?.businessType || 'general_merchandise',
-                                currencySymbol: companyCurrencySymbol,
-                                companyOverride: {
-                                  name: company?.companyName,
-                                  companyName: company?.companyName,
-                                  address: company?.address,
-                                  email: company?.email,
-                                  phone: company?.phoneNumber,
-                                  logo: company?.logo,
-                                  signature: company?.signature,
-                                  bankName: company?.bankName,
-                                  accountName: company?.bankAccountName,
-                                  accountNumber: company?.bankAccountNumber,
-                                },
-                              };
-                              const res = await createInvoice(payload);
-                              if (res?.success) {
-                                console.log('[TemplatePicker][HTML->PDF] Invoice registered in history');
-                                setPdfReadyUri(targetUri);
-                                Alert.alert('Success', 'Invoice created and registered successfully!');
-                              } else {
-                                throw new Error(res?.message || 'Failed to register invoice on server');
-                              }
-                            }
-                          } catch (histErr) {
-                            console.warn('[TemplatePicker][HTML->PDF] Failed to register history:', histErr?.message || histErr);
-                            Alert.alert('Registration Failed', 'PDF generated but could not save to history. ' + (histErr?.message || ''));
-                          }
-
-                        } catch (err) {
-                          console.error('[TemplatePicker][HTML->PDF] Failed:', err?.message || err);
-                          Alert.alert('Export failed', String(err?.message || err));
-                        } finally {
-                          setSavingHtmlPdf(false);
-                        }
-                      }}
+                      onPress={handleFinalSaveAndDownload}
                       style={[styles.primaryHollowButton, { flex: 1, borderColor: pdfReadyUri ? Colors.primary : Colors.success }, savingHtmlPdf && { opacity: 0.7 }]}
                       disabled={savingHtmlPdf}
                     >
                       <Text style={[styles.primaryHollowButtonText, { color: pdfReadyUri ? Colors.primary : Colors.success }]}>
                         {savingHtmlPdf ? 'Generating…' : pdfReadyUri ? 'Step 2: Share Invoice' : 'Step 1: Create & Register'}
                       </Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity onPress={async () => {
-                      if (!company?.companyId) return Alert.alert('Error', 'Missing company ID. Please login again.');
-                      try {
-                        setDownloading(true);
-                        console.log('[TemplatePicker] Download clicked');
-                        const payload = {
-                          companyId: company.companyId,
-                          invoiceDate: invoice.invoiceDate?.toISOString().slice(0, 10),
-                          dueDate: invoice.dueDate?.toISOString().slice(0, 10),
-                          customer: {
-                            name: invoice.customerName,
-                            address: invoice.customerAddress,
-                            contact: invoice.customerContact,
-                          },
-                          items: items.map((it) => ({ description: it.description, qty: Number(it.qty || 0), price: Number(it.price || 0) })),
-                          template: invoiceTemplate,
-                          brandColor,
-                          category: category || 'general',
-                          businessType: company?.businessType || 'general_merchandise',
-                          // currency set by server/company settings
-                          companyOverride: {
-                            name: company?.companyName,
-                            companyName: company?.companyName,
-                            address: company?.address,
-                            email: company?.email,
-                            phone: company?.phoneNumber,
-                            logo: company?.logo,
-                            signature: company?.signature,
-                            bankName: company?.bankName,
-                            accountName: company?.bankAccountName,
-                            accountNumber: company?.bankAccountNumber,
-                          },
-                        };
-                        console.log('[TemplatePicker] Payload:', payload);
-                        const res = await createInvoice(payload);
-                        if (!res?.pdfUrl) throw new Error(res?.message || 'Failed to generate PDF');
-                        console.log('[TemplatePicker] Server pdfUrl:', res.pdfUrl);
-                        if (Platform.OS === 'web') {
-                          try {
-                            const fname = (res.filename || (invoice.invoiceNumber ? `${invoice.invoiceNumber}.pdf` : 'invoice.pdf')).replace(/[^a-zA-Z0-9_.-]/g, '_');
-                            const resp = await fetch(res.pdfUrl);
-                            const blob = await resp.blob();
-                            const url = URL.createObjectURL(blob);
-                            const a = document.createElement('a');
-                            a.href = url;
-                            a.download = fname;
-                            document.body.appendChild(a);
-                            a.click();
-                            a.remove();
-                            setTimeout(() => URL.revokeObjectURL(url), 1500);
-                          } catch (webErr) {
-                            console.warn('[TemplatePicker][Server->PDF][Web] Direct download failed, opening URL:', webErr?.message || webErr);
-                            await Linking.openURL(res.pdfUrl);
-                          }
-                          return;
-                        }
-                        const invNoServer = invoice.invoiceNumber || `INV-${(company?.companyId || 'LOCAL')}-${Date.now()}`;
-                        const filename = `${invNoServer}.pdf`.replace(/[^a-zA-Z0-9_.-]/g, '_');
-                        let baseDir = FileSystem.cacheDirectory || FileSystem.documentDirectory || null;
-                        if (!baseDir && FileSystem.documentDirectory) {
-                          // Create a temporary dir under documentDirectory
-                          const tmpDir = `${FileSystem.documentDirectory}tmp/`;
-                          try {
-                            await FileSystem.makeDirectoryAsync(tmpDir, { intermediates: true });
-                            baseDir = tmpDir;
-                          } catch (mkErr) {
-                            console.warn('[TemplatePicker] makeDirectory tmp failed:', mkErr?.message || mkErr);
-                          }
-                        }
-                        if (!baseDir) {
-                          console.warn('[TemplatePicker] No writable temp directory available, opening remote URL');
-                          await Linking.openURL(res.pdfUrl);
-                          return;
-                        }
-                        const tempUri = `${baseDir}${filename}`;
-                        console.log('[TemplatePicker] tempUri:', tempUri);
-                        const dl = await FileSystemLegacy.downloadAsync(res.pdfUrl, tempUri);
-                        console.log('[TemplatePicker] Downloaded to temp:', dl?.uri);
-                        if (Platform.OS === 'android') {
-                          try {
-                            const perm = await FileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync();
-                            console.log('[TemplatePicker][Android] SAF permission:', perm);
-                            if (perm.granted && perm.directoryUri) {
-                              const fileUri = await FileSystem.StorageAccessFramework.createFileAsync(perm.directoryUri, filename, 'application/pdf');
-                              console.log('[TemplatePicker][Android] SAF fileUri:', fileUri);
-                              const base64 = await FileSystemLegacy.readAsStringAsync(dl.uri, { encoding: 'base64' });
-                              await FileSystem.StorageAccessFramework.writeAsStringAsync(fileUri, base64, { encoding: 'base64' });
-                              Alert.alert('Saved', 'Invoice PDF saved to selected folder.');
-                            } else {
-                              // Fallback: open file from cache
-                              console.log('[TemplatePicker][Android] SAF not granted, opening from cache');
-                              const contentUri = await FileSystem.getContentUriAsync(dl.uri);
-                              console.log('[TemplatePicker][Android] contentUri:', contentUri);
-                              await Linking.openURL(contentUri);
-                            }
-                          } catch (e) {
-                            // Fallback open
-                            console.warn('[TemplatePicker][Android] SAF write failed:', e?.message || e);
-                            try {
-                              const contentUri = await FileSystem.getContentUriAsync(dl.uri);
-                              console.log('[TemplatePicker][Android] Fallback contentUri:', contentUri);
-                              await Linking.openURL(contentUri);
-                            } catch (openErr) {
-                              console.error('[TemplatePicker][Android] Fallback open failed:', openErr?.message || openErr);
-                            }
-                          }
-                        } else {
-                          console.log('[TemplatePicker][iOS/Web] Opening temp file');
-                          await Linking.openURL(dl.uri);
-                        }
-                      } catch (err) {
-                        console.error('[TemplatePicker] Download failed:', err?.message || err);
-                        Alert.alert('Download failed', String(err?.message || err));
-                      } finally {
-                        setDownloading(false);
-                      }
-                    }} style={{ display: 'none' }}>
-                      <Text />
                     </TouchableOpacity>
                   </View>
                 </View>
