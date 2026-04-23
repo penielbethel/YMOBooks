@@ -1110,9 +1110,15 @@ export default function TemplatePickerScreen({ navigation, route }) {
             </View>
             <View style={styles.previewContainer}>
               <Text style={styles.previewLabel}>Preview</Text>
-              <TouchableOpacity activeOpacity={0.8} onPress={() => setPreviewVisible(true)}>
+              <TouchableOpacity activeOpacity={0.8} onPress={() => {
+                if (Platform.OS === 'web') {
+                  Alert.alert('Download Required', 'To view the full layout on Web, please use the "Save & Download PDF" button below.');
+                  return;
+                }
+                setPreviewVisible(true);
+              }}>
                 <TemplatePreview companyName={company?.companyName} template={invoiceTemplate} brandColor={brandColor} />
-                <Text style={styles.tapHint}>Tap to view full layout</Text>
+                <Text style={styles.tapHint}>{Platform.OS === 'web' ? 'Download for full layout' : 'Tap to view full layout'}</Text>
               </TouchableOpacity>
             </View>
           </View>

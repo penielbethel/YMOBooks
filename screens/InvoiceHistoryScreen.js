@@ -36,6 +36,7 @@ const InvoiceHistoryScreen = ({ navigation, route }) => {
   const [selectMode, setSelectMode] = useState(false);
   const [selectedInvoicesMap, setSelectedInvoicesMap] = useState({});
   const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [confirmModal, setConfirmModal] = useState({ visible: false, title: '', message: '', onConfirm: null });
 
   // Reload company data on focus to ensure receipts have latest settings
   useFocusEffect(
@@ -338,7 +339,7 @@ const InvoiceHistoryScreen = ({ navigation, route }) => {
           throw new Error(res?.message || 'Failed to generate receipt on server');
         }
       } else {
-        // Fallback for mobile or if pdfUrl missing
+        // Fallback for mobile
         if (Platform.OS !== 'web') {
           const file = await Print.printToFileAsync({ html });
           const resp = await fetch(file.uri);
@@ -352,7 +353,9 @@ const InvoiceHistoryScreen = ({ navigation, route }) => {
           a.remove();
           setTimeout(() => URL.revokeObjectURL(url), 1500);
         } else {
-          Alert.alert('Error', 'Direct download failed. Please try again.');
+          // On Web, if no pdfUrl, we try to create it by calling createReceipt if type is receipt
+          // For invoices, if pdfUrl is missing, we can't easily generate on client without Print
+          Alert.alert('Download Error', 'No server PDF link found for this document. Please try refreshing.');
         }
       }
     } catch (err) {
@@ -503,7 +506,7 @@ const InvoiceHistoryScreen = ({ navigation, route }) => {
     }
   };
 
-  const onDeleteInvoice = async (item) => {
+  const onDeleteInvoice = (item) => {
     if (!companyId) return Alert.alert('Missing Company', 'Company ID not found');
     const msg = `Are you sure you want to delete ${item.invoiceNumber}?`;
     
@@ -523,9 +526,12 @@ const InvoiceHistoryScreen = ({ navigation, route }) => {
     };
 
     if (Platform.OS === 'web') {
-      if (window.confirm(`Delete Invoice\n\n${msg}`)) {
-        await performDelete();
-      }
+      setConfirmModal({
+        visible: true,
+        title: 'Delete Invoice',
+        message: msg,
+        onConfirm: performDelete
+      });
     } else {
       Alert.alert('Delete Invoice', msg, [
         { text: 'Cancel', style: 'cancel' },
@@ -641,9 +647,12 @@ const InvoiceHistoryScreen = ({ navigation, route }) => {
                 };
 
                 if (Platform.OS === 'web') {
-                  if (window.confirm(`Delete Receipt\n\n${msg}`)) {
-                    performDeleteReceipt();
-                  }
+                  setConfirmModal({
+                    visible: true,
+                    title: 'Delete Receipt',
+                    message: msg,
+                    onConfirm: performDeleteReceipt
+                  });
                 } else {
                   Alert.alert('Delete Receipt', msg, [
                     { text: 'Cancel', style: 'cancel' },
@@ -913,6 +922,10 @@ const InvoiceHistoryScreen = ({ navigation, route }) => {
                 }
 
                 if (!previewHtml) return;
+                if (Platform.OS === 'web') {
+                   Alert.alert('Direct Download Only', 'On Web, please use the direct download button on the list page for reliable PDF generation.');
+                   return;
+                }
                 try {
                   setSavingHtmlPdf(true);
                   const file = await Print.printToFileAsync({ html: previewHtml });
@@ -989,6 +1002,24 @@ const InvoiceHistoryScreen = ({ navigation, route }) => {
           </View>
         </SafeAreaView>
       </Modal>
+      {/* Confirmation Modal for Web */}
+      <Modal visible={confirmModal.visible} transparent animationType="fade">
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' }}>
+          <View style={{ backgroundColor: '#fff', padding: 24, borderRadius: 12, width: '85%', maxWidth: 400 }}>
+            <Text style={{ fontSize: 18, fontWeight: 'bold', marginBottom: 12 }}>{confirmModal.title}</Text>
+            <Text style={{ fontSize: 14, color: '#666', marginBottom: 24 }}>{confirmModal.message}</Text>
+            <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 12 }}>
+              <TouchableOpacity onPress={() => setConfirmModal({ ...confirmModal, visible: false })} style={{ padding: 12 }}>
+                <Text style={{ color: '#666', fontWeight: '600' }}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => { confirmModal.onConfirm?.(); setConfirmModal({ ...confirmModal, visible: false }); }} style={{ backgroundColor: Colors.error || '#ef4444', paddingVertical: 12, paddingHorizontal: 20, borderRadius: 8 }}>
+                <Text style={{ color: '#fff', fontWeight: 'bold' }}>Delete</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
     </SafeAreaView>
   );
 };
