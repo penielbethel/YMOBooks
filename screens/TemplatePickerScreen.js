@@ -965,29 +965,19 @@ export default function TemplatePickerScreen({ navigation, route }) {
         currencySymbol: companyCurrencySymbol,
       });
 
-      const file = await Print.printToFileAsync({ html });
       const safeName = `${invNo}.pdf`.replace(/[^a-zA-Z0-9_.-]/g, '_');
+      let file = null;
+      let targetUri = null;
 
-      let targetUri = file.uri;
-      if (Platform.OS === 'web') {
-        const resp = await fetch(file.uri);
-        const blob = await resp.blob();
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = safeName;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        setTimeout(() => URL.revokeObjectURL(url), 1500);
-      } else {
+      if (Platform.OS !== 'web') {
+        file = await Print.printToFileAsync({ html });
         try {
           let baseDir = FileSystem.documentDirectory || FileSystem.cacheDirectory || '';
           if (baseDir && !baseDir.endsWith('/')) baseDir += '/';
           targetUri = `${baseDir}${safeName}`;
           await FileSystemLegacy.moveAsync({ from: file.uri, to: targetUri });
         } catch (mvErr) {
-          targetUri = file.uri;
+          targetUri = file?.uri;
         }
       }
 
@@ -1019,6 +1009,31 @@ export default function TemplatePickerScreen({ navigation, route }) {
         };
         const res = await createInvoice(payload);
         if (res?.success) {
+          if (Platform.OS === 'web' && res.pdfUrl) {
+            const resp = await fetch(res.pdfUrl);
+            const blob = await resp.blob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = safeName;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 1500);
+          } else if (Platform.OS === 'web') {
+             // Fallback for web if no server url, although printToFileAsync is what we want to avoid
+             const resp = await fetch(file.uri);
+             const blob = await resp.blob();
+             const url = URL.createObjectURL(blob);
+             const a = document.createElement('a');
+             a.href = url;
+             a.download = safeName;
+             document.body.appendChild(a);
+             a.click();
+             a.remove();
+             setTimeout(() => URL.revokeObjectURL(url), 1500);
+          }
+          
           setPdfReadyUri(targetUri);
           Alert.alert('Success', 'Invoice created and registered!');
           setPreviewVisible(false);

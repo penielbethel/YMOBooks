@@ -297,19 +297,18 @@ const InvoiceHistoryScreen = ({ navigation, route }) => {
         filename = `RCT_${invNo}.pdf`;
       }
 
-      const file = await Print.printToFileAsync({ html });
-      const resp = await fetch(file.uri);
-      const blob = await resp.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = filename.replace(/[^a-zA-Z0-9_.-]/g, '_');
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 1500);
-
-      if (type === 'receipt' && companyId && item) {
+      if (type === 'invoice' && item.pdfUrl) {
+        const resp = await fetch(item.pdfUrl);
+        const blob = await resp.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename.replace(/[^a-zA-Z0-9_.-]/g, '_');
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 1500);
+      } else if (type === 'receipt' && companyId && item) {
         const payload = {
           companyId,
           invoiceNumber: item.invoiceNumber,
@@ -322,9 +321,38 @@ const InvoiceHistoryScreen = ({ navigation, route }) => {
           businessType: companyObj?.businessType || 'general_merchandise',
         };
         const res = await createReceipt(payload);
-        if (res?.success) {
-          Alert.alert('Success', 'Receipt generated and registered!');
+        if (res?.success && res.pdfUrl) {
+          const resp = await fetch(res.pdfUrl);
+          const blob = await resp.blob();
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = filename.replace(/[^a-zA-Z0-9_.-]/g, '_');
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          setTimeout(() => URL.revokeObjectURL(url), 1500);
+          Alert.alert('Success', 'Receipt generated and downloaded!');
           await refetch();
+        } else {
+          throw new Error(res?.message || 'Failed to generate receipt on server');
+        }
+      } else {
+        // Fallback for mobile or if pdfUrl missing
+        if (Platform.OS !== 'web') {
+          const file = await Print.printToFileAsync({ html });
+          const resp = await fetch(file.uri);
+          const blob = await resp.blob();
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = filename.replace(/[^a-zA-Z0-9_.-]/g, '_');
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          setTimeout(() => URL.revokeObjectURL(url), 1500);
+        } else {
+          Alert.alert('Error', 'Direct download failed. Please try again.');
         }
       }
     } catch (err) {
@@ -477,30 +505,33 @@ const InvoiceHistoryScreen = ({ navigation, route }) => {
 
   const onDeleteInvoice = async (item) => {
     if (!companyId) return Alert.alert('Missing Company', 'Company ID not found');
-    Alert.alert(
-      'Delete Invoice',
-      `Are you sure you want to delete ${item.invoiceNumber}?`,
-      [
+    const msg = `Are you sure you want to delete ${item.invoiceNumber}?`;
+    
+    const performDelete = async () => {
+      try {
+        const res = await deleteInvoice(companyId, item.invoiceNumber);
+        if (res?.success) {
+          setInvoices((prev) => prev.filter((x) => x.invoiceNumber !== item.invoiceNumber));
+          try { await refetch(); } catch (_) { }
+          Alert.alert('Deleted', 'Invoice removed from history');
+        } else {
+          Alert.alert('Failed', res?.message || 'Could not delete invoice');
+        }
+      } catch (e) {
+        Alert.alert('Error', 'Delete failed');
+      }
+    };
+
+    if (Platform.OS === 'web') {
+      if (window.confirm(`Delete Invoice\n\n${msg}`)) {
+        await performDelete();
+      }
+    } else {
+      Alert.alert('Delete Invoice', msg, [
         { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete', style: 'destructive', onPress: async () => {
-            try {
-              const res = await deleteInvoice(companyId, item.invoiceNumber);
-              if (res?.success) {
-                setInvoices((prev) => prev.filter((x) => x.invoiceNumber !== item.invoiceNumber));
-                // Refresh receipts map to reflect cascaded deletion and paid status change
-                try { await refetch(); } catch (_) { }
-                Alert.alert('Deleted', 'Invoice removed from history');
-              } else {
-                Alert.alert('Failed', res?.message || 'Could not delete invoice');
-              }
-            } catch (e) {
-              Alert.alert('Error', 'Delete failed');
-            }
-          }
-        },
-      ]
-    );
+        { text: 'Delete', style: 'destructive', onPress: performDelete },
+      ]);
+    }
   };
 
   const toggleSelectInvoice = (invoiceNumber) => {
@@ -519,37 +550,44 @@ const InvoiceHistoryScreen = ({ navigation, route }) => {
     if (!companyId) return Alert.alert('Missing Company', 'Company ID not found');
     const targets = Object.keys(selectedInvoicesMap).filter((k) => selectedInvoicesMap[k]);
     if (!targets.length) return Alert.alert('Select invoices', 'Please select at least one invoice to delete');
-    Alert.alert(
-      'Delete Selected Invoices',
-      `Delete ${targets.length} selected invoice${targets.length === 1 ? '' : 's'}?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete', style: 'destructive', onPress: async () => {
-            try {
-              setBulkDeleting(true);
-              let successCount = 0;
-              for (const invNum of targets) {
-                try {
-                  const res = await deleteInvoice(companyId, invNum);
-                  if (res?.success) successCount++;
-                } catch (_) { }
-              }
-              if (successCount > 0) {
-                setInvoices((prev) => prev.filter((x) => !selectedInvoicesMap[x.invoiceNumber]));
-                clearSelection();
-                try { await refetch(); } catch (_) { }
-                Alert.alert('Deleted', `Removed ${successCount} invoice${successCount === 1 ? '' : 's'} from history`);
-              } else {
-                Alert.alert('Failed', 'Could not delete selected invoices');
-              }
-            } finally {
-              setBulkDeleting(false);
-            }
-          }
-        },
-      ]
-    );
+
+    const performBulkDelete = async () => {
+      try {
+        setBulkDeleting(true);
+        let successCount = 0;
+        for (const invNum of targets) {
+          try {
+            const res = await deleteInvoice(companyId, invNum);
+            if (res?.success) successCount++;
+          } catch (_) { }
+        }
+        if (successCount > 0) {
+          setInvoices((prev) => prev.filter((x) => !selectedInvoicesMap[x.invoiceNumber]));
+          clearSelection();
+          try { await refetch(); } catch (_) { }
+          Alert.alert('Deleted', `Removed ${successCount} invoice${successCount === 1 ? '' : 's'} from history`);
+        } else {
+          Alert.alert('Failed', 'Could not delete selected invoices');
+        }
+      } finally {
+        setBulkDeleting(false);
+      }
+    };
+
+    if (Platform.OS === 'web') {
+      if (window.confirm(`Delete Selected Invoices\n\nDelete ${targets.length} selected invoice${targets.length === 1 ? '' : 's'}?`)) {
+        performBulkDelete();
+      }
+    } else {
+      Alert.alert(
+        'Delete Selected Invoices',
+        `Delete ${targets.length} selected invoice${targets.length === 1 ? '' : 's'}?`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Delete', style: 'destructive', onPress: performBulkDelete },
+        ]
+      );
+    }
   };
 
   const renderItem = ({ item }) => (
@@ -586,29 +624,32 @@ const InvoiceHistoryScreen = ({ navigation, route }) => {
             <TouchableOpacity
               style={[styles.smallBtn, styles.deleteBtn]}
               onPress={() => {
-                Alert.alert(
-                  'Delete Receipt',
-                  `Remove receipt(s) for ${item.invoiceNumber}? This will reduce revenue.`,
-                  [
+                const msg = `Remove receipt(s) for ${item.invoiceNumber}? This will reduce revenue.`;
+                const performDeleteReceipt = async () => {
+                  try {
+                    const res = await deleteReceiptByInvoice(companyId, item.invoiceNumber);
+                    if (res?.success) {
+                      setReceiptsByInvoice((prev) => ({ ...prev, [item.invoiceNumber]: false }));
+                      Alert.alert('Deleted', 'Receipt removed and revenue synced');
+                      await refetch();
+                    } else {
+                      Alert.alert('Failed', res?.message || 'Could not delete receipt');
+                    }
+                  } catch (_e) {
+                    Alert.alert('Error', 'Delete failed');
+                  }
+                };
+
+                if (Platform.OS === 'web') {
+                  if (window.confirm(`Delete Receipt\n\n${msg}`)) {
+                    performDeleteReceipt();
+                  }
+                } else {
+                  Alert.alert('Delete Receipt', msg, [
                     { text: 'Cancel', style: 'cancel' },
-                    {
-                      text: 'Delete', style: 'destructive', onPress: async () => {
-                        try {
-                          const res = await deleteReceiptByInvoice(companyId, item.invoiceNumber);
-                          if (res?.success) {
-                            setReceiptsByInvoice((prev) => ({ ...prev, [item.invoiceNumber]: false }));
-                            Alert.alert('Deleted', 'Receipt removed and revenue synced');
-                            await refetch();
-                          } else {
-                            Alert.alert('Failed', res?.message || 'Could not delete receipt');
-                          }
-                        } catch (_e) {
-                          Alert.alert('Error', 'Delete failed');
-                        }
-                      }
-                    },
-                  ]
-                );
+                    { text: 'Delete', style: 'destructive', onPress: performDeleteReceipt },
+                  ]);
+                }
               }}
             >
               <Text style={styles.smallBtnText}>Delete Receipt</Text>

@@ -116,20 +116,10 @@ const CreateInvoiceScreen = ({ navigation, route }) => {
         currencySymbol
       });
 
-      const { uri } = await Print.printToFileAsync({ html });
-      if (Platform.OS === 'web') {
-        const resp = await fetch(uri);
-        const blob = await resp.blob();
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `INV_${Date.now()}.pdf`;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        setTimeout(() => URL.revokeObjectURL(url), 1500);
-        Alert.alert('Success', 'Invoice generated and downloaded!');
-      } else {
+      let uri = null;
+      if (Platform.OS !== 'web') {
+        const printRes = await Print.printToFileAsync({ html });
+        uri = printRes.uri;
         setPreviewUrl(uri);
         setPreviewVisible(true);
       }
@@ -151,7 +141,22 @@ const CreateInvoiceScreen = ({ navigation, route }) => {
         category: invoice.category,
       };
 
-      createInvoice(payload).catch(err => console.warn('Background sync failed', err));
+      const res = await createInvoice(payload);
+      if (Platform.OS === 'web' && res?.pdfUrl) {
+        const resp = await fetch(res.pdfUrl);
+        const blob = await resp.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `INV_${Date.now()}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 1500);
+        Alert.alert('Success', 'Invoice generated and downloaded!');
+      } else if (Platform.OS === 'web') {
+        Alert.alert('Error', 'Failed to generate PDF on server');
+      }
 
     } catch (err) {
       console.error(err);
