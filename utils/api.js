@@ -19,20 +19,25 @@ export function isAdmin(id) {
 export function resolveAssetUri(uri) {
   if (!uri || typeof uri !== 'string') return null;
   if (uri.startsWith('data:') || uri.startsWith('file://')) return uri;
-  if (uri.startsWith('/')) return `${Config.API_BASE_URL}${uri}`;
-
-  // Always normalize Uploadcare URLs to the clean base URL.
-  // The stored URL may already have transformation paths like /-/preview/400x400/
-  // appended from an older version. Stacking more operations on top causes 404s.
-  // Extracting just the UUID and using the correct custom CDN host always works.
-  if (uri.includes('ucarecdn.com') || uri.includes('ucarecd.net')) {
-    const match = uri.match(/(?:ucarecdn\.com|ucarecd\.net)\/([a-f0-9-]{36})/i);
-    if (match && match[1]) {
-      const resolved = `https://1cu7zozupu.ucarecd.net/${match[1]}/`;
-      console.log('[resolveAssetUri] uploadcare →', resolved);
-      return resolved;
+  
+  // If it's already an absolute URL, check if it's one we need to normalize
+  if (uri.startsWith('http')) {
+    // If it's a legacy /files/ path pointing to the server, keep it absolute but check
+    if (uri.includes('/files/branding/')) return uri;
+    
+    // For Uploadcare, only normalize if it's a known legacy pattern or wrong host
+    if (uri.includes('ucarecdn.com') || uri.includes('ucarecd.net')) {
+      const match = uri.match(/(?:ucarecdn\.com|ucarecd\.net)\/([a-f0-9-]{36})/i);
+      if (match && match[1]) {
+        // Use the confirmed working custom host and format
+        return `https://1cu7zozupu.ucarecd.net/${match[1]}/`;
+      }
     }
+    return uri;
   }
+
+  if (uri.startsWith('/')) return `${Config.API_BASE_URL}${uri}`;
+  
   return uri;
 }
 

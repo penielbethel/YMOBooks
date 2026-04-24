@@ -714,15 +714,17 @@ function resolveImageSource(val) {
   if (val.startsWith('data:')) return dataUrlToBuffer(val);
 
   // Handle external URLs (like Uploadcare)
-  if (val.startsWith('http') && !val.includes('/files/')) {
-    let url = val;
-    if (url.includes('ucarecdn.com') || url.includes('ucarecd.net')) {
-      const match = url.match(/(?:ucarecdn\.com|ucarecd\.net)\/([a-f0-9-]{36})/i);
+  if (val.startsWith('http')) {
+    if (val.includes('ucarecdn.com') || val.includes('ucarecd.net')) {
+      const match = val.match(/(?:ucarecdn\.com|ucarecd\.net)\/([a-f0-9-]{36})/i);
       if (match && match[1]) {
-        url = `https://1cu7zozupu.ucarecd.net/${match[1]}/`;
+        return `https://1cu7zozupu.ucarecd.net/${match[1]}/`;
       }
     }
-    return url;
+    return val;
+  }
+  if (val.startsWith('/')) {
+    return `https://ymobooks.vercel.app${val}`;
   }
 
   // Handle local /files/ paths or full URLs pointing to our /files/ endpoint
