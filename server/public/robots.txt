@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://ymobooks.vercel.app/sitemap.xml
