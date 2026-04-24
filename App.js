@@ -92,8 +92,9 @@ export default function App() {
         const urlParams = new URLSearchParams(window.location.search);
         const screenParam = urlParams.get('screen');
         
-        // We can't use hasCompanyData here reliably because it's async
-        // Let's check AsyncStorage directly if possible, or just handle the params
+        // Sync check for web persistence to prevent race conditions during refresh
+        const hasData = !!localStorage.getItem('companyData');
+
         if (screenParam === 'login') {
           return { routes: [{ name: 'Login' }] };
         }
@@ -107,9 +108,14 @@ export default function App() {
           };
         }
 
-        // If no params and we are on app.html, let the Navigator's initialRouteName handle it
-        if (path.includes('app.html')) {
-          return undefined;
+        // If we are on app.html and have data, force Dashboard
+        if (path.includes('app.html') && hasData) {
+          return { routes: [{ name: 'Dashboard' }] };
+        }
+
+        // If we are on app.html and NO data, force Login
+        if (path.includes('app.html') && !hasData) {
+          return { routes: [{ name: 'Login' }] };
         }
       }
       return undefined; // Fall back to default behavior
