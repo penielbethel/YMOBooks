@@ -228,7 +228,7 @@ async function optimizeImageDataUrl(dataUrl, kind = 'logo') {
 
     let buffer = parsed.buffer;
     if (lib) {
-      const max = kind === 'signature' ? { width: 600, height: 220 } : { width: 512, height: 512 };
+      const max = kind === 'signature' ? { width: 1200, height: 440 } : { width: 1024, height: 1024 };
       let pipeline = lib(parsed.buffer).rotate();
       pipeline = pipeline.resize({ ...max, fit: 'inside', withoutEnlargement: true });
       buffer = await pipeline.png({ compressionLevel: 9, palette: true }).toBuffer();
@@ -278,7 +278,7 @@ async function uploadToUploadcare(dataUrlOrPath) {
 
     if (res.data && res.data.file) {
       // Store clean base URL — resolveImageSource handles display/fetch
-      return `https://1cu7zozupu.ucarecd.net/${res.data.file}/`;
+      return `https://ucarecdn.com/${res.data.file}/`;
     }
   } catch (err) {
     console.warn('Uploadcare upload failed:', err.response?.data || err.message);
@@ -719,7 +719,7 @@ function resolveImageSource(val) {
     if (url.includes('ucarecdn.com') || url.includes('ucarecd.net')) {
       const match = url.match(/(?:ucarecdn\.com|ucarecd\.net)\/([a-f0-9-]{36})/i);
       if (match && match[1]) {
-        url = `https://1cu7zozupu.ucarecd.net/${match[1]}/`;
+        url = `https://ucarecdn.com/${match[1]}/`;
       }
     }
     return url;

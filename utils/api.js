@@ -28,7 +28,7 @@ export function resolveAssetUri(uri) {
   if (uri.includes('ucarecdn.com') || uri.includes('ucarecd.net')) {
     const match = uri.match(/(?:ucarecdn\.com|ucarecd\.net)\/([a-f0-9-]{36})/i);
     if (match && match[1]) {
-      const resolved = `https://1cu7zozupu.ucarecd.net/${match[1]}/`;
+      const resolved = `https://ucarecdn.com/${match[1]}/`;
       console.log('[resolveAssetUri] uploadcare →', resolved);
       return resolved;
     }
