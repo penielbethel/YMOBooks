@@ -217,11 +217,11 @@ const CompanyRegistrationScreen = ({ navigation, route }) => {
     try {
       const fileUri = await ensureFileUriFromInput(input, kind);
       if (!fileUri) return undefined;
-      const bounds = kind === 'signature' ? { width: 1200, height: 440 } : { width: 1024, height: 1024 };
+      const bounds = kind === 'signature' ? { width: 800, height: 300 } : { width: 800, height: 800 };
       const result = await ImageManipulator.manipulateAsync(
         fileUri,
         [{ resize: { width: bounds.width, height: bounds.height } }],
-        { compress: 0.9, format: ImageManipulator.SaveFormat.PNG, base64: true }
+        { compress: 0.8, format: ImageManipulator.SaveFormat.PNG, base64: true }
       );
       if (result?.base64) return `data:image/png;base64,${result.base64}`;
     } catch { }

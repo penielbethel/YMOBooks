@@ -228,7 +228,7 @@ async function optimizeImageDataUrl(dataUrl, kind = 'logo') {
 
     let buffer = parsed.buffer;
     if (lib) {
-      const max = kind === 'signature' ? { width: 1200, height: 440 } : { width: 1024, height: 1024 };
+      const max = kind === 'signature' ? { width: 800, height: 300 } : { width: 800, height: 800 };
       let pipeline = lib(parsed.buffer).rotate();
       pipeline = pipeline.resize({ ...max, fit: 'inside', withoutEnlargement: true });
       buffer = await pipeline.png({ compressionLevel: 9, palette: true }).toBuffer();
