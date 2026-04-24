@@ -399,16 +399,12 @@ const StockManagementScreen = ({ navigation }) => {
     return (
         <SafeAreaView style={styles.container}>
             <View style={styles.header}>
-                {Platform.OS !== 'web' ? (
                     <>
                         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
                             <Ionicons name="arrow-back" size={24} color={Colors.white} />
                         </TouchableOpacity>
-                        <Text style={styles.headerTitle}>Stock Management</Text>
+                        <Text style={[styles.headerTitle, { flex: 1 }]}>Stock Management</Text>
                     </>
-                ) : (
-                    <Text style={[styles.headerTitle, { flex: 1 }]}>Dashboard / Stock</Text>
-                )}
                 <TouchableOpacity onPress={openAddModal} style={[styles.addBtn, Platform.OS === 'web' && { backgroundColor: Colors.primary, borderRadius: 8, paddingHorizontal: 12 }]}>
                     <Ionicons name="add" size={24} color={Colors.white} />
                     {Platform.OS === 'web' && <Text style={{ color: 'white', fontWeight: 'bold', marginLeft: 5 }}>Add Item</Text>}

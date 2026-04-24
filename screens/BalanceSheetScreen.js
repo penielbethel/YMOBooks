@@ -83,7 +83,6 @@ const BalanceSheetScreen = ({ navigation }) => {
 
     return (
         <SafeAreaView style={styles.container}>
-            {Platform.OS !== 'web' && (
                 <View style={styles.header}>
                     <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
                         <Ionicons name="arrow-back" size={24} color="#fff" />
@@ -94,7 +93,6 @@ const BalanceSheetScreen = ({ navigation }) => {
                     </View>
                     <View style={{ width: 24 }} />
                 </View>
-            )}
 
             <ScrollView
                 style={styles.content}

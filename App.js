@@ -46,8 +46,8 @@ export default function App() {
         try {
           const ping = await pingBackend();
           if (ping.ok) {
-            const check = await fetchCompany(parsed.companyId);
-            if (check && check.success) isValid = true;
+            const check = await fetchCompany(parsed.companyId, parsed.businessType);
+            if (check && (check.success || check.company)) isValid = true;
           } else {
             isValid = true;
           }
@@ -87,6 +87,11 @@ export default function App() {
         const urlParams = new URLSearchParams(window.location.search);
         const screenParam = urlParams.get('screen');
         
+        if (hasCompanyData) {
+          // If already logged in, ignore landing page screen params and continue
+          return undefined; 
+        }
+
         if (screenParam === 'login') {
           return { routes: [{ name: 'Login' }] };
         }
@@ -126,9 +131,7 @@ export default function App() {
           <Stack.Navigator
             initialRouteName={hasCompanyData ? 'Dashboard' : 'Welcome'}
             screenOptions={{
-              headerShown: Platform.OS === 'web',
-              headerTitleStyle: { color: Colors.primary, fontWeight: 'bold' },
-              headerTintColor: Colors.primary,
+              headerShown: false,
               cardStyle: { backgroundColor: Colors.background }
             }}
           >

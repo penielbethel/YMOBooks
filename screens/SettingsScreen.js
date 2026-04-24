@@ -392,15 +392,13 @@ const SettingsScreen = ({ navigation }) => {
   return (
     <>
       <SafeAreaView style={styles.container}>
-        {Platform.OS !== 'web' && (
-          <View style={styles.header}>
-            <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-              <Text style={styles.backButtonText}>← Back</Text>
-            </TouchableOpacity>
-            <Text style={styles.title}>Settings</Text>
-            <Text style={styles.subtitle}>Manage your account and preferences</Text>
-          </View>
-        )}
+        <View style={styles.header}>
+          <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
+            <Text style={styles.backButtonText}>← Back</Text>
+          </TouchableOpacity>
+          <Text style={styles.title}>Settings</Text>
+          <Text style={styles.subtitle}>Manage your account and preferences</Text>
+        </View>
 
         <ScrollView contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
           {/* Section 1: Company Information */}

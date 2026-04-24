@@ -112,7 +112,6 @@ const ProfitLossScreen = ({ navigation, route }) => {
 
     return (
         <SafeAreaView style={styles.container}>
-            {Platform.OS !== 'web' && (
                 <View style={styles.header}>
                     <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
                         <Ionicons name="arrow-back" size={24} color="#fff" />
@@ -120,7 +119,6 @@ const ProfitLossScreen = ({ navigation, route }) => {
                     <Text style={styles.headerTitle}>{route?.params?.serviceTitle ? `${route.params.serviceTitle} P&L` : 'Overall Profit & Loss'}</Text>
                     <View style={{ width: 24 }} />
                 </View>
-            )}
 
             <ScrollView
                 style={styles.content}

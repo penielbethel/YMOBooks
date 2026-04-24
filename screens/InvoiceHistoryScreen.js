@@ -822,15 +822,13 @@ const InvoiceHistoryScreen = ({ navigation, route }) => {
 
   return (
     <SafeAreaView style={styles.container}>
-      {Platform.OS !== 'web' && (
-        <View style={styles.header}>
-          <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-            <Text style={styles.backButtonText}>← Back</Text>
-          </TouchableOpacity>
-          <Text style={styles.title}>{route?.params?.serviceTitle ? `${route.params.serviceTitle} History` : 'Invoice History'}</Text>
-          <Text style={styles.subtitle}>{subtitleText}</Text>
-        </View>
-      )}
+      <View style={styles.header}>
+        <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
+          <Text style={styles.backButtonText}>← Back</Text>
+        </TouchableOpacity>
+        <Text style={styles.title}>{route?.params?.serviceTitle ? `${route.params.serviceTitle} History` : 'Invoice History'}</Text>
+        <Text style={styles.subtitle}>{subtitleText}</Text>
+      </View>
       {loading ? (
         <View style={styles.loadingBox}>
           <ActivityIndicator color={Colors.primary} />
