@@ -278,7 +278,7 @@ async function uploadToUploadcare(dataUrlOrPath) {
 
     if (res.data && res.data.file) {
       // Store clean base URL — resolveImageSource handles display/fetch
-      return `https://ucarecdn.com/${res.data.file}/`;
+      return `https://ucarecdn.com/${res.data.file}`;
     }
   } catch (err) {
     console.warn('Uploadcare upload failed:', err.response?.data || err.message);
@@ -719,7 +719,7 @@ function resolveImageSource(val) {
     if (url.includes('ucarecdn.com') || url.includes('ucarecd.net')) {
       const match = url.match(/(?:ucarecdn\.com|ucarecd\.net)\/([a-f0-9-]{36})/i);
       if (match && match[1]) {
-        url = `https://ucarecdn.com/${match[1]}/`;
+        url = `https://ucarecdn.com/${match[1]}`;
       }
     }
     return url;

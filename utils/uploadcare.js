@@ -87,7 +87,7 @@ export async function uploadToUploadcare(fileSource) {
             const fileId = data.file;
             // Explicitly store the file permanently via REST API
             await storeUploadcareFile(fileId);
-            const cdnUrl = `https://ucarecdn.com/${fileId}/`;
+            const cdnUrl = `https://ucarecdn.com/${fileId}`;
             console.log('[Uploadcare] Upload success. URL:', cdnUrl);
             return cdnUrl;
         }
