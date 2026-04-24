@@ -29,8 +29,9 @@ export function resolveAssetUri(uri) {
     if (uri.includes('ucarecdn.com') || uri.includes('ucarecd.net')) {
       const match = uri.match(/(?:ucarecdn\.com|ucarecd\.net)\/([a-f0-9-]{36})/i);
       if (match && match[1]) {
-        // Use the confirmed working custom host and format
-        return `https://1cu7zozupu.ucarecd.net/${match[1]}/`;
+        // Normalize and then proxy through our server to fix connection issues
+        const resolved = `https://1cu7zozupu.ucarecd.net/${match[1]}/`;
+        return `${Config.API_BASE_URL}/api/proxy-image?url=${encodeURIComponent(resolved)}`;
       }
     }
     return uri;

@@ -2897,6 +2897,33 @@ app.post('/api/pay/webhook', async (req, res) => {
   // ... logic to update DB ...
   res.status(200).send('OK');
 });
+// Proxy endpoint for Uploadcare images to fix connection issues on some mobile carriers
+app.get('/api/proxy-image', async (req, res) => {
+  const { url } = req.query;
+  if (!url) return res.status(400).send('Missing URL');
+  
+  // Only allow proxying for Uploadcare domains
+  if (!url.includes('ucarecdn.com') && !url.includes('ucarecd.net')) {
+    return res.status(403).send('Forbidden: Only Uploadcare domains are proxied');
+  }
+
+  try {
+    const response = await axios.get(url, { responseType: 'stream', timeout: 15000 });
+    
+    // Forward the content type from Uploadcare
+    const contentType = response.headers['content-type'] || 'image/png';
+    res.setHeader('Content-Type', contentType);
+    
+    // Cache for 1 day
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    
+    response.data.pipe(res);
+  } catch (err) {
+    // console.warn('Image proxy failed for:', url, err.message);
+    res.status(500).send('Proxy error');
+  }
+});
+
 // Catch-all route to serve the Expo Web SPA for any non-API request
 app.get('*', (req, res) => {
   // If it's an API route that reached here, it's a 404
