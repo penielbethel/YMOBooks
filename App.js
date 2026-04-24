@@ -98,7 +98,13 @@ export default function App() {
           return { routes: [{ name: 'Login' }] };
         }
         if (screenParam === 'register') {
-          return { routes: [{ name: 'CompanyRegistration' }] };
+          const businessType = urlParams.get('businessType');
+          return { 
+            routes: [{ 
+              name: 'CompanyRegistration',
+              params: { businessType }
+            }] 
+          };
         }
 
         // If no params and we are on app.html, let the Navigator's initialRouteName handle it

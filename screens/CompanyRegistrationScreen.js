@@ -25,7 +25,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors } from '../constants/Colors';
 import { Fonts } from '../constants/Fonts';
 import { Spacing } from '../constants/Spacing';
-import { registerCompany, updateCompany, fetchCompany } from '../utils/api';
+import { registerCompany, updateCompany, fetchCompany, getApiBaseUrl } from '../utils/api';
 import { uploadToUploadcare } from '../utils/uploadcare';
 import { buildRegistrationHtml } from '../utils/invoiceHtml';
 
@@ -485,7 +485,7 @@ const CompanyRegistrationScreen = ({ navigation, route }) => {
       setLoading(true);
       
       if (Platform.OS === 'web') {
-        const downloadUrl = `${Config.API_BASE_URL}/api/download-profile?companyId=${generatedCompanyId}&businessType=${formData.businessType}`;
+        const downloadUrl = `${getApiBaseUrl()}/api/download-profile?companyId=${generatedCompanyId}&businessType=${formData.businessType}`;
         const a = document.createElement('a');
         a.href = downloadUrl;
         a.download = `Company_Profile_${generatedCompanyId}.pdf`;
@@ -528,9 +528,14 @@ const CompanyRegistrationScreen = ({ navigation, route }) => {
               >
                 <Text style={styles.backButtonText}>← Back</Text>
               </TouchableOpacity>
-              <Text style={styles.title}>{mode === 'edit' ? "Edit your Company's Details" : 'Register Your Company'}</Text>
+              <Text style={styles.title}>
+                {mode === 'edit' ? "Edit Company's Details" : 
+                  `Register for ${formData.businessType === 'printing_press' ? 'Printing Press' : 
+                    formData.businessType === 'manufacturing' ? 'Manufacturing' : 'General Merchandise'}`}
+              </Text>
               <Text style={styles.subtitle}>
-                {mode === 'edit' ? 'Update your profile information and logo' : 'Set up your company profile to create professional documents'}
+                {mode === 'edit' ? 'Update your profile information and logo' : 
+                  `Set up your ${formData.businessType === 'manufacturing' ? 'Production' : 'Business'} profile to get started`}
               </Text>
             </View>
 
