@@ -41,18 +41,14 @@ export default function App() {
     try {
       const companyData = await AsyncStorage.getItem('companyData');
       if (companyData) {
-        // Verify against backend to support "clean sheet" resets
         const parsed = JSON.parse(companyData);
         let isValid = false;
         try {
           const ping = await pingBackend();
           if (ping.ok) {
             const check = await fetchCompany(parsed.companyId);
-            if (check && check.success) {
-              isValid = true;
-            }
+            if (check && check.success) isValid = true;
           } else {
-            // Offline: assume valid if we have data
             isValid = true;
           }
         } catch (e) { }
@@ -60,59 +56,45 @@ export default function App() {
         if (isValid) {
           setHasCompanyData(true);
         } else {
-          // Backend has been wiped or ID is invalid - clear local storage
           await AsyncStorage.removeItem('companyData');
-          // Proceed to auto-register below
-          setHasCompanyData(false); // will trigger auto-reg logic if westructure flow, but here we just fall out
-        }
-      }
-
-      const refreshedData = await AsyncStorage.getItem('companyData');
-      if (!refreshedData) {
-        // Auto-register a test company on first launch to verify backend
-        try {
-          const ping = await pingBackend();
-          if (ping.ok) {
-            const res = await registerCompany({
-              name: 'Auto Test',
-              email: 'auto@test.local',
-              businessType: 'general_merchandise'
-            });
-            if (res?.success && res.companyId) {
-              const fetched = await fetchCompany(res.companyId);
-              const c = fetched?.company || { name: 'Auto Test', companyId: res.companyId };
-              const stored = {
-                companyName: c.name,
-                address: c.address || '',
-                email: c.email || '',
-                phoneNumber: c.phone || '',
-                logo: c.logo || null,
-                signature: c.signature || null,
-                companyId: c.companyId,
-                invoiceTemplate: c.invoiceTemplate || 'classic',
-                receiptTemplate: c.receiptTemplate || 'classic',
-                // Include bank and brand fields so they persist across sessions
-                bankName: c.bankName || '',
-                bankAccountName: c.accountName || c.bankAccountName || '',
-                bankAccountNumber: c.accountNumber || c.bankAccountNumber || '',
-                brandColor: c.brandColor || null,
-                currencySymbol: c.currencySymbol || '$',
-                businessType: 'general_merchandise',
-                hasLogo: !!c.logo,
-                hasSignature: !!c.signature,
-              };
-              await AsyncStorage.setItem('companyData', JSON.stringify(stored));
-              setHasCompanyData(true);
-            }
-          }
-        } catch (_e) {
-          // ignore auto-registration errors
+          setHasCompanyData(false);
         }
       }
     } catch (error) {
       console.log('Error checking company data:', error);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // Professional Web Linking Configuration
+  const linking = {
+    prefixes: [Platform.OS === 'web' && typeof window !== 'undefined' ? window.location.origin : 'ymobooks://'],
+    config: {
+      screens: {
+        Welcome: '',
+        Login: {
+          path: 'app.html',
+          parse: { screen: (s) => s === 'login' ? 'login' : null },
+        },
+        CompanyRegistration: 'register',
+        Dashboard: 'dashboard',
+      }
+    },
+    // Custom logic to handle the ?screen=... param from the landing page
+    getStateFromPath(path, config) {
+      if (Platform.OS === 'web') {
+        const urlParams = new URLSearchParams(window.location.search);
+        const screenParam = urlParams.get('screen');
+        
+        if (screenParam === 'login') {
+          return { routes: [{ name: 'Login' }] };
+        }
+        if (screenParam === 'register') {
+          return { routes: [{ name: 'CompanyRegistration' }] };
+        }
+      }
+      return undefined; // Fall back to default behavior
     }
   };
 
@@ -126,7 +108,7 @@ export default function App() {
   }
 
   return (
-    <NavigationContainer>
+    <NavigationContainer linking={linking}>
       <StatusBar style="light" backgroundColor={Colors.primary} />
       <View style={{ flex: 1, backgroundColor: Platform.OS === 'web' ? '#f8fafc' : Colors.background }}>
         <View style={Platform.OS === 'web' ? {

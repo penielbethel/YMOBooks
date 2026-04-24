@@ -88,7 +88,6 @@ const WelcomeScreen = ({ navigation }) => {
   ];
 
   const handleWhatsApp = () => {
-    // WhatsApp direct link (Nigeria +234 for 08169114903)
     const url = 'https://wa.me/2348169114903?text=Hello%20YMOBooks%20Help%20Desk';
     Linking.openURL(url).catch(() => { });
   };
@@ -129,7 +128,7 @@ const WelcomeScreen = ({ navigation }) => {
           </Text>
         </View>
 
-        {/* Action Buttons - Moved to top for better UX */}
+        {/* Action Buttons */}
         <View style={styles.actionContainer}>
           <TouchableOpacity
             style={styles.primaryButton}
@@ -237,7 +236,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.background,
     ...(Platform.OS === 'web' && {
-      backgroundColor: '#f8fafc', // lighter, cleaner blue-gray
+      backgroundColor: '#f8fafc',
     })
   },
   scrollContent: {
@@ -392,7 +391,7 @@ const styles = StyleSheet.create({
     lineHeight: 16,
   },
   footerSpacing: {
-    height: 100, // Space for FAB
+    height: 100,
   },
   fab: {
     position: 'absolute',
@@ -475,4 +474,5 @@ const styles = StyleSheet.create({
   },
 });
 
-export default WelcomeScreen;
+export default WelcomeScreen;;
+;

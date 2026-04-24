@@ -413,48 +413,9 @@
             to { opacity: 1; transform: translateY(0); }
         }
 
-        .mobile-menu-btn {
-            display: none;
-            cursor: pointer;
-            color: var(--gray-900);
-        }
-
         /* --- Mobile Responsiveness --- */
         @media (max-width: 768px) {
-            .mobile-menu-btn {
-                display: block;
-            }
-            .nav-links {
-                display: none;
-                flex-direction: column;
-                position: absolute;
-                top: 100%;
-                left: 0;
-                right: 0;
-                background: white;
-                padding: 1.5rem 2rem;
-                box-shadow: 0 20px 40px rgba(0,0,0,0.1);
-                border-top: 1px solid var(--gray-100);
-                align-items: flex-start;
-                gap: 1.5rem;
-            }
-            .nav-links.active {
-                display: flex;
-            }
-            .dropdown-content {
-                position: static;
-                box-shadow: none;
-                border: none;
-                padding: 0.5rem 0 0 1rem;
-                display: none;
-            }
-            .dropdown.active .dropdown-content {
-                display: block;
-            }
-            .nav-cta {
-                width: 100%;
-                text-align: center;
-            }
+            .nav-links { display: none; }
             h1 { font-size: 2.8rem; }
             .hero-btns { flex-direction: column; }
             .feature-grid { grid-template-columns: 1fr; }
@@ -470,10 +431,7 @@
                     <img src="/assets/logo.png" alt="YMOBooks">
                     <span>YMOBooks</span>
                 </a>
-                <div class="mobile-menu-btn" id="mobileMenuBtn">
-                    <i data-lucide="menu" size="28"></i>
-                </div>
-                <div class="nav-links" id="navLinks">
+                <div class="nav-links">
                     <a href="#features">Features</a>
                     <div class="dropdown">
                         <div class="dropdown-trigger">
@@ -481,11 +439,11 @@
                             <i data-lucide="chevron-down" size="14" style="color: var(--gray-600); margin-top: 2px;"></i>
                         </div>
                         <div class="dropdown-content">
-                            <a href="/app.html?screen=login">
+                            <a href="/app.html">
                                 <i data-lucide="log-in" size="16"></i>
                                 <span>Web App Login</span>
                             </a>
-                            <a href="/app.html?screen=register">
+                            <a href="/app.html">
                                 <i data-lucide="plus-circle" size="16"></i>
                                 <span>Register Company</span>
                             </a>
@@ -495,7 +453,7 @@
                             </a>
                         </div>
                     </div>
-                    <a href="/app.html?screen=login" class="nav-cta">Go to Web App</a>
+                    <a href="/app.html" class="nav-cta">Go to Web App</a>
                 </div>
             </nav>
         </div>
@@ -511,11 +469,11 @@
                 <h1>Smart Financial Management. Simplified.</h1>
                 <p>Manage invoices, receipts, expenses, and taxes effortlessly. Built for Printing Press, Manufacturing, and General Merchandise businesses across Africa.</p>
                 <div class="hero-btns">
-                    <a href="/app.html?screen=register" class="btn btn-primary">
+                    <a href="/app.html" class="btn btn-primary">
                         <span>Get Started Free</span>
                         <i data-lucide="arrow-right" size="18"></i>
                     </a>
-                    <a href="/app.html?screen=login" class="btn btn-secondary">
+                    <a href="/app.html" class="btn btn-secondary">
                         <span>Login to Dashboard</span>
                         <i data-lucide="user" size="18"></i>
                     </a>
@@ -598,8 +556,8 @@
                 <div class="footer-links">
                     <h5>Platform</h5>
                     <ul>
-                        <li><a href="/app.html?screen=login">Web App Login</a></li>
-                        <li><a href="/app.html?screen=register">Register Company</a></li>
+                        <li><a href="/app.html">Web App Login</a></li>
+                        <li><a href="/app.html">Register Company</a></li>
                         <li><a href="tax_calculator.html">Tax Calculator</a></li>
                     </ul>
                 </div>
@@ -629,31 +587,7 @@
                 document.querySelector(this.getAttribute('href')).scrollIntoView({
                     behavior: 'smooth'
                 });
-                // Close mobile menu if open
-                const navLinks = document.getElementById('navLinks');
-                if(navLinks.classList.contains('active')) {
-                    navLinks.classList.remove('active');
-                }
             });
-        });
-
-        // Mobile Menu Toggle
-        const mobileMenuBtn = document.getElementById('mobileMenuBtn');
-        const navLinks = document.getElementById('navLinks');
-        
-        mobileMenuBtn.addEventListener('click', () => {
-            navLinks.classList.toggle('active');
-        });
-
-        // Mobile Dropdown Toggle
-        const dropdownTrigger = document.querySelector('.dropdown-trigger');
-        const dropdown = document.querySelector('.dropdown');
-        
-        dropdownTrigger.addEventListener('click', (e) => {
-            if (window.innerWidth <= 768) {
-                e.preventDefault();
-                dropdown.classList.toggle('active');
-            }
         });
     </script>
 </body>

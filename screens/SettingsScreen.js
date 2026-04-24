@@ -131,15 +131,21 @@ const SettingsScreen = ({ navigation }) => {
             const fetched = await fetchCompany(c.companyId, c.businessType);
             const full = fetched?.company || fetched?.data;
             if (full) {
-              const adminIsLoggedIn = isAdmin(c.companyId);
+              const adminId = c.companyId || company?.companyId;
+              const adminIsLoggedIn = isAdmin(adminId);
+              const currentActiveCategory = company?.businessType || c.businessType;
+
               const merged = { 
                 ...c, 
                 ...full,
-                businessType: adminIsLoggedIn ? c.businessType : (full.businessType || c.businessType)
+                // TRIPLE LOCK: If admin, prioritize the locally active category (c.businessType)
+                // over the server's master profile category (full.businessType)
+                businessType: adminIsLoggedIn ? currentActiveCategory : (full.businessType || currentActiveCategory)
               };
               populateFields(merged);
               await AsyncStorage.setItem('companyData', JSON.stringify(merged)).catch(() => { });
               if (full.logo) await AsyncStorage.setItem('companyLogoCache', full.logo).catch(() => { });
+              setCompany(merged);
             }
           } catch (e) {
             console.warn('[Settings] Failed to fetch full company details on load', e);

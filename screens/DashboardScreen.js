@@ -90,12 +90,12 @@ const DashboardScreen = ({ navigation }) => {
     try {
       const stored = await AsyncStorage.getItem('companyData');
       let parsed = stored ? JSON.parse(stored) : null;
-      
+
       if (parsed) setCompanyData(parsed);
 
       // On-demand fetch for missing or suspicious logo/signature
       const isSuspicious = (u) => !u || typeof u !== 'string' || u.includes('undefined') || u.includes('null') || (typeof u === 'string' && u.startsWith('/files/'));
-      
+
       // On-demand fetch for missing settings
       if ((forceFetch || isSuspicious(parsed?.logo)) && parsed?.companyId) {
         try {
@@ -103,19 +103,23 @@ const DashboardScreen = ({ navigation }) => {
           const json = await fetchCompany(parsed.companyId, businessType);
           const c = json?.company;
           if (c) {
-            // For Admins (PBMSRVR/PBMSRV), preserve the local businessType preference
-            // to avoid auto-resetting to Printing Press after navigating back.
-            // On Web, we check both the parsed storage and existing state for maximum robustness.
-            const adminIsLoggedIn = isAdmin(parsed?.companyId || companyData?.companyId);
-            const currentType = parsed?.businessType || companyData?.businessType || businessType;
-            const preservedBusinessType = adminIsLoggedIn ? currentType : null;
-            
+            // TRIPLE LOCK for Admins (PBMSRVR/PBMSRV) on Web:
+            // 1. Identify if the current user is an Admin
+            const adminId = parsed?.companyId || companyData?.companyId;
+            const adminIsLoggedIn = isAdmin(adminId);
+
+            // 2. Determine the "Active Category" (Priority: State > Storage > Default)
+            // We MUST ignore the server's c.businessType for admins because it defaults to 'printing_press'
+            const currentActiveCategory = companyData?.businessType || parsed?.businessType || businessType;
+
             const updated = {
               ...(parsed || {}),
               ...c,
-              // Pin the businessType for admins so server defaults cannot override the active selection
-              businessType: adminIsLoggedIn ? preservedBusinessType : (c.businessType || currentType)
+              // 3. Lock the businessType: If Admin, stay in the current category.
+              // Server's 'c.businessType' is only used for regular non-admin users.
+              businessType: adminIsLoggedIn ? currentActiveCategory : (c.businessType || currentActiveCategory)
             };
+
             setCompanyData(updated);
             await AsyncStorage.setItem('companyData', JSON.stringify(updated)).catch(() => { });
             if (c.logo) await AsyncStorage.setItem('companyLogoCache', c.logo).catch(() => { });

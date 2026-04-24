@@ -310,31 +310,32 @@ const InvoiceHistoryScreen = ({ navigation, route }) => {
         filename = `RCT_${invNo}.pdf`;
       }
 
-      if (type === 'invoice' && item.pdfUrl) {
-        // Use the secure attachment endpoint if pdfPath is available
-        if (item.pdfPath && Platform.OS === 'web') {
-          const downloadUrl = `${getApiBaseUrl()}/api/download-invoice?pdfPath=${encodeURIComponent(item.pdfPath)}&filename=${encodeURIComponent(item.pdfPath.split('/').pop() || 'invoice.pdf')}`;
+      if (type === 'invoice' && (item.pdfUrl || item.pdfPath)) {
+        // CONSISTENCY FIX: On both Web AND Mobile, prioritize the professionally rendered backend PDF
+        const downloadUrl = (item.pdfPath && Platform.OS === 'web')
+          ? `${getApiBaseUrl()}/api/download-invoice?pdfPath=${encodeURIComponent(item.pdfPath)}&filename=${encodeURIComponent(item.pdfPath.split('/').pop() || 'invoice.pdf')}`
+          : item.pdfUrl;
+
+        if (Platform.OS === 'web') {
           const a = document.createElement('a');
           a.href = downloadUrl;
-          a.download = item.pdfPath.split('/').pop() || 'invoice.pdf';
-          document.body.appendChild(a);
-          a.click();
-          a.remove();
-          return;
-        }
-        // Fallback for web if only pdfUrl is present
-        if (Platform.OS === 'web') {
-          const resp = await fetch(item.pdfUrl);
-          const blob = await resp.blob();
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url;
           a.download = (item.pdfPath ? item.pdfPath.split('/').pop() : filename).replace(/[^a-zA-Z0-9_.-]/g, '_');
           document.body.appendChild(a);
           a.click();
           a.remove();
-          setTimeout(() => URL.revokeObjectURL(url), 1500);
           return;
+        } else if (downloadUrl) {
+          // On Mobile: Download the server PDF to ensure it's identical to the Web version
+          try {
+            let cacheDir = FileSystem.cacheDirectory || '';
+            if (!cacheDir.endsWith('/')) cacheDir += '/';
+            const downloadUri = `${cacheDir}${filename}`;
+            const dl = await FileSystemLegacy.downloadAsync(downloadUrl, downloadUri);
+            await Sharing.shareAsync(dl.uri);
+            return;
+          } catch (dlErr) {
+            console.warn('[PDF Sync] Backend download failed, falling back to local print:', dlErr);
+          }
         }
       } else if (type === 'receipt' && companyId && item) {
         const payload = {
@@ -349,18 +350,31 @@ const InvoiceHistoryScreen = ({ navigation, route }) => {
           businessType: companyObj?.businessType || 'general_merchandise',
         };
         const res = await createReceipt(payload);
-        if (res?.success && res.pdfUrl) {
+        if (res?.success && (res.pdfUrl || res.pdfPath)) {
+          const downloadUrl = (res.pdfPath && Platform.OS === 'web')
+            ? `${getApiBaseUrl()}/api/download-invoice?pdfPath=${encodeURIComponent(res.pdfPath)}&filename=${encodeURIComponent(res.filename || res.pdfPath.split('/').pop() || 'receipt.pdf')}`
+            : res.pdfUrl;
+
           if (Platform.OS === 'web') {
-            const downloadUrl = res.pdfPath 
-              ? `${getApiBaseUrl()}/api/download-invoice?pdfPath=${encodeURIComponent(res.pdfPath)}&filename=${encodeURIComponent(res.filename || res.pdfPath.split('/').pop() || 'receipt.pdf')}`
-              : res.pdfUrl;
-            
             const a = document.createElement('a');
             a.href = downloadUrl;
             a.download = res.filename || (res.pdfPath ? res.pdfPath.split('/').pop() : 'receipt.pdf');
             document.body.appendChild(a);
             a.click();
             a.remove();
+          } else if (downloadUrl) {
+            // On Mobile: Download the server PDF for receipts as well
+            try {
+              let cacheDir = FileSystem.cacheDirectory || '';
+              if (!cacheDir.endsWith('/')) cacheDir += '/';
+              const downloadUri = `${cacheDir}${res.filename || 'receipt.pdf'}`;
+              const dl = await FileSystemLegacy.downloadAsync(downloadUrl, downloadUri);
+              await Sharing.shareAsync(dl.uri);
+            } catch (dlErr) {
+              console.warn('[Receipt Sync] Backend download failed, falling back to local print:', dlErr);
+              const { uri } = await Print.printToFileAsync({ html });
+              await Sharing.shareAsync(uri);
+            }
           }
           await refetch();
           return;
@@ -368,6 +382,7 @@ const InvoiceHistoryScreen = ({ navigation, route }) => {
           throw new Error(res?.message || 'Failed to generate receipt on server');
         }
       } else {
+        // Fallback for cases where no server document exists (e.g. legacy or offline items)
         if (Platform.OS === 'web') {
           Alert.alert('Download Error', 'No server PDF link found for this document. Please try refreshing.');
         } else {
