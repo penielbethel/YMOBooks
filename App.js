@@ -42,16 +42,21 @@ export default function App() {
       const companyData = await AsyncStorage.getItem('companyData');
       if (companyData) {
         const parsed = JSON.parse(companyData);
-        let isValid = false;
+        let isValid = true; // Assume valid unless proven otherwise on web
+        
         try {
           const ping = await pingBackend();
           if (ping.ok) {
             const check = await fetchCompany(parsed.companyId, parsed.businessType);
-            if (check && (check.success || check.company)) isValid = true;
-          } else {
-            isValid = true;
+            // If the server explicitly says success:false, then it's invalid. 
+            // If the server is down or returns 404, we might want to keep the local session.
+            if (check && check.success === false && check.message?.includes('not found')) {
+              isValid = false;
+            }
           }
-        } catch (e) { }
+        } catch (e) { 
+          console.log('Validation ping/fetch failed, keeping local session');
+        }
 
         if (isValid) {
           setHasCompanyData(true);
@@ -87,16 +92,18 @@ export default function App() {
         const urlParams = new URLSearchParams(window.location.search);
         const screenParam = urlParams.get('screen');
         
-        if (hasCompanyData) {
-          // If already logged in, ignore landing page screen params and continue
-          return undefined; 
-        }
-
+        // We can't use hasCompanyData here reliably because it's async
+        // Let's check AsyncStorage directly if possible, or just handle the params
         if (screenParam === 'login') {
           return { routes: [{ name: 'Login' }] };
         }
         if (screenParam === 'register') {
           return { routes: [{ name: 'CompanyRegistration' }] };
+        }
+
+        // If no params and we are on app.html, let the Navigator's initialRouteName handle it
+        if (path.includes('app.html')) {
+          return undefined;
         }
       }
       return undefined; // Fall back to default behavior
@@ -106,7 +113,10 @@ export default function App() {
   if (isLoading) {
     return (
       <View style={styles.loadingContainer}>
-        <Text style={styles.loadingText}>Loading YMOBooks...</Text>
+        <View style={{ backgroundColor: 'white', padding: 20, borderRadius: 20, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 10 }}>
+           <Text style={{ color: Colors.primary, fontSize: 20, fontWeight: '800' }}>YMOBooks</Text>
+        </View>
+        <Text style={[styles.loadingText, { marginTop: 20 }]}>Resuming Session...</Text>
         <StatusBar style="auto" />
       </View>
     );
