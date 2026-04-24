@@ -426,6 +426,83 @@
             border-top: 1px solid #1e293b;
         }
 
+        /* --- Advert Section --- */
+        .advert-section {
+            padding: 6rem 5%;
+            background: linear-gradient(135deg, #fff 0%, var(--gray-50) 100%);
+            border-top: 1px solid var(--gray-200);
+            border-bottom: 1px solid #1e293b;
+        }
+
+        .advert-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 4rem;
+            align-items: center;
+        }
+
+        .advert-image {
+            border-radius: 24px;
+            overflow: hidden;
+            box-shadow: 0 30px 60px rgba(0,0,0,0.1);
+            position: relative;
+        }
+
+        .advert-image img {
+            width: 100%;
+            height: auto;
+            display: block;
+            transition: transform 0.5s ease;
+        }
+
+        .advert-image:hover img {
+            transform: scale(1.03);
+        }
+
+        .advert-content h2 {
+            font-size: clamp(2rem, 4vw, 3rem);
+            margin-bottom: 1.5rem;
+            letter-spacing: -1px;
+            color: var(--gray-900);
+        }
+
+        .advert-content p {
+            font-size: 1.1rem;
+            color: var(--gray-600);
+            margin-bottom: 2rem;
+            line-height: 1.8;
+        }
+        
+        .advert-content ul {
+            list-style: none;
+            margin-bottom: 2rem;
+        }
+        
+        .advert-content ul li {
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            font-weight: 500;
+            color: var(--gray-900);
+        }
+        
+        .advert-content ul li i {
+            color: var(--primary);
+        }
+
+        @media (max-width: 900px) {
+            .advert-container {
+                grid-template-columns: 1fr;
+                gap: 2rem;
+            }
+            .advert-content {
+                order: -1;
+            }
+        }
+
         /* --- Animations --- */
         @keyframes fadeInUp {
             from { opacity: 0; transform: translateY(30px); }
@@ -603,6 +680,26 @@
                     <h3>Secure & Private</h3>
                     <p>Your financial data is encrypted and backed up, ensuring you never lose your records even if you switch devices.</p>
                 </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Advert Section -->
+    <section class="advert-section">
+        <div class="advert-container">
+            <div class="advert-content">
+                <div class="badge"><i data-lucide="star"></i> Join the Movement</div>
+                <h2>Run your business with style and confidence.</h2>
+                <p>YMOBooks isn't just software; it's a statement. Join thousands of modern entrepreneurs across the continent who are upgrading their business image.</p>
+                <ul>
+                    <li><i data-lucide="check-circle-2"></i> Elevate your professional identity</li>
+                    <li><i data-lucide="check-circle-2"></i> Manage your finances securely from any device</li>
+                    <li><i data-lucide="check-circle-2"></i> Represent your brand with our premium tools</li>
+                </ul>
+                <a href="/app.html?screen=register" class="btn btn-primary">Join the Community</a>
+            </div>
+            <div class="advert-image">
+                <img src="/assets/ymobooks_apparel.png" alt="YMOBooks User Lifestyle">
             </div>
         </div>
     </section>
