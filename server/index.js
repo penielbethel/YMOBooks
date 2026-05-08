@@ -14,6 +14,14 @@ const UC_SECRET = process.env.UPLOADCARE_SECRET_KEY;
 let DB_CONNECTED = false;
 let sharp = null; // lazy-loaded to avoid boot issues if optional dep missing
 
+// --- Global Trial Mode (Pro for All) ---
+// Grant Pro features to all users during the Google Play Review period.
+// Target window: 3 weeks from May 8, 2026.
+const TRIAL_END_DATE = new Date('2026-06-01T00:00:00Z');
+function isGlobalTrialActive() {
+  return new Date() < TRIAL_END_DATE;
+}
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 const MONGO_URI = process.env.MONGO_URI; // Set in environment. If unset, server uses file fallback.
@@ -104,33 +112,35 @@ function findCompanyFile(companyId, businessType) {
 async function findCompanyById(companyId, businessType) {
   if (!companyId) return null;
   const searchId = String(companyId).trim();
-  
-  // 1. Try JSON local file first
-  let company = findCompanyFile(searchId, businessType);
-  if (company) return company;
+  let company = null;
 
-  // 2. Try MongoDB match if connected
   try {
-    // If businessType provided, try pairing it
-    if (businessType) {
-      company = await Company.findOne({ 
-        companyId: { $regex: new RegExp(`^${searchId}$`, 'i') },
-        businessType: businessType 
-      }).lean();
-      if (company) return company;
-    }
+    // 1. Try JSON local file first
+    company = findCompanyFile(searchId, businessType);
 
-    // Fallback to ID only — but ONLY if no businessType was requested
-    // This prevents admin/multi-category IDs from returning the wrong category
-    if (!businessType) {
-      company = await Company.findOne({ companyId: { $regex: new RegExp(`^${searchId}$`, 'i') } }).lean();
-      if (company) return company;
+    // 2. Try MongoDB match if connected
+    if (!company) {
+      if (businessType) {
+        company = await Company.findOne({ 
+          companyId: { $regex: new RegExp(`^${searchId}$`, 'i') },
+          businessType: businessType 
+        }).lean();
+      }
+
+      if (!company && !businessType) {
+        company = await Company.findOne({ companyId: { $regex: new RegExp(`^${searchId}$`, 'i') } }).lean();
+      }
     }
   } catch (err) {
-    // DB lookup failed
+    // silent
   }
 
-  return null;
+  // Global Trial Override
+  if (company && isGlobalTrialActive()) {
+    company.isPremium = true;
+  }
+
+  return company;
 }
 
 // Local file fallback store for expenses when Mongo is unavailable
@@ -2607,6 +2617,11 @@ app.post('/api/login', async (req, res) => {
     }
 
     if (!company) return res.status(404).json({ success: false, message: 'Company not found' });
+
+    // Global Trial Override
+    if (isGlobalTrialActive()) {
+      company.isPremium = true;
+    }
 
     // Strict Category Enforcment
     if (businessType) {
